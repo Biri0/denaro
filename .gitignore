@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+/credentials.json
+/denaro_backup_*.json
+/keystore.properties
+*.jks
+*.keystore

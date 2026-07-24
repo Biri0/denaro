@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Denaro</string>
+    <string name="migration_progress">Preparing your data\u2026</string>
+    <string name="migration_failed">Couldn\u2019t migrate your existing data.</string>
+    <string name="retry">Retry</string>
 </resources>

@@ -1,0 +1,27 @@
+package it.rfmariano.denaro.data.local
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+
+@Database(
+    entities = [
+        AccountEntity::class,
+        RecurringRuleEntity::class,
+        TransactionEntity::class,
+        TransferEntity::class,
+        LegacyImportEntity::class,
+    ],
+    views = [AccountBalance::class],
+    version = 1,
+    exportSchema = true,
+)
+@TypeConverters(Converters::class)
+abstract class DenaroDatabase : RoomDatabase() {
+    abstract fun accountDao(): AccountDao
+    abstract fun transactionDao(): TransactionDao
+    abstract fun recurringRuleDao(): RecurringRuleDao
+    abstract fun transferDao(): TransferDao
+    abstract fun accountBalanceDao(): AccountBalanceDao
+    abstract fun legacyImportDao(): LegacyImportDao
+}
