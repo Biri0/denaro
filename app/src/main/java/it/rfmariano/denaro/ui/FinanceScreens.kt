@@ -2,6 +2,7 @@
 
 package it.rfmariano.denaro.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -98,7 +98,9 @@ fun HomeRouteContent(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 item {
@@ -218,7 +220,9 @@ fun AccountsRouteContent(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentPadding = PaddingValues(bottom = 96.dp),
             ) {
                 items(state.active, key = AccountSummary::id) { account ->
@@ -263,12 +267,16 @@ fun AccountDetailRouteContent(
     ) { padding ->
         if (account != null) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 item {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(20.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
                     ) {
                         Text(
                             stringResource(R.string.current_balance),
@@ -286,11 +294,11 @@ fun AccountDetailRouteContent(
                         Spacer(Modifier.height(18.dp))
                         Text(
                             "${stringResource(R.string.opening_balance)}: " +
-                                if (amountsVisible) {
-                                    Money.format(account.openingBalanceMinor, account.currency)
-                                } else {
-                                    stringResource(R.string.amount_hidden)
-                                },
+                                    if (amountsVisible) {
+                                        Money.format(account.openingBalanceMinor, account.currency)
+                                    } else {
+                                        stringResource(R.string.amount_hidden)
+                                    },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -299,7 +307,8 @@ fun AccountDetailRouteContent(
                     item { SectionHeader(stringResource(R.string.scheduled)) }
                     items(state.recurringRules, key = { it.id }) { rule ->
                         Column(
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                         ) {
                             Text(
@@ -406,7 +415,9 @@ fun ActivityRouteContent(
             }
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -441,7 +452,9 @@ fun ActivityRouteContent(
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {

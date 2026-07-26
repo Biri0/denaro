@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -247,7 +246,9 @@ fun EmptyState(
         Icon(
             painter = painterResource(icon),
             contentDescription = null,
-            modifier = Modifier.size(40.dp).alpha(0.7f),
+            modifier = Modifier
+                .size(40.dp)
+                .alpha(0.7f),
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(16.dp))

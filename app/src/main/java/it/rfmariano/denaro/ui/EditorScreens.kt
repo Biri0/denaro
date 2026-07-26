@@ -4,23 +4,19 @@ package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -37,8 +33,8 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,17 +51,16 @@ import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.SupportedCurrencies
-import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransactionInput
+import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransferInput
 import it.rfmariano.denaro.data.local.TransactionType
-import java.math.BigDecimal
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 @Composable
 fun AccountEditorScreen(
@@ -206,10 +201,12 @@ fun AccountEditorScreen(
                     trailingIcon = {
                         ExposedDropdownMenuDefaults.TrailingIcon(showCurrencyMenu)
                     },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(
-                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                        enabled = accountId == null,
-                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(
+                            ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                            enabled = accountId == null,
+                        ),
                 )
                 ExposedDropdownMenu(
                     expanded = showCurrencyMenu,
@@ -455,7 +452,8 @@ fun ActivityEditorScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
@@ -521,9 +519,9 @@ fun ActivityEditorScreen(
                     label = stringResource(R.string.to_account),
                     accounts = accounts.filter {
                         it.id != accountId &&
-                            it.currency == accounts.find { source ->
-                                source.id == accountId
-                            }?.currency
+                                it.currency == accounts.find { source ->
+                            source.id == accountId
+                        }?.currency
                     },
                     selectedId = destinationId,
                     onSelected = {
@@ -675,10 +673,12 @@ fun AccountSelector(
             label = { Text(label) },
             placeholder = { Text(stringResource(R.string.select_account)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(
-                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                enabled = true,
-            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(
+                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = true,
+                ),
         )
         ExposedDropdownMenu(
             expanded = expanded,

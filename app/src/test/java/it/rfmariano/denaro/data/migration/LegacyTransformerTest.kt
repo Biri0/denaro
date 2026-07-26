@@ -8,13 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.ZoneOffset
-import kotlin.collections.map
-import kotlin.collections.single
-import kotlin.map
-import kotlin.sequences.map
-import kotlin.sequences.single
-import kotlin.text.map
-import kotlin.text.single
 
 class LegacyTransformerTest {
     private val transformer = LegacyTransformer(

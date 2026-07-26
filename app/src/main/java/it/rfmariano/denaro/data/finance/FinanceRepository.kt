@@ -12,12 +12,12 @@ import it.rfmariano.denaro.data.local.TransactionEntity
 import it.rfmariano.denaro.data.local.TransferEntity
 import it.rfmariano.denaro.data.local.TransferPairUsage
 import it.rfmariano.denaro.data.local.UuidV7
-import java.time.Instant
-import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.time.Instant
+import java.time.ZoneId
 
 class FinanceRepository(
     private val database: DenaroDatabase,
