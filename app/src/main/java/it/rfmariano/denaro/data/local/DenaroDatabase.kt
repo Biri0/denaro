@@ -23,5 +23,6 @@ abstract class DenaroDatabase : RoomDatabase() {
     abstract fun recurringRuleDao(): RecurringRuleDao
     abstract fun transferDao(): TransferDao
     abstract fun accountBalanceDao(): AccountBalanceDao
+    abstract fun activityDao(): ActivityDao
     abstract fun legacyImportDao(): LegacyImportDao
 }

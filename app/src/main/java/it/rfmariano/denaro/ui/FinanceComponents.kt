@@ -1,0 +1,270 @@
+package it.rfmariano.denaro.ui
+
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import it.rfmariano.denaro.R
+import it.rfmariano.denaro.data.finance.AccountSummary
+import it.rfmariano.denaro.data.finance.ActivityItem
+import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.Money
+import it.rfmariano.denaro.ui.theme.Positive
+import it.rfmariano.denaro.ui.theme.PositiveDark
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import com.composables.icons.lucide.R as LucideR
+
+@Composable
+fun AmountText(
+    amountMinor: Long,
+    currency: String,
+    amountsVisible: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+) {
+    Text(
+        text = if (amountsVisible) {
+            Money.format(amountMinor, currency)
+        } else {
+            stringResource(R.string.amount_hidden)
+        },
+        modifier = modifier,
+        color = color,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+fun AccountRow(
+    account: AccountSummary,
+    amountsVisible: Boolean,
+    onClick: () -> Unit,
+    trailingAction: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(LucideR.drawable.lucide_ic_wallet),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(account.name, style = MaterialTheme.typography.titleMedium)
+            account.description?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+        AmountText(
+            amountMinor = account.balanceMinor,
+            currency = account.currency,
+            amountsVisible = amountsVisible,
+        )
+        if (trailingAction != null) {
+            Spacer(Modifier.width(8.dp))
+            trailingAction()
+        }
+    }
+}
+
+@Composable
+fun ActivityRow(
+    item: ActivityItem,
+    amountsVisible: Boolean,
+    onClick: () -> Unit,
+    perspectiveAccountId: String? = null,
+    showTransferSign: Boolean = true,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ActivityIcon(item.kind)
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.description ?: when (item.kind) {
+                    ActivityKind.INCOME -> stringResource(R.string.income)
+                    ActivityKind.EXPENSE -> stringResource(R.string.expense)
+                    ActivityKind.TRANSFER -> stringResource(R.string.transfer)
+                },
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+            )
+            Text(
+                text = if (item.kind == ActivityKind.TRANSFER) {
+                    "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
+                } else {
+                    item.accountName
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            val signedAmount = item.signedAmount(perspectiveAccountId, showTransferSign)
+            AmountText(
+                amountMinor = signedAmount,
+                currency = item.currency,
+                amountsVisible = amountsVisible,
+                color = when (item.kind) {
+                    ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {
+                        PositiveDark
+                    } else {
+                        Positive
+                    }
+
+                    ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
+                    ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                text = item.occurredAt.formattedDate(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+internal fun ActivityItem.signedAmount(
+    perspectiveAccountId: String?,
+    showTransferSign: Boolean = true,
+): Long =
+    when (kind) {
+        ActivityKind.INCOME -> amountMinor
+        ActivityKind.EXPENSE -> -amountMinor
+        ActivityKind.TRANSFER -> {
+            if (!showTransferSign || counterpartyAccountId == perspectiveAccountId) {
+                amountMinor
+            } else {
+                -amountMinor
+            }
+        }
+    }
+
+@Composable
+private fun ActivityIcon(kind: ActivityKind) {
+    @DrawableRes val icon = when (kind) {
+        ActivityKind.INCOME -> LucideR.drawable.lucide_ic_arrow_down
+        ActivityKind.EXPENSE -> LucideR.drawable.lucide_ic_arrow_up
+        ActivityKind.TRANSFER -> LucideR.drawable.lucide_ic_arrow_down_up
+    }
+    val tint = when (kind) {
+        ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {
+            PositiveDark
+        } else {
+            Positive
+        }
+
+        ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
+        ActivityKind.TRANSFER -> MaterialTheme.colorScheme.tertiary
+    }
+    Box(
+        modifier = Modifier.size(36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+fun SectionHeader(
+    title: String,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        action?.invoke()
+    }
+}
+
+@Composable
+fun EmptyState(
+    @DrawableRes icon: Int,
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            modifier = Modifier.size(40.dp).alpha(0.7f),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (action != null) {
+            Spacer(Modifier.height(20.dp))
+            action()
+        }
+    }
+}
+
+fun Long.formattedDate(): String = DateTimeFormatter
+    .ofLocalizedDate(FormatStyle.MEDIUM)
+    .format(Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate())
