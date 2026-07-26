@@ -6,6 +6,26 @@ val releaseKeystore = Properties().apply {
         releaseKeystoreFile.inputStream().use(::load)
     }
 }
+val ciKeystorePath = providers.environmentVariable("DENARO_UPLOAD_KEYSTORE_PATH").orNull
+val ciStorePassword = providers.environmentVariable("DENARO_UPLOAD_STORE_PASSWORD").orNull
+val ciKeyAlias = providers.environmentVariable("DENARO_UPLOAD_KEY_ALIAS").orNull
+val ciKeyPassword = providers.environmentVariable("DENARO_UPLOAD_KEY_PASSWORD").orNull
+val ciSigningValues = listOf(
+    ciKeystorePath,
+    ciStorePassword,
+    ciKeyAlias,
+    ciKeyPassword,
+)
+val hasCiSigning = ciSigningValues.all { !it.isNullOrBlank() }
+check(ciSigningValues.all { it.isNullOrBlank() } || hasCiSigning) {
+    "CI signing requires all four DENARO_UPLOAD_* environment variables."
+}
+val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.let {
+    requireNotNull(it.toIntOrNull()) { "releaseVersionCode must be an integer." }
+}
+val releaseVersionName = providers.gradleProperty("releaseVersionName").orNull?.also {
+    require(it.isNotBlank()) { "releaseVersionName must not be blank." }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -13,6 +33,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.androidx.room)
+    alias(libs.plugins.gradle.play.publisher)
 }
 
 android {
@@ -27,15 +48,22 @@ android {
         applicationId = "it.rfmariano.denaro"
         minSdk = 26
         targetSdk = 36
-        versionCode = 38
-        versionName = "2.0.0-pre-alpha.1"
+        versionCode = releaseVersionCode ?: 38
+        versionName = releaseVersionName ?: "2.0.0-pre-alpha.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            if (releaseKeystoreFile.isFile) {
+            if (hasCiSigning) {
+                signingConfig = signingConfigs.create("ciRelease") {
+                    storeFile = rootProject.file(requireNotNull(ciKeystorePath))
+                    storePassword = requireNotNull(ciStorePassword)
+                    keyAlias = requireNotNull(ciKeyAlias)
+                    keyPassword = requireNotNull(ciKeyPassword)
+                }
+            } else if (releaseKeystoreFile.isFile) {
                 signingConfig = signingConfigs.create("release") {
                     storeFile = rootProject.file(
                         releaseKeystore.getProperty("storeFile"),
@@ -46,7 +74,7 @@ android {
                 }
             }
             optimization {
-                enable = false
+                enable = true
             }
         }
     }
@@ -57,6 +85,12 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+play {
+    useApplicationDefaultCredentials.set(true)
+    track.set("internal")
+    releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.COMPLETED)
 }
 
 room {

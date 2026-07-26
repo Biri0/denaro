@@ -16,6 +16,7 @@ navigation3 = "1.1.4"
 paging = "3.5.0"
 kotlinxSerialization = "1.9.0"
 composeIcons = "2.2.1"
+gradlePlayPublisher = "4.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -56,3 +57,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 androidx-room = { id = "androidx.room", version.ref = "room" }
+gradle-play-publisher = { id = "com.github.triplet.play", version.ref = "gradlePlayPublisher" }
