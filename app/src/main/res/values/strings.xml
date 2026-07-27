@@ -18,6 +18,8 @@
     <string name="restore">Restore</string>
     <string name="opening_balance">Opening balance</string>
     <string name="scheduled">Scheduled</string>
+    <string name="one_time">One-time</string>
+    <string name="paused">Paused</string>
     <string name="no_activity">No activity yet</string>
     <string name="no_activity_description">Income, expenses, and transfers will appear here.</string>
     <string name="all">All</string>
@@ -43,6 +45,10 @@
     <string name="currency">Currency</string>
     <string name="amount">Amount</string>
     <string name="date">Date</string>
+    <string name="first_occurrence">First occurrence</string>
+    <string name="next_occurrence_label">Next occurrence</string>
+    <string name="repeat_every">Repeat every</string>
+    <string name="frequency">Frequency</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
@@ -51,6 +57,8 @@
     <string name="archive_account_message">The account will be hidden and its active scheduled transactions will be stopped. Its history will remain available.</string>
     <string name="opening_balance_warning">Changing the opening balance changes the account’s current balance.</string>
     <string name="add_transaction">Add transaction</string>
+    <string name="add_scheduled_transaction">Add scheduled transaction</string>
+    <string name="edit_scheduled_transaction">Edit scheduled transaction</string>
     <string name="edit_transaction">Edit transaction</string>
     <string name="edit_transfer">Edit transfer</string>
     <string name="account">Account</string>
@@ -60,6 +68,13 @@
     <string name="delete_activity">Delete this activity?</string>
     <string name="delete_activity_message">This cannot be undone.</string>
     <string name="recurring_occurrence_note">This changes only this occurrence. Future scheduled transactions will continue.</string>
+    <string name="edit_schedule">Edit schedule</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="schedule_paused">Scheduled transaction paused.</string>
+    <string name="schedule_resumed">Scheduled transaction resumed.</string>
+    <string name="delete_schedule">Delete this schedule?</string>
+    <string name="delete_schedule_message">Past activity will remain. Future occurrences will stop.</string>
     <string name="account_saved">Account saved.</string>
     <string name="activity_saved">Activity saved.</string>
     <string name="account_archived">Account archived.</string>

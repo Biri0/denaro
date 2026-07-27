@@ -78,7 +78,13 @@ interface TransactionDao {
 @Dao
 interface RecurringRuleDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(rule: RecurringRuleEntity)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(rules: List<RecurringRuleEntity>)
+
+    @Query("SELECT * FROM recurring_rules WHERE id = :id")
+    suspend fun getById(id: String): RecurringRuleEntity?
 
     @Query(
         """
@@ -109,6 +115,9 @@ interface RecurringRuleDao {
 
     @Update
     suspend fun update(rule: RecurringRuleEntity)
+
+    @Delete
+    suspend fun delete(rule: RecurringRuleEntity)
 
     @Query(
         """

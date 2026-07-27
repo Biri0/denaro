@@ -53,6 +53,9 @@ data class AccountEditorRoute(val accountId: String? = null) : NavKey
 data class ActivityEditorRoute(
     val kind: ActivityKind = ActivityKind.EXPENSE,
     val id: String? = null,
+    val recurringRuleId: String? = null,
+    val scheduled: Boolean = false,
+    val accountId: String? = null,
 ) : NavKey
 
 private enum class TopLevelDestination(
@@ -194,6 +197,9 @@ fun DenaroApp(repository: FinanceRepository) {
                         amountsVisible = amountsVisible,
                         onBack = { backStack.removeLastOrNull() },
                         onEdit = { backStack.add(AccountEditorRoute(it)) },
+                        onEditSchedule = {
+                            backStack.add(ActivityEditorRoute(recurringRuleId = it))
+                        },
                     )
                 }
                 entry<ArchivedAccountsRoute> {
@@ -230,6 +236,9 @@ fun DenaroApp(repository: FinanceRepository) {
                         onFinished = { backStack.removeLastOrNull() },
                         onBack = { backStack.removeLastOrNull() },
                         onMessage = ::showMessage,
+                        onEditSchedule = {
+                            backStack.add(ActivityEditorRoute(recurringRuleId = it))
+                        },
                     )
                 }
             },

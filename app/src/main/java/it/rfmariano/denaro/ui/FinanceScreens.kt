@@ -3,6 +3,7 @@
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -244,6 +245,7 @@ fun AccountDetailRouteContent(
     amountsVisible: Boolean,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
+    onEditSchedule: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val account = state.account
@@ -309,6 +311,7 @@ fun AccountDetailRouteContent(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable { onEditSchedule(rule.id) }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                         ) {
                             Text(
@@ -343,6 +346,20 @@ fun AccountDetailRouteContent(
                                 ),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            Text(
+                                text = if (amountsVisible) {
+                                    Money.format(rule.amountMinor, account.currency)
+                                } else {
+                                    stringResource(R.string.amount_hidden)
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (!rule.isActive) {
+                                Text(
+                                    stringResource(R.string.paused),
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
                         }
                         HorizontalDivider(modifier = Modifier.padding(start = 20.dp))
                     }

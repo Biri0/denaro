@@ -68,6 +68,16 @@ data class TransferInput(
     val description: String?,
 )
 
+data class RecurringRuleInput(
+    val accountId: String,
+    val amountMinor: Long,
+    val transactionType: TransactionType,
+    val description: String?,
+    val frequency: RecurrenceFrequency,
+    val intervalCount: Int,
+    val nextOccurrenceAt: Long,
+)
+
 data class TransferAccountSuggestions(
     val preferredSourceId: String? = null,
     val preferredDestinationIds: Map<String, String> = emptyMap(),

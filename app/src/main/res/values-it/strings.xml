@@ -18,6 +18,8 @@
     <string name="restore">Ripristina</string>
     <string name="opening_balance">Saldo iniziale</string>
     <string name="scheduled">Programmati</string>
+    <string name="one_time">Una tantum</string>
+    <string name="paused">In pausa</string>
     <string name="no_activity">Nessun movimento</string>
     <string name="no_activity_description">Entrate, uscite e trasferimenti appariranno qui.</string>
     <string name="all">Tutti</string>
@@ -43,6 +45,10 @@
     <string name="currency">Valuta</string>
     <string name="amount">Importo</string>
     <string name="date">Data</string>
+    <string name="first_occurrence">Prima occorrenza</string>
+    <string name="next_occurrence_label">Prossima occorrenza</string>
+    <string name="repeat_every">Ripeti ogni</string>
+    <string name="frequency">Frequenza</string>
     <string name="save">Salva</string>
     <string name="cancel">Annulla</string>
     <string name="delete">Elimina</string>
@@ -51,6 +57,8 @@
     <string name="archive_account_message">Il conto verrà nascosto e i movimenti programmati attivi verranno interrotti. La cronologia resterà disponibile.</string>
     <string name="opening_balance_warning">La modifica del saldo iniziale cambia il saldo attuale del conto.</string>
     <string name="add_transaction">Aggiungi movimento</string>
+    <string name="add_scheduled_transaction">Aggiungi movimento programmato</string>
+    <string name="edit_scheduled_transaction">Modifica movimento programmato</string>
     <string name="edit_transaction">Modifica movimento</string>
     <string name="edit_transfer">Modifica trasferimento</string>
     <string name="account">Conto</string>
@@ -60,6 +68,13 @@
     <string name="delete_activity">Eliminare questo movimento?</string>
     <string name="delete_activity_message">Questa operazione non può essere annullata.</string>
     <string name="recurring_occurrence_note">La modifica riguarda solo questa occorrenza. I movimenti programmati futuri continueranno.</string>
+    <string name="edit_schedule">Modifica programmazione</string>
+    <string name="pause">Metti in pausa</string>
+    <string name="resume">Riprendi</string>
+    <string name="schedule_paused">Movimento programmato messo in pausa.</string>
+    <string name="schedule_resumed">Movimento programmato ripreso.</string>
+    <string name="delete_schedule">Eliminare questa programmazione?</string>
+    <string name="delete_schedule_message">I movimenti passati resteranno. Le occorrenze future verranno interrotte.</string>
     <string name="account_saved">Conto salvato.</string>
     <string name="activity_saved">Movimento salvato.</string>
     <string name="account_archived">Conto archiviato.</string>

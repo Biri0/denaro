@@ -4,14 +4,71 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import it.rfmariano.denaro.data.local.DenaroDatabase
+import it.rfmariano.denaro.data.local.RecurrenceFrequency
+import it.rfmariano.denaro.data.local.TransactionType
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FinanceRepositoryTest {
+    @Test
+    fun scheduledRuleCreatesDueActivityAndDeletionKeepsHistory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(
+            context,
+            DenaroDatabase::class.java,
+        ).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 1_000 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val ruleId = repository.createRecurringRule(
+                recurringRuleInput(accountId, nextOccurrenceAt = 0),
+            )
+
+            assertEquals(1, database.transactionDao().count())
+            repository.deleteRecurringRule(ruleId)
+
+            assertEquals(1, database.transactionDao().count())
+            assertNull(database.transactionDao().observeAll().first().single().recurringRuleId)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun resumeSkipsOccurrencesMissedWhilePaused() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(
+            context,
+            DenaroDatabase::class.java,
+        ).build()
+        var now = 0L
+
+        try {
+            val repository = FinanceRepository(database, clock = { now })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val ruleId = repository.createRecurringRule(
+                recurringRuleInput(accountId, nextOccurrenceAt = 86_400_000),
+            )
+            repository.pauseRecurringRule(ruleId)
+            now = 3 * 86_400_000L
+            repository.resumeRecurringRule(ruleId)
+
+            val rule = requireNotNull(repository.getRecurringRule(ruleId))
+            assertTrue(rule.isActive)
+            assertTrue(rule.nextOccurrenceAt > now)
+            assertEquals(0, database.transactionDao().count())
+        } finally {
+            database.close()
+        }
+    }
+
     @Test
     fun transferCreateAndUpdateRejectNegativeTimestamps() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -107,5 +164,18 @@ class FinanceRepositoryTest {
         amountMinor = 100,
         occurredAt = occurredAt,
         description = null,
+    )
+
+    private fun recurringRuleInput(
+        accountId: String,
+        nextOccurrenceAt: Long,
+    ) = RecurringRuleInput(
+        accountId = accountId,
+        amountMinor = 100,
+        transactionType = TransactionType.EXPENSE,
+        description = "Rent",
+        frequency = RecurrenceFrequency.DAILY,
+        intervalCount = 1,
+        nextOccurrenceAt = nextOccurrenceAt,
     )
 }

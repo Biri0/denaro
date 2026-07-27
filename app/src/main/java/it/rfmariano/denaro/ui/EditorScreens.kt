@@ -50,11 +50,13 @@ import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
+import it.rfmariano.denaro.data.finance.RecurringRuleInput
 import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import it.rfmariano.denaro.data.finance.TransactionInput
 import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransferInput
 import it.rfmariano.denaro.data.local.TransactionType
+import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -276,16 +278,25 @@ fun ActivityEditorScreen(
     onFinished: () -> Unit,
     onBack: () -> Unit,
     onMessage: (String) -> Unit,
+    onEditSchedule: (String) -> Unit = {},
 ) {
     val accounts by repository.observeActiveAccounts().collectAsStateWithLifecycle(emptyList())
     var kind by rememberSaveable { mutableStateOf(route.kind) }
-    var accountId by rememberSaveable { mutableStateOf("") }
+    var accountId by rememberSaveable { mutableStateOf(route.accountId.orEmpty()) }
     var destinationId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var occurredAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var recurringRuleId by rememberSaveable { mutableStateOf<String?>(null) }
-    var loaded by rememberSaveable(route.id) { mutableStateOf(route.id == null) }
+    var isScheduled by rememberSaveable {
+        mutableStateOf(route.scheduled || route.recurringRuleId != null)
+    }
+    var frequency by rememberSaveable { mutableStateOf(RecurrenceFrequency.MONTHLY) }
+    var intervalCount by rememberSaveable { mutableStateOf("1") }
+    var ruleActive by rememberSaveable { mutableStateOf(true) }
+    var loaded by rememberSaveable(route.id, route.recurringRuleId) {
+        mutableStateOf(route.id == null && route.recurringRuleId == null)
+    }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var transferSuggestions by remember { mutableStateOf(TransferAccountSuggestions()) }
     var transferSuggestionsLoaded by remember { mutableStateOf(false) }
@@ -296,14 +307,18 @@ fun ActivityEditorScreen(
     }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showFrequencyMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val savedMessage = stringResource(R.string.activity_saved)
     val deletedMessage = stringResource(R.string.activity_deleted)
+    val pausedMessage = stringResource(R.string.schedule_paused)
+    val resumedMessage = stringResource(R.string.schedule_resumed)
 
     LaunchedEffect(accounts, route.id, kind) {
         if (
             route.id == null &&
+            route.recurringRuleId == null &&
             kind != ActivityKind.TRANSFER &&
             accountId.isEmpty() &&
             accounts.isNotEmpty()
@@ -312,7 +327,7 @@ fun ActivityEditorScreen(
         }
     }
     LaunchedEffect(accounts, route.id) {
-        if (route.id == null && accounts.isNotEmpty()) {
+        if (route.id == null && route.recurringRuleId == null && accounts.isNotEmpty()) {
             transferSuggestions = repository.getTransferAccountSuggestions()
             transferSuggestionsLoaded = true
         }
@@ -326,6 +341,7 @@ fun ActivityEditorScreen(
     ) {
         if (
             route.id == null &&
+            route.recurringRuleId == null &&
             kind == ActivityKind.TRANSFER &&
             accounts.isNotEmpty() &&
             transferSuggestionsLoaded &&
@@ -378,6 +394,26 @@ fun ActivityEditorScreen(
             loaded = true
         }
     }
+    LaunchedEffect(route.recurringRuleId) {
+        route.recurringRuleId?.let { id ->
+            repository.getRecurringRule(id)?.let {
+                kind = if (it.transactionType == TransactionType.INCOME) {
+                    ActivityKind.INCOME
+                } else {
+                    ActivityKind.EXPENSE
+                }
+                accountId = it.accountId
+                amount = it.amountMinor.toInputAmount()
+                description = it.description.orEmpty()
+                occurredAt = it.nextOccurrenceAt
+                frequency = it.frequency
+                intervalCount = it.intervalCount.toString()
+                ruleActive = it.isActive
+                isScheduled = true
+            }
+            loaded = true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -386,6 +422,9 @@ fun ActivityEditorScreen(
                     Text(
                         stringResource(
                             when {
+                                route.recurringRuleId != null ->
+                                    R.string.edit_scheduled_transaction
+                                isScheduled -> R.string.add_scheduled_transaction
                                 route.id == null -> R.string.add_transaction
                                 route.kind == ActivityKind.TRANSFER -> R.string.edit_transfer
                                 else -> R.string.edit_transaction
@@ -404,7 +443,32 @@ fun ActivityEditorScreen(
                             scope.launch {
                                 runCatching {
                                     val amountMinor = Money.parseMinorUnits(amount)
-                                    if (kind == ActivityKind.TRANSFER) {
+                                    if (isScheduled) {
+                                        val input = RecurringRuleInput(
+                                            accountId = accountId,
+                                            amountMinor = amountMinor,
+                                            transactionType = if (kind == ActivityKind.INCOME) {
+                                                TransactionType.INCOME
+                                            } else {
+                                                TransactionType.EXPENSE
+                                            },
+                                            description = description,
+                                            frequency = frequency,
+                                            intervalCount = intervalCount.toIntOrNull()
+                                                ?: throw IllegalArgumentException(
+                                                    "Interval must be greater than zero",
+                                                ),
+                                            nextOccurrenceAt = occurredAt,
+                                        )
+                                        if (route.recurringRuleId == null) {
+                                            repository.createRecurringRule(input)
+                                        } else {
+                                            repository.updateRecurringRule(
+                                                route.recurringRuleId,
+                                                input,
+                                            )
+                                        }
+                                    } else if (kind == ActivityKind.TRANSFER) {
                                         val input = TransferInput(
                                             fromAccountId = accountId,
                                             toAccountId = destinationId,
@@ -464,7 +528,7 @@ fun ActivityEditorScreen(
                 ActivityKind.entries.forEachIndexed { index, option ->
                     SegmentedButton(
                         selected = kind == option,
-                        enabled = route.id == null,
+                        enabled = route.id == null && route.recurringRuleId == null,
                         onClick = {
                             if (option == ActivityKind.TRANSFER && kind != option) {
                                 transferDefaultsApplied = false
@@ -473,6 +537,9 @@ fun ActivityEditorScreen(
                             }
                             kind = option
                             destinationId = ""
+                            if (option == ActivityKind.TRANSFER) {
+                                isScheduled = false
+                            }
                         },
                         shape = SegmentedButtonDefaults.itemShape(
                             index,
@@ -488,6 +555,28 @@ fun ActivityEditorScreen(
                                 },
                             ),
                         )
+                    }
+                }
+            }
+            if (kind != ActivityKind.TRANSFER && route.id == null) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    listOf(false, true).forEachIndexed { index, scheduled ->
+                        SegmentedButton(
+                            selected = isScheduled == scheduled,
+                            enabled = route.recurringRuleId == null,
+                            onClick = { isScheduled = scheduled },
+                            shape = SegmentedButtonDefaults.itemShape(index, 2),
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (scheduled) {
+                                        R.string.scheduled
+                                    } else {
+                                        R.string.one_time
+                                    },
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -543,11 +632,65 @@ fun ActivityEditorScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (isScheduled) {
+                OutlinedTextField(
+                    value = intervalCount,
+                    onValueChange = { intervalCount = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.repeat_every)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ExposedDropdownMenuBox(
+                    expanded = showFrequencyMenu,
+                    onExpandedChange = { showFrequencyMenu = !showFrequencyMenu },
+                ) {
+                    OutlinedTextField(
+                        value = stringResource(frequency.labelResource()),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.frequency)) },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(showFrequencyMenu)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                enabled = true,
+                            ),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showFrequencyMenu,
+                        onDismissRequest = { showFrequencyMenu = false },
+                    ) {
+                        RecurrenceFrequency.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(option.labelResource())) },
+                                onClick = {
+                                    frequency = option
+                                    showFrequencyMenu = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             OutlinedButton(
                 onClick = { showDatePicker = true },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("${stringResource(R.string.date)}: ${occurredAt.formattedDate()}")
+                Text(
+                    "${
+                        stringResource(
+                            when {
+                                route.recurringRuleId != null -> R.string.next_occurrence_label
+                                isScheduled -> R.string.first_occurrence
+                                else -> R.string.date
+                            },
+                        )
+                    }: ${occurredAt.formattedDate()}",
+                )
             }
             OutlinedTextField(
                 value = description,
@@ -562,11 +705,45 @@ fun ActivityEditorScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
+                TextButton(onClick = { onEditSchedule(it) }) {
+                    Text(stringResource(R.string.edit_schedule))
+                }
             }
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
-            if (route.id != null) {
+            if (route.recurringRuleId != null) {
+                HorizontalDivider()
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            runCatching {
+                                if (ruleActive) {
+                                    repository.pauseRecurringRule(route.recurringRuleId)
+                                } else {
+                                    repository.resumeRecurringRule(route.recurringRuleId)
+                                }
+                            }.onSuccess {
+                                ruleActive = !ruleActive
+                                onMessage(if (ruleActive) resumedMessage else pausedMessage)
+                            }.onFailure { error = it.message }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        stringResource(
+                            if (ruleActive) R.string.pause else R.string.resume,
+                        ),
+                    )
+                }
+                OutlinedButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            } else if (route.id != null) {
                 HorizontalDivider()
                 OutlinedButton(
                     onClick = { confirmDelete = true },
@@ -606,21 +783,43 @@ fun ActivityEditorScreen(
         }
     }
 
-    if (confirmDelete && route.id != null) {
+    if (confirmDelete && (route.id != null || route.recurringRuleId != null)) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.delete_activity)) },
-            text = { Text(stringResource(R.string.delete_activity_message)) },
+            title = {
+                Text(
+                    stringResource(
+                        if (route.recurringRuleId != null) {
+                            R.string.delete_schedule
+                        } else {
+                            R.string.delete_activity
+                        },
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        if (route.recurringRuleId != null) {
+                            R.string.delete_schedule_message
+                        } else {
+                            R.string.delete_activity_message
+                        },
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmDelete = false
                         scope.launch {
                             runCatching {
-                                if (route.kind == ActivityKind.TRANSFER) {
-                                    repository.deleteTransfer(route.id)
+                                if (route.recurringRuleId != null) {
+                                    repository.deleteRecurringRule(route.recurringRuleId)
+                                } else if (route.kind == ActivityKind.TRANSFER) {
+                                    repository.deleteTransfer(requireNotNull(route.id))
                                 } else {
-                                    repository.deleteTransaction(route.id)
+                                    repository.deleteTransaction(requireNotNull(route.id))
                                 }
                             }.onSuccess {
                                 onMessage(deletedMessage)
@@ -639,6 +838,13 @@ fun ActivityEditorScreen(
             },
         )
     }
+}
+
+private fun RecurrenceFrequency.labelResource(): Int = when (this) {
+    RecurrenceFrequency.DAILY -> R.string.daily
+    RecurrenceFrequency.WEEKLY -> R.string.weekly
+    RecurrenceFrequency.MONTHLY -> R.string.monthly
+    RecurrenceFrequency.YEARLY -> R.string.yearly
 }
 
 private fun suggestedDestinationId(

@@ -8,6 +8,8 @@ import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.ActivityRecord
 import it.rfmariano.denaro.data.local.DenaroDatabase
+import it.rfmariano.denaro.data.local.RecurrenceFrequency
+import it.rfmariano.denaro.data.local.RecurringRuleEntity
 import it.rfmariano.denaro.data.local.TransactionEntity
 import it.rfmariano.denaro.data.local.TransferEntity
 import it.rfmariano.denaro.data.local.TransferPairUsage
@@ -235,6 +237,100 @@ class FinanceRepository(
         recurrenceProcessor.processDueRules()
     }
 
+    suspend fun getRecurringRule(id: String): RecurringRuleEntity? =
+        database.recurringRuleDao().getById(id)
+
+    suspend fun createRecurringRule(input: RecurringRuleInput): String {
+        validateRecurringRule(input)
+        requireActiveAccount(input.accountId)
+        val timestamp = clock()
+        val id = UuidV7.generate()
+        val zoneId = ZoneId.systemDefault()
+        val occurrence = Instant.ofEpochMilli(input.nextOccurrenceAt).atZone(zoneId)
+        database.recurringRuleDao().insert(
+            RecurringRuleEntity(
+                id = id,
+                accountId = input.accountId,
+                amountMinor = input.amountMinor,
+                transactionType = input.transactionType,
+                description = input.description.normalized(),
+                frequency = input.frequency,
+                intervalCount = input.intervalCount,
+                timezoneId = zoneId.id,
+                anchorDay = occurrence.anchorDay(input.frequency),
+                anchorMonth = occurrence.anchorMonth(input.frequency),
+                startAt = input.nextOccurrenceAt,
+                lastGeneratedAt = null,
+                nextOccurrenceAt = input.nextOccurrenceAt,
+                isActive = true,
+                createdAt = timestamp,
+                updatedAt = timestamp,
+            ),
+        )
+        processDueRecurrences()
+        return id
+    }
+
+    suspend fun updateRecurringRule(id: String, input: RecurringRuleInput) {
+        validateRecurringRule(input)
+        requireActiveAccount(input.accountId)
+        val existing = requireNotNull(database.recurringRuleDao().getById(id)) {
+            "Scheduled transaction not found"
+        }
+        val zoneId = ZoneId.of(existing.timezoneId)
+        val occurrence = Instant.ofEpochMilli(input.nextOccurrenceAt).atZone(zoneId)
+        database.recurringRuleDao().update(
+            existing.copy(
+                accountId = input.accountId,
+                amountMinor = input.amountMinor,
+                transactionType = input.transactionType,
+                description = input.description.normalized(),
+                frequency = input.frequency,
+                intervalCount = input.intervalCount,
+                anchorDay = occurrence.anchorDay(input.frequency),
+                anchorMonth = occurrence.anchorMonth(input.frequency),
+                nextOccurrenceAt = input.nextOccurrenceAt,
+                updatedAt = clock(),
+            ),
+        )
+        if (existing.isActive) processDueRecurrences()
+    }
+
+    suspend fun pauseRecurringRule(id: String) {
+        val existing = requireNotNull(database.recurringRuleDao().getById(id)) {
+            "Scheduled transaction not found"
+        }
+        database.recurringRuleDao().update(
+            existing.copy(isActive = false, updatedAt = clock()),
+        )
+    }
+
+    suspend fun resumeRecurringRule(id: String) {
+        var existing = requireNotNull(database.recurringRuleDao().getById(id)) {
+            "Scheduled transaction not found"
+        }
+        requireActiveAccount(existing.accountId)
+        val now = clock()
+        while (existing.nextOccurrenceAt <= now) {
+            existing = existing.copy(
+                nextOccurrenceAt = RecurrenceCalculator.nextOccurrence(
+                    existing,
+                    existing.nextOccurrenceAt,
+                ),
+            )
+        }
+        database.recurringRuleDao().update(
+            existing.copy(isActive = true, updatedAt = now),
+        )
+    }
+
+    suspend fun deleteRecurringRule(id: String) {
+        val existing = requireNotNull(database.recurringRuleDao().getById(id)) {
+            "Scheduled transaction not found"
+        }
+        database.recurringRuleDao().delete(existing)
+    }
+
     private suspend fun validateTransfer(input: TransferInput) {
         require(input.amountMinor > 0) { "Amount must be greater than zero" }
         require(input.occurredAt >= 0) { "Date is invalid" }
@@ -266,6 +362,12 @@ class FinanceRepository(
         require(input.occurredAt >= 0) { "Date is invalid" }
     }
 
+    private fun validateRecurringRule(input: RecurringRuleInput) {
+        require(input.amountMinor > 0) { "Amount must be greater than zero" }
+        require(input.intervalCount > 0) { "Interval must be greater than zero" }
+        require(input.nextOccurrenceAt >= 0) { "Date is invalid" }
+    }
+
     private fun TransferInput.toEntity(
         id: String,
         createdAt: Long,
@@ -286,6 +388,17 @@ class FinanceRepository(
         Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
     private fun String?.normalized(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+
+    private fun java.time.ZonedDateTime.anchorDay(
+        frequency: RecurrenceFrequency,
+    ): Int? = when (frequency) {
+        RecurrenceFrequency.MONTHLY, RecurrenceFrequency.YEARLY -> dayOfMonth
+        else -> null
+    }
+
+    private fun java.time.ZonedDateTime.anchorMonth(
+        frequency: RecurrenceFrequency,
+    ): Int? = if (frequency == RecurrenceFrequency.YEARLY) monthValue else null
 
     private fun AccountEntity.toSummary(balanceMinor: Long?): AccountSummary =
         AccountSummary(
