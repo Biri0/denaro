@@ -1,5 +1,9 @@
 package it.rfmariano.denaro.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -13,8 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +34,7 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.composables.icons.lucide.R as LucideR
@@ -39,6 +47,9 @@ private data object AccountsRoute : NavKey
 
 @Serializable
 private data object ActivityRoute : NavKey
+
+@Serializable
+private data object SettingsRoute : NavKey
 
 @Serializable
 private data class AccountDetailRoute(val accountId: String) : NavKey
@@ -68,7 +79,11 @@ private enum class TopLevelDestination(
 }
 
 @Composable
-fun DenaroApp(repository: FinanceRepository) {
+fun DenaroApp(
+    repository: FinanceRepository,
+    preferencesRepository: AppPreferencesRepository,
+) {
+    val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     val homeBackStack = rememberNavBackStack(HomeRoute)
     val accountsBackStack = rememberNavBackStack(AccountsRoute)
     val activityBackStack = rememberNavBackStack(ActivityRoute)
@@ -110,39 +125,24 @@ fun DenaroApp(repository: FinanceRepository) {
         processRecurrences()
     }
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            TopLevelDestination.entries.forEach { destination ->
-                item(
-                    selected = currentDestination == destination,
-                    onClick = { currentDestination = destination },
-                    icon = {
-                        Icon(
-                            painter = painterResource(destination.icon),
-                            contentDescription = stringResource(destination.label),
-                        )
-                    },
-                    label = { Text(stringResource(destination.label)) },
-                )
-            }
-        },
-    ) {
-        val backStack = when (currentDestination) {
-            TopLevelDestination.HOME -> homeBackStack
-            TopLevelDestination.ACCOUNTS -> accountsBackStack
-            TopLevelDestination.ACTIVITY -> activityBackStack
-        }
-        SnackbarHost(hostState = snackbarHostState)
-        NavDisplay(
-            backStack = backStack,
-            onBack = {
-                if (backStack.size > 1) {
-                    backStack.removeLastOrNull()
-                } else if (currentDestination != TopLevelDestination.HOME) {
-                    currentDestination = TopLevelDestination.HOME
-                }
-            },
-            entryProvider = entryProvider {
+    val backStack = when (currentDestination) {
+        TopLevelDestination.HOME -> homeBackStack
+        TopLevelDestination.ACCOUNTS -> accountsBackStack
+        TopLevelDestination.ACTIVITY -> activityBackStack
+    }
+    val appContent: @Composable () -> Unit = {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavDisplay(
+                modifier = Modifier.fillMaxSize(),
+                backStack = backStack,
+                onBack = {
+                    if (backStack.size > 1) {
+                        backStack.removeLastOrNull()
+                    } else if (currentDestination != TopLevelDestination.HOME) {
+                        currentDestination = TopLevelDestination.HOME
+                    }
+                },
+                entryProvider = entryProvider {
                 entry<HomeRoute> {
                     HomeRouteContent(
                         viewModel = homeViewModel,
@@ -156,6 +156,13 @@ fun DenaroApp(repository: FinanceRepository) {
                         onActivityClick = { item ->
                             homeBackStack.add(item.editorRoute())
                         },
+                        onSettings = { homeBackStack.add(SettingsRoute) },
+                    )
+                }
+                    entry<SettingsRoute> {
+                        SettingsScreen(
+                            preferencesRepository = preferencesRepository,
+                            onBack = { homeBackStack.removeLastOrNull() },
                     )
                 }
                 entry<AccountsRoute> {
@@ -206,6 +213,7 @@ fun DenaroApp(repository: FinanceRepository) {
                     val state by accountsViewModel.uiState.collectAsStateWithLifecycle()
                     ArchivedAccountsRouteContent(
                         accounts = state.archived,
+                        isLoading = state.isLoading,
                         amountsVisible = amountsVisible,
                         onBack = { backStack.removeLastOrNull() },
                         onRestore = { accountId ->
@@ -223,6 +231,7 @@ fun DenaroApp(repository: FinanceRepository) {
                 entry<AccountEditorRoute> { route ->
                     AccountEditorScreen(
                         repository = repository,
+                        defaultCurrency = preferences.defaultCurrency,
                         accountId = route.accountId,
                         onFinished = { backStack.removeLastOrNull() },
                         onBack = { backStack.removeLastOrNull() },
@@ -241,8 +250,42 @@ fun DenaroApp(repository: FinanceRepository) {
                         },
                     )
                 }
+                },
+            )
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+            )
+        }
+    }
+    val settingsVisible =
+        currentDestination == TopLevelDestination.HOME &&
+                homeBackStack.lastOrNull() is SettingsRoute
+    if (settingsVisible) {
+        appContent()
+    } else {
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                TopLevelDestination.entries.forEach { destination ->
+                    item(
+                        selected = currentDestination == destination,
+                        onClick = { currentDestination = destination },
+                        icon = {
+                            Icon(
+                                painter = painterResource(destination.icon),
+                                contentDescription = stringResource(destination.label),
+                            )
+                        },
+                        label = { Text(stringResource(destination.label)) },
+                    )
+                }
             },
-        )
+        ) {
+            appContent()
+        }
     }
 }
 

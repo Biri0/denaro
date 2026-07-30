@@ -2,8 +2,8 @@
 
 package it.rfmariano.denaro.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,6 +56,7 @@ fun HomeRouteContent(
     onAddAccount: () -> Unit,
     onSeeAllActivity: () -> Unit,
     onActivityClick: (ActivityItem) -> Unit,
+    onSettings: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Scaffold(
@@ -63,6 +64,12 @@ fun HomeRouteContent(
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(
+                            painter = painterResource(LucideR.drawable.lucide_ic_settings),
+                            contentDescription = stringResource(R.string.settings),
+                        )
+                    }
                     IconButton(onClick = onToggleAmounts) {
                         Icon(
                             painter = painterResource(
@@ -85,65 +92,75 @@ fun HomeRouteContent(
             )
         },
     ) { padding ->
-        if (state.accounts.isEmpty()) {
-            EmptyState(
-                icon = LucideR.drawable.lucide_ic_wallet,
-                title = stringResource(R.string.no_accounts),
-                description = stringResource(R.string.no_accounts_description),
-                modifier = Modifier.padding(padding),
-                action = {
-                    Button(onClick = onAddAccount) {
-                        Text(stringResource(R.string.add_account))
-                    }
-                },
-            )
-        } else {
-            LazyColumn(
+        when {
+            state.isLoading -> HomeLoadingSkeleton(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 24.dp),
-            ) {
-                item {
-                    BalanceBand(state.totalsByCurrency, amountsVisible)
-                }
-                item {
-                    SectionHeader(stringResource(R.string.accounts))
-                }
-                items(state.accounts, key = AccountSummary::id) { account ->
-                    AccountRow(
-                        account = account,
-                        amountsVisible = amountsVisible,
-                        onClick = { onAccountClick(account.id) },
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
-                }
-                item {
-                    SectionHeader(
-                        title = stringResource(R.string.recent_activity),
-                        action = {
-                            TextButton(onClick = onSeeAllActivity) {
-                                Text(stringResource(R.string.see_all))
-                            }
-                        },
-                    )
-                }
-                if (state.recentActivity.isEmpty()) {
+            )
+
+            shouldShowEmptyState(state.isLoading, state.accounts.size) -> {
+                EmptyState(
+                    icon = LucideR.drawable.lucide_ic_wallet,
+                    title = stringResource(R.string.no_accounts),
+                    description = stringResource(R.string.no_accounts_description),
+                    modifier = Modifier.padding(padding),
+                    action = {
+                        Button(onClick = onAddAccount) {
+                            Text(stringResource(R.string.add_account))
+                        }
+                    },
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                ) {
                     item {
-                        EmptyState(
-                            icon = LucideR.drawable.lucide_ic_receipt,
-                            title = stringResource(R.string.no_activity),
-                            description = stringResource(R.string.no_activity_description),
-                        )
+                        BalanceBand(state.totalsByCurrency, amountsVisible)
                     }
-                } else {
-                    items(state.recentActivity, key = ActivityItem::id) { activity ->
-                        ActivityRow(
-                            item = activity,
+                    item {
+                        SectionHeader(stringResource(R.string.accounts))
+                    }
+                    items(state.accounts, key = AccountSummary::id) { account ->
+                        AccountRow(
+                            account = account,
                             amountsVisible = amountsVisible,
-                            onClick = { onActivityClick(activity) },
+                            onClick = { onAccountClick(account.id) },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
+                    }
+                    item {
+                        SectionHeader(
+                            title = stringResource(R.string.recent_activity),
+                            action = {
+                                TextButton(onClick = onSeeAllActivity) {
+                                    Text(stringResource(R.string.see_all))
+                                }
+                            },
+                        )
+                    }
+                    if (state.recentActivity.isEmpty()) {
+                        item {
+                            EmptyState(
+                                icon = LucideR.drawable.lucide_ic_receipt,
+                                title = stringResource(R.string.no_activity),
+                                description = stringResource(R.string.no_activity_description),
+                            )
+                        }
+                    } else {
+                        items(state.recentActivity, key = ActivityItem::id) { activity ->
+                            ActivityRow(
+                                item = activity,
+                                amountsVisible = amountsVisible,
+                                onClick = { onActivityClick(activity) },
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
+                        }
                     }
                 }
             }
@@ -212,27 +229,37 @@ fun AccountsRouteContent(
             }
         },
     ) { padding ->
-        if (state.active.isEmpty()) {
-            EmptyState(
-                icon = LucideR.drawable.lucide_ic_wallet,
-                title = stringResource(R.string.no_accounts),
-                description = stringResource(R.string.no_accounts_description),
-                modifier = Modifier.padding(padding),
-            )
-        } else {
-            LazyColumn(
+        when {
+            state.isLoading -> AccountListLoadingSkeleton(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 96.dp),
-            ) {
-                items(state.active, key = AccountSummary::id) { account ->
-                    AccountRow(
-                        account = account,
-                        amountsVisible = amountsVisible,
-                        onClick = { onAccountClick(account.id) },
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
+            )
+
+            shouldShowEmptyState(state.isLoading, state.active.size) -> {
+                EmptyState(
+                    icon = LucideR.drawable.lucide_ic_wallet,
+                    title = stringResource(R.string.no_accounts),
+                    description = stringResource(R.string.no_accounts_description),
+                    modifier = Modifier.padding(padding),
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(bottom = 96.dp),
+                ) {
+                    items(state.active, key = AccountSummary::id) { account ->
+                        AccountRow(
+                            account = account,
+                            amountsVisible = amountsVisible,
+                            onClick = { onAccountClick(account.id) },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
+                    }
                 }
             }
         }
@@ -267,7 +294,13 @@ fun AccountDetailRouteContent(
             )
         },
     ) { padding ->
-        if (account != null) {
+        if (state.isLoading) {
+            AccountDetailLoadingSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            )
+        } else if (account != null) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -372,6 +405,7 @@ fun AccountDetailRouteContent(
 @Composable
 fun ArchivedAccountsRouteContent(
     accounts: List<AccountSummary>,
+    isLoading: Boolean,
     amountsVisible: Boolean,
     onBack: () -> Unit,
     onRestore: (String) -> Unit,
@@ -384,7 +418,13 @@ fun ArchivedAccountsRouteContent(
             )
         },
     ) { padding ->
-        if (accounts.isEmpty()) {
+        if (isLoading) {
+            AccountListLoadingSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            )
+        } else if (shouldShowEmptyState(isLoading, accounts.size)) {
             EmptyState(
                 icon = LucideR.drawable.lucide_ic_archive,
                 title = stringResource(R.string.no_archived_accounts),
@@ -505,15 +545,39 @@ private fun ActivityList(
     perspectiveAccountId: String?,
     onActivityClick: (ActivityItem) -> Unit,
 ) {
-    if (activity.loadState.refresh is LoadState.NotLoading && activity.itemCount == 0) {
-        EmptyState(
-            icon = LucideR.drawable.lucide_ic_receipt,
-            title = stringResource(R.string.no_activity),
-            description = stringResource(R.string.no_activity_description),
-        )
-        return
+    when (activity.loadState.refresh) {
+        is LoadState.Loading -> {
+            ActivityLoadingSkeleton(modifier = Modifier.fillMaxSize())
+            return
+        }
+
+        is LoadState.Error -> {
+            EmptyState(
+                icon = LucideR.drawable.lucide_ic_receipt,
+                title = stringResource(R.string.activity_load_failed),
+                description = "",
+                action = {
+                    Button(onClick = activity::retry) {
+                        Text(stringResource(R.string.retry))
+                    }
+                },
+            )
+            return
+        }
+
+        is LoadState.NotLoading -> {
+            if (activity.itemCount == 0) {
+                EmptyState(
+                    icon = LucideR.drawable.lucide_ic_receipt,
+                    title = stringResource(R.string.no_activity),
+                    description = stringResource(R.string.no_activity_description),
+                )
+                return
+            }
+        }
     }
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         state = rememberLazyListState(),
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
@@ -545,8 +609,35 @@ private fun ActivityList(
                 HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
             }
         }
+        when (activity.loadState.append) {
+            is LoadState.Loading -> {
+                item {
+                    ActivityLoadingSkeleton(rowCount = 2)
+                }
+            }
+
+            is LoadState.Error -> {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        TextButton(onClick = activity::retry) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
+            }
+
+            is LoadState.NotLoading -> Unit
+        }
     }
 }
+
+internal fun shouldShowEmptyState(isLoading: Boolean, itemCount: Int): Boolean =
+    !isLoading && itemCount == 0
 
 @Composable
 fun BackButton(onClick: () -> Unit) {

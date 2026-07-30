@@ -85,7 +85,12 @@ class FinanceRepository(
         kind: ActivityKind?,
         accountId: String?,
     ): Flow<PagingData<ActivityItem>> = Pager(
-        config = PagingConfig(pageSize = 40, initialLoadSize = 40),
+        config = PagingConfig(
+            pageSize = 40,
+            initialLoadSize = 40,
+            prefetchDistance = 10,
+            enablePlaceholders = false,
+        ),
         pagingSourceFactory = {
             database.activityDao().pagingSource(kind?.name, accountId)
         },

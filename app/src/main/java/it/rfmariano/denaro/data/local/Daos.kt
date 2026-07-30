@@ -46,6 +46,7 @@ interface AccountDao {
 
     @Query("SELECT COUNT(*) FROM accounts")
     suspend fun count(): Int
+
 }
 
 @Dao
@@ -73,6 +74,7 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
+
 }
 
 @Dao
@@ -130,6 +132,7 @@ interface RecurringRuleDao {
 
     @Query("SELECT COUNT(*) FROM recurring_rules")
     suspend fun count(): Int
+
 }
 
 @Dao
@@ -166,6 +169,7 @@ interface TransferDao {
 
     @Query("SELECT COUNT(*) FROM transfers")
     suspend fun count(): Int
+
 }
 
 data class TransferPairUsage(

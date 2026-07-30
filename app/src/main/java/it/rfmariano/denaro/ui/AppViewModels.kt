@@ -18,51 +18,77 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 data class HomeUiState(
+    val isLoading: Boolean = true,
     val accounts: List<AccountSummary> = emptyList(),
     val totalsByCurrency: Map<String, Long> = emptyMap(),
     val recentActivity: List<ActivityItem> = emptyList(),
 )
 
-class HomeViewModel(repository: FinanceRepository) : ViewModel() {
-    val uiState = combine(
-        repository.observeActiveAccounts(),
-        repository.observeRecentActivity(),
-    ) { accounts, activity ->
-        HomeUiState(
-            accounts = accounts,
-            totalsByCurrency = accounts
-                .groupBy(AccountSummary::currency)
-                .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
-                .toSortedMap(),
-            recentActivity = activity,
-        )
+class HomeViewModel(private val repository: FinanceRepository) : ViewModel() {
+    private val refreshRequests = MutableStateFlow(0L)
+
+    val uiState = refreshableFlow(refreshRequests, HomeUiState()) {
+        combine(
+            repository.observeActiveAccounts(),
+            repository.observeRecentActivity(),
+        ) { accounts, activity ->
+            HomeUiState(
+                isLoading = false,
+                accounts = accounts,
+                totalsByCurrency = accounts
+                    .groupBy(AccountSummary::currency)
+                    .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
+                    .toSortedMap(),
+                recentActivity = activity,
+            )
+        }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         HomeUiState(),
     )
+
+    fun refresh() {
+        refreshRequests.update { it + 1 }
+    }
 }
 
 data class AccountsUiState(
+    val isLoading: Boolean = true,
     val active: List<AccountSummary> = emptyList(),
     val archived: List<AccountSummary> = emptyList(),
 )
 
-class AccountsViewModel(repository: FinanceRepository) : ViewModel() {
-    val uiState = combine(
-        repository.observeActiveAccounts(),
-        repository.observeArchivedAccounts(),
-        ::AccountsUiState,
-    ).stateIn(
+class AccountsViewModel(private val repository: FinanceRepository) : ViewModel() {
+    private val refreshRequests = MutableStateFlow(0L)
+
+    val uiState = refreshableFlow(refreshRequests, AccountsUiState()) {
+        combine(
+            repository.observeActiveAccounts(),
+            repository.observeArchivedAccounts(),
+        ) { active, archived ->
+            AccountsUiState(
+                isLoading = false,
+                active = active,
+                archived = archived,
+            )
+        }
+    }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         AccountsUiState(),
     )
+
+    fun refresh() {
+        refreshRequests.update { it + 1 }
+    }
 }
 
 data class AccountDetailUiState(
+    val isLoading: Boolean = true,
     val account: AccountSummary? = null,
     val recurringRules: List<RecurringRuleSummary> = emptyList(),
 )
@@ -74,8 +100,13 @@ class AccountDetailViewModel(
     val uiState = combine(
         repository.observeAccount(accountId),
         repository.observeRecurringRules(accountId),
-        ::AccountDetailUiState,
-    ).stateIn(
+    ) { account, recurringRules ->
+        AccountDetailUiState(
+            isLoading = false,
+            account = account,
+            recurringRules = recurringRules,
+        )
+    }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         AccountDetailUiState(),
@@ -86,6 +117,7 @@ class AccountDetailViewModel(
 class ActivityViewModel(private val repository: FinanceRepository) : ViewModel() {
     val selectedKind = MutableStateFlow<ActivityKind?>(null)
     val selectedAccountId = MutableStateFlow<String?>(null)
+    private val refreshRequests = MutableStateFlow(0L)
     val accounts = repository.observeActiveAccounts().stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -94,10 +126,16 @@ class ActivityViewModel(private val repository: FinanceRepository) : ViewModel()
     val activity: Flow<PagingData<ActivityItem>> = combine(
         selectedKind,
         selectedAccountId,
-        ::Pair,
-    ).flatMapLatest { (kind, accountId) ->
+        refreshRequests,
+    ) { kind, accountId, _ ->
+        kind to accountId
+    }.flatMapLatest { (kind, accountId) ->
         repository.activityPager(kind, accountId)
     }.cachedIn(viewModelScope)
+
+    fun refresh() {
+        refreshRequests.update { it + 1 }
+    }
 }
 
 inline fun <reified T : ViewModel> viewModelFactory(

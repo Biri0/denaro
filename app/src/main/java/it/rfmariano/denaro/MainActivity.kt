@@ -1,44 +1,69 @@
 package it.rfmariano.denaro
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import it.rfmariano.denaro.data.migration.LegacyMigrationCoordinator
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.data.migration.MigrationResult
+import it.rfmariano.denaro.data.migration.MigrationViewModel
+import it.rfmariano.denaro.data.preferences.ThemeMode
 import it.rfmariano.denaro.ui.DenaroApp
 import it.rfmariano.denaro.ui.theme.DenaroTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+    private val migrationViewModel by viewModels<MigrationViewModel>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        val denaroApplication = application as DenaroApplication
+        denaroApplication.preferencesRepository.applyStoredLanguage(force = true)
+        splashScreen.setKeepOnScreenCondition {
+            migrationViewModel.result.value == null
+        }
         enableEdgeToEdge()
         setContent {
-            DenaroTheme {
-                MigrationGate {
-                    DenaroApp(
-                        repository = (application as DenaroApplication).financeRepository,
-                    )
+            val preferences by denaroApplication.preferencesRepository.state
+                .collectAsStateWithLifecycle()
+            val migrationResult by migrationViewModel.result.collectAsStateWithLifecycle()
+            DenaroTheme(
+                darkTheme = when (preferences.themeMode) {
+                    ThemeMode.SYSTEM -> null
+                    ThemeMode.LIGHT -> false
+                    ThemeMode.DARK -> true
+                },
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                ) {
+                    MigrationGate(
+                        result = migrationResult,
+                        onRetry = migrationViewModel::retry,
+                    ) {
+                        DenaroApp(
+                            repository = denaroApplication.financeRepository,
+                            preferencesRepository = denaroApplication.preferencesRepository,
+                        )
+                    }
                 }
             }
         }
@@ -46,43 +71,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MigrationGate(content: @Composable () -> Unit) {
-    val context = LocalContext.current.applicationContext
-    val coordinator = remember(context) {
-        LegacyMigrationCoordinator(context)
-    }
-    var attempt by remember { mutableIntStateOf(0) }
-    var result by remember { mutableStateOf<MigrationResult?>(null) }
-
-    LaunchedEffect(attempt) {
-        result = null
-        result = coordinator.migrateIfNeeded()
-    }
-
+private fun MigrationGate(
+    result: MigrationResult?,
+    onRetry: () -> Unit,
+    content: @Composable () -> Unit,
+) {
     when (val current = result) {
-        null -> MigrationProgress()
+        null -> Unit
         MigrationResult.NotNeeded,
         is MigrationResult.Success,
             -> content()
 
         is MigrationResult.Failure -> MigrationFailure(
             message = current.message,
-            onRetry = { attempt++ },
-        )
-    }
-}
-
-@Composable
-private fun MigrationProgress() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(40.dp))
-        Text(
-            text = stringResource(R.string.migration_progress),
-            modifier = Modifier.padding(top = 20.dp),
+            onRetry = onRetry,
         )
     }
 }

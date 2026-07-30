@@ -55,8 +55,8 @@ import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import it.rfmariano.denaro.data.finance.TransactionInput
 import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransferInput
-import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
+import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -67,6 +67,7 @@ import java.time.ZoneOffset
 @Composable
 fun AccountEditorScreen(
     repository: FinanceRepository,
+    defaultCurrency: String = "EUR",
     accountId: String?,
     onFinished: (String) -> Unit,
     onBack: () -> Unit,
@@ -75,7 +76,7 @@ fun AccountEditorScreen(
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var openingBalance by rememberSaveable { mutableStateOf("") }
-    var currency by rememberSaveable { mutableStateOf("EUR") }
+    var currency by rememberSaveable(accountId) { mutableStateOf(defaultCurrency) }
     var loaded by rememberSaveable(accountId) { mutableStateOf(accountId == null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }

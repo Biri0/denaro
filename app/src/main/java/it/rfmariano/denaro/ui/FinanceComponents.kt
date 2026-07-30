@@ -1,10 +1,17 @@
 package it.rfmariano.denaro.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +30,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.rfmariano.denaro.R
@@ -264,6 +274,214 @@ fun EmptyState(
             action()
         }
     }
+}
+
+@Composable
+fun HomeLoadingSkeleton(modifier: Modifier = Modifier) {
+    val alpha = rememberSkeletonAlpha()
+    LoadingSkeletonContainer(modifier) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(84.dp)
+                    .height(14.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(12.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(190.dp)
+                    .height(30.dp),
+                alpha = alpha,
+            )
+        }
+        SkeletonSectionHeader(alpha)
+        repeat(6) { AccountSkeletonRow(alpha) }
+    }
+}
+
+@Composable
+fun AccountListLoadingSkeleton(
+    modifier: Modifier = Modifier,
+    rowCount: Int = 7,
+) {
+    val alpha = rememberSkeletonAlpha()
+    LoadingSkeletonContainer(modifier) {
+        repeat(rowCount) { AccountSkeletonRow(alpha) }
+    }
+}
+
+@Composable
+fun AccountDetailLoadingSkeleton(modifier: Modifier = Modifier) {
+    val alpha = rememberSkeletonAlpha()
+    LoadingSkeletonContainer(modifier) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(110.dp)
+                    .height(14.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(10.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(180.dp)
+                    .height(30.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(20.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(14.dp),
+                alpha = alpha,
+            )
+        }
+        SkeletonSectionHeader(alpha)
+        repeat(3) { ActivitySkeletonRow(alpha) }
+    }
+}
+
+@Composable
+fun ActivityLoadingSkeleton(
+    modifier: Modifier = Modifier,
+    rowCount: Int = 7,
+) {
+    val alpha = rememberSkeletonAlpha()
+    LoadingSkeletonContainer(modifier) {
+        repeat(rowCount) { ActivitySkeletonRow(alpha) }
+    }
+}
+
+@Composable
+private fun LoadingSkeletonContainer(
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val loadingLabel = stringResource(R.string.loading)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = loadingLabel },
+        content = content,
+    )
+}
+
+@Composable
+private fun AccountSkeletonRow(alpha: Float) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBlock(Modifier.size(22.dp), alpha)
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(132.dp)
+                    .height(17.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(8.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(176.dp)
+                    .height(13.dp),
+                alpha = alpha,
+            )
+        }
+        SkeletonBlock(
+            modifier = Modifier
+                .width(92.dp)
+                .height(18.dp),
+            alpha = alpha,
+        )
+    }
+}
+
+@Composable
+private fun ActivitySkeletonRow(alpha: Float) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBlock(Modifier.size(36.dp), alpha)
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(150.dp)
+                    .height(17.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(8.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(104.dp)
+                    .height(13.dp),
+                alpha = alpha,
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(82.dp)
+                    .height(17.dp),
+                alpha = alpha,
+            )
+            Spacer(Modifier.height(8.dp))
+            SkeletonBlock(
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(13.dp),
+                alpha = alpha,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SkeletonSectionHeader(alpha: Float) {
+    SkeletonBlock(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .width(116.dp)
+            .height(17.dp),
+        alpha = alpha,
+    )
+}
+
+@Composable
+private fun SkeletonBlock(
+    modifier: Modifier,
+    alpha: Float,
+) {
+    Box(
+        modifier = modifier
+            .alpha(alpha)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(6.dp),
+            ),
+    )
+}
+
+@Composable
+private fun rememberSkeletonAlpha(): Float {
+    val transition = rememberInfiniteTransition(label = "skeleton pulse")
+    return transition.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 0.78f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "skeleton alpha",
+    ).value
 }
 
 fun Long.formattedDate(): String = DateTimeFormatter

@@ -29,11 +29,12 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun DenaroTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
+    val useDarkTheme = darkTheme ?: isSystemInDarkTheme()
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
+        colorScheme = if (useDarkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content,
     )

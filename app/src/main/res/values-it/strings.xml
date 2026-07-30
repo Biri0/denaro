@@ -3,6 +3,8 @@
     <string name="migration_progress">Preparazione dei dati…</string>
     <string name="migration_failed">Impossibile migrare i dati esistenti.</string>
     <string name="retry">Riprova</string>
+    <string name="loading">Caricamento</string>
+    <string name="activity_load_failed">Impossibile caricare i movimenti.</string>
     <string name="home">Home</string>
     <string name="accounts">Conti</string>
     <string name="activity">Movimenti</string>
@@ -82,4 +84,15 @@
     <string name="choose_same_currency">Scegli due conti diversi con la stessa valuta.</string>
     <string name="filter_account">Filtra per conto</string>
     <string name="clear_filter">Rimuovi filtro</string>
+    <string name="settings">Impostazioni</string>
+    <string name="appearance">Aspetto</string>
+    <string name="general">Generali</string>
+    <string name="theme">Tema</string>
+    <string name="language">Lingua</string>
+    <string name="default_currency">Valuta predefinita</string>
+    <string name="system_default">Predefinito di sistema</string>
+    <string name="light">Chiaro</string>
+    <string name="dark">Scuro</string>
+    <string name="english">English</string>
+    <string name="italian">Italiano</string>
 </resources>
