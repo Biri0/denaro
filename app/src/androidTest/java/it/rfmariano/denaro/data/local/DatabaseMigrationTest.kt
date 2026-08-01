@@ -68,6 +68,36 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration2To3AlignsExistingSubcategoryColors() {
+        helper.createDatabase(TEST_DATABASE, 2).apply {
+            execSQL(
+                """
+                INSERT INTO categories
+                    (id, type, parent_id, name, icon_name, color_index, archived_at,
+                     archived_by_parent_id, created_at, updated_at)
+                VALUES ('parent', 'EXPENSE', NULL, 'Food', 'utensils', 4, NULL, NULL, 10, 10)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO categories
+                    (id, type, parent_id, name, icon_name, color_index, archived_at,
+                     archived_by_parent_id, created_at, updated_at)
+                VALUES ('child', 'EXPENSE', 'parent', 'Groceries', 'basket', 9, NULL, NULL, 10, 10)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 3, true, MIGRATION_2_3).use { db ->
+            db.query("SELECT color_index FROM categories WHERE id = 'child'").use {
+                it.moveToFirst()
+                assertEquals(4, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "migration-test"
     }

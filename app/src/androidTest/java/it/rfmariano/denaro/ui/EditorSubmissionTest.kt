@@ -258,4 +258,53 @@ class EditorSubmissionTest {
         composeRule.waitUntil { completions.get() == 1 }
         assertEquals(categoryId, repository.getTransaction(transactionId)?.categoryId)
     }
+
+    @Test
+    fun newlyCreatedCategoryWinsAfterExistingTransactionLoads() = runBlocking {
+        val accountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val previousCategoryId = repository.createCategory(
+            CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+        )
+        val createdCategoryId = repository.createCategory(
+            CategoryInput(TransactionType.EXPENSE, null, "Shopping", "shopping_bag", 2),
+        )
+        val transactionId = repository.createTransaction(
+            TransactionInput(
+                accountId = accountId,
+                amountMinor = 1_000,
+                type = TransactionType.EXPENSE,
+                occurredAt = 1,
+                description = "Lunch",
+                categoryId = previousCategoryId,
+            ),
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+        val consumptions = AtomicInteger()
+
+        composeRule.setContent {
+            DenaroTheme {
+                ActivityEditorScreen(
+                    repository = repository,
+                    route = ActivityEditorRoute(
+                        kind = ActivityKind.EXPENSE,
+                        id = transactionId,
+                    ),
+                    onFinished = { completions.incrementAndGet() },
+                    onBack = {},
+                    onMessage = {},
+                    createdCategoryId = createdCategoryId,
+                    onCreatedCategoryConsumed = { consumptions.incrementAndGet() },
+                )
+            }
+        }
+
+        composeRule.waitUntil { consumptions.get() == 1 }
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+        composeRule.waitUntil { completions.get() == 1 }
+
+        assertEquals(createdCategoryId, repository.getTransaction(transactionId)?.categoryId)
+    }
 }

@@ -39,3 +39,19 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            UPDATE categories
+            SET color_index = (
+                SELECT parent.color_index
+                FROM categories AS parent
+                WHERE parent.id = categories.parent_id
+            )
+            WHERE parent_id IS NOT NULL
+            """.trimIndent(),
+        )
+    }
+}

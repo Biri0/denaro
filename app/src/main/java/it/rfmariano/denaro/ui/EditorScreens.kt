@@ -328,8 +328,8 @@ fun ActivityEditorScreen(
     val pausedMessage = stringResource(R.string.schedule_paused)
     val resumedMessage = stringResource(R.string.schedule_resumed)
 
-    LaunchedEffect(createdCategoryId) {
-        createdCategoryId?.let {
+    LaunchedEffect(createdCategoryId, loaded) {
+        if (loaded) createdCategoryId?.let {
             categoryId = it
             onCreatedCategoryConsumed()
         }

@@ -24,6 +24,7 @@ data class AppPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val language: LanguageOption = LanguageOption.SYSTEM,
     val defaultCurrency: String = DEFAULT_CURRENCY,
+    val amountsVisible: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_CURRENCY = "EUR"
@@ -57,6 +58,13 @@ class AppPreferencesRepository(context: Context) {
         }
     }
 
+    fun setAmountsVisible(value: Boolean) {
+        update {
+            preferences.edit().putBoolean(KEY_AMOUNTS_VISIBLE, value).apply()
+            copy(amountsVisible = value)
+        }
+    }
+
     fun applyStoredLanguage(force: Boolean = false) {
         applyLanguage(_state.value.language, force)
     }
@@ -79,7 +87,8 @@ class AppPreferencesRepository(context: Context) {
         val currency = preferences.getString(KEY_CURRENCY, null)
             ?.takeIf { it in SupportedCurrencies }
             ?: AppPreferences.DEFAULT_CURRENCY
-        return AppPreferences(theme, language, currency)
+        val amountsVisible = preferences.getBoolean(KEY_AMOUNTS_VISIBLE, true)
+        return AppPreferences(theme, language, currency, amountsVisible)
     }
 
     private fun applyLanguage(
@@ -110,5 +119,6 @@ class AppPreferencesRepository(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_LANGUAGE = "language"
         const val KEY_CURRENCY = "default_currency"
+        const val KEY_AMOUNTS_VISIBLE = "amounts_visible"
     }
 }

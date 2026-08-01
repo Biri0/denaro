@@ -4,6 +4,7 @@ package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -35,9 +34,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,7 +51,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +65,7 @@ import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import com.composables.icons.lucide.R as LucideR
 
 @Composable
@@ -99,9 +98,13 @@ fun CategoryManagementScreen(
             }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier
+            .fillMaxSize()
+            .padding(padding)) {
             SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 TransactionType.entries.forEachIndexed { index, option ->
                     SegmentedButton(
@@ -114,7 +117,9 @@ fun CategoryManagementScreen(
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.show_archived), modifier = Modifier.weight(1f))
@@ -205,7 +210,10 @@ private fun CategoryRow(
     onArchive: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEdit)
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -245,6 +253,11 @@ fun CategoryEditorScreen(
     var loaded by rememberSaveable(categoryId) { mutableStateOf(categoryId == null) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val displayedColorIndex = parentId
+        ?.let { selectedParentId ->
+            categories.find { it.id == selectedParentId }?.colorIndex
+        }
+        ?: colorIndex
 
     LaunchedEffect(categoryId) {
         categoryId?.let { id ->
@@ -283,7 +296,13 @@ fun CategoryEditorScreen(
                                     } else {
                                         suggestCategoryIcon(name)
                                     }
-                                    val input = CategoryInput(type, parentId, name, resolvedIcon, colorIndex)
+                                    val input = CategoryInput(
+                                        type,
+                                        parentId,
+                                        name,
+                                        resolvedIcon,
+                                        displayedColorIndex,
+                                    )
                                     if (categoryId == null) {
                                         repository.createCategory(input)
                                     } else {
@@ -303,7 +322,10 @@ fun CategoryEditorScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             OutlinedTextField(
@@ -319,21 +341,35 @@ fun CategoryEditorScreen(
                 onSelected = { parentId = it },
             )
             OutlinedButton(onClick = { iconPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                CategoryIcon(iconName, colorIndex)
+                CategoryIcon(iconName, displayedColorIndex)
                 Text(categoryIconOption(iconName).name.replace('_', ' '), modifier = Modifier.padding(start = 12.dp))
             }
             Text(stringResource(R.string.color))
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CategoryPalette.forEachIndexed { index, color ->
-                    Box(
-                        modifier = Modifier.size(if (colorIndex == index) 30.dp else 24.dp)
-                            .background(color, CircleShape)
-                            .clickable { colorIndex = index },
-                    )
+            if (parentId == null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CategoryPalette.forEachIndexed { index, color ->
+                        Box(
+                            modifier = Modifier
+                                .size(if (colorIndex == index) 30.dp else 24.dp)
+                                .background(color, CircleShape)
+                                .clickable { colorIndex = index },
+                        )
+                    }
                 }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(
+                            CategoryPalette[displayedColorIndex.mod(CategoryPalette.size)],
+                            CircleShape,
+                        ),
+                )
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
@@ -361,14 +397,16 @@ fun CategoryEditorScreen(
                     ) {
                         gridItems(options, key = CategoryIconOption::name) { option ->
                             Column(
-                                modifier = Modifier.clickable {
-                                    iconName = option.name
-                                    iconManuallySelected = true
-                                    iconPicker = false
-                                }.padding(horizontal = 4.dp, vertical = 10.dp),
+                                modifier = Modifier
+                                    .clickable {
+                                        iconName = option.name
+                                        iconManuallySelected = true
+                                        iconPicker = false
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 10.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                CategoryIcon(option.name, colorIndex)
+                                CategoryIcon(option.name, displayedColorIndex)
                                 Text(
                                     text = option.name.replace('_', ' '),
                                     style = MaterialTheme.typography.labelSmall,
@@ -401,7 +439,9 @@ private fun ParentCategorySelector(
             label = { Text(stringResource(R.string.parent_category)) },
             placeholder = { Text(stringResource(R.string.none)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = { onSelected(null); expanded = false })

@@ -47,6 +47,13 @@ class FinanceRepository(
         validateCategory(input)
         val timestamp = clock()
         val id = UuidV7.generate()
+        val colorIndex = input.parentId
+            ?.let { parentId ->
+                requireNotNull(
+                    database.categoryDao().getById(parentId)
+                ).colorIndex
+            }
+            ?: input.colorIndex.coerceIn(0, 11)
         database.categoryDao().insert(
             CategoryEntity(
                 id = id,
@@ -54,7 +61,7 @@ class FinanceRepository(
                 parentId = input.parentId,
                 name = input.name.trim(),
                 iconName = input.iconName,
-                colorIndex = input.colorIndex.coerceIn(0, 11),
+                colorIndex = colorIndex,
                 archivedAt = null,
                 createdAt = timestamp,
                 updatedAt = timestamp,
@@ -69,15 +76,28 @@ class FinanceRepository(
             "Category not found"
         }
         require(existing.type == input.type) { "Category type cannot be changed" }
-        database.categoryDao().update(
-            existing.copy(
-                parentId = input.parentId,
-                name = input.name.trim(),
-                iconName = input.iconName,
-                colorIndex = input.colorIndex.coerceIn(0, 11),
-                updatedAt = clock(),
-            ),
-        )
+        val colorIndex = input.parentId
+            ?.let { parentId ->
+                requireNotNull(
+                    database.categoryDao().getById(parentId)
+                ).colorIndex
+            }
+            ?: input.colorIndex.coerceIn(0, 11)
+        val timestamp = clock()
+        database.withTransaction {
+            database.categoryDao().update(
+                existing.copy(
+                    parentId = input.parentId,
+                    name = input.name.trim(),
+                    iconName = input.iconName,
+                    colorIndex = colorIndex,
+                    updatedAt = timestamp,
+                ),
+            )
+            if (input.parentId == null) {
+                database.categoryDao().updateChildrenColor(categoryId, colorIndex, timestamp)
+            }
+        }
     }
 
     suspend fun archiveCategory(categoryId: String) {

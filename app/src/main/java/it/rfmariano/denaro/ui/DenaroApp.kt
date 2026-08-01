@@ -106,7 +106,6 @@ fun DenaroApp(
     var currentDestination by rememberSaveable {
         mutableStateOf(TopLevelDestination.HOME)
     }
-    var amountsVisible by rememberSaveable { mutableStateOf(true) }
     var pendingActivityCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -172,8 +171,10 @@ fun DenaroApp(
                 entry<HomeRoute> {
                     HomeRouteContent(
                         viewModel = homeViewModel,
-                        amountsVisible = amountsVisible,
-                        onToggleAmounts = { amountsVisible = !amountsVisible },
+                        amountsVisible = preferences.amountsVisible,
+                        onToggleAmounts = {
+                            preferencesRepository.setAmountsVisible(!preferences.amountsVisible)
+                        },
                         onAddAccount = { homeBackStack.add(AccountEditorRoute()) },
                         onSettings = { homeBackStack.add(SettingsRoute) },
                         onCategoryClick = { kind, categoryId, fromDate, toDate, currency, accountId ->
@@ -226,7 +227,7 @@ fun DenaroApp(
                 entry<AccountsRoute> {
                     AccountsRouteContent(
                         viewModel = accountsViewModel,
-                        amountsVisible = amountsVisible,
+                        amountsVisible = preferences.amountsVisible,
                         onAccountClick = {
                             accountsBackStack.add(AccountDetailRoute(it))
                         },
@@ -241,7 +242,7 @@ fun DenaroApp(
                 entry<ActivityRoute> {
                     ActivityRouteContent(
                         viewModel = activityViewModel,
-                        amountsVisible = amountsVisible,
+                        amountsVisible = preferences.amountsVisible,
                         onAddActivity = {
                             activityBackStack.add(ActivityEditorRoute())
                         },
@@ -259,7 +260,7 @@ fun DenaroApp(
                     )
                     AccountDetailRouteContent(
                         viewModel = detailViewModel,
-                        amountsVisible = amountsVisible,
+                        amountsVisible = preferences.amountsVisible,
                         onBack = { backStack.removeLastOrNull() },
                         onEdit = { backStack.add(AccountEditorRoute(it)) },
                         onEditSchedule = {
@@ -272,7 +273,7 @@ fun DenaroApp(
                     ArchivedAccountsRouteContent(
                         accounts = state.archived,
                         isLoading = state.isLoading,
-                        amountsVisible = amountsVisible,
+                        amountsVisible = preferences.amountsVisible,
                         onBack = { backStack.removeLastOrNull() },
                         onRestore = { accountId ->
                             scope.launch {

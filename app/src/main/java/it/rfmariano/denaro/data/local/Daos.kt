@@ -77,6 +77,16 @@ interface CategoryDao {
     @Query(
         """
         UPDATE categories
+        SET color_index = :colorIndex,
+            updated_at = :updatedAt
+        WHERE parent_id = :parentId
+        """,
+    )
+    suspend fun updateChildrenColor(parentId: String, colorIndex: Int, updatedAt: Long)
+
+    @Query(
+        """
+        UPDATE categories
         SET archived_at = :archivedAt,
             archived_by_parent_id = NULL,
             updated_at = :updatedAt

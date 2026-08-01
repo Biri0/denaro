@@ -17,6 +17,33 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class FinanceRepositoryTest {
     @Test
+    fun subcategoriesAlwaysUseAndFollowParentColor() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val parentId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 2),
+            )
+            val childId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, parentId, "Groceries", "basket", 9),
+            )
+
+            assertEquals(2, repository.getCategory(childId)?.colorIndex)
+
+            repository.updateCategory(
+                parentId,
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 6),
+            )
+
+            assertEquals(6, repository.getCategory(parentId)?.colorIndex)
+            assertEquals(6, repository.getCategory(childId)?.colorIndex)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun dashboardGroupsSubcategoriesAndExcludesTransfers() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
