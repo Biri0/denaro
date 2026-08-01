@@ -24,6 +24,34 @@ enum class LegacyImportStatus {
 }
 
 @Entity(
+    tableName = "categories",
+    foreignKeys = [
+        ForeignKey(
+            entity = CategoryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["parent_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["parent_id"]),
+        Index(value = ["type", "archived_at", "name"]),
+    ],
+)
+data class CategoryEntity(
+    @PrimaryKey val id: String,
+    val type: TransactionType,
+    @ColumnInfo(name = "parent_id") val parentId: String?,
+    val name: String,
+    @ColumnInfo(name = "icon_name") val iconName: String,
+    @ColumnInfo(name = "color_index") val colorIndex: Int,
+    @ColumnInfo(name = "archived_at") val archivedAt: Long?,
+    @ColumnInfo(name = "archived_by_parent_id") val archivedByParentId: String? = null,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+@Entity(
     tableName = "accounts",
     indices = [Index(value = ["archived_at", "name"])],
 )
@@ -47,15 +75,23 @@ data class AccountEntity(
             childColumns = ["account_id"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        ForeignKey(
+            entity = CategoryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["category_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["account_id"]),
+        Index(value = ["category_id"]),
         Index(value = ["is_active", "next_occurrence_at"]),
     ],
 )
 data class RecurringRuleEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "account_id") val accountId: String,
+    @ColumnInfo(name = "category_id") val categoryId: String? = null,
     @ColumnInfo(name = "amount_minor") val amountMinor: Long,
     @ColumnInfo(name = "transaction_type") val transactionType: TransactionType,
     val description: String?,
@@ -87,10 +123,18 @@ data class RecurringRuleEntity(
             childColumns = ["recurring_rule_id"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = CategoryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["category_id"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["account_id", "occurred_at"]),
         Index(value = ["recurring_rule_id"]),
+        Index(value = ["category_id"]),
+        Index(value = ["local_date", "type", "account_id"]),
         Index(value = ["recurring_rule_id", "occurrence_key"], unique = true),
     ],
 )
@@ -98,6 +142,7 @@ data class TransactionEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "account_id") val accountId: String,
     @ColumnInfo(name = "recurring_rule_id") val recurringRuleId: String?,
+    @ColumnInfo(name = "category_id") val categoryId: String? = null,
     @ColumnInfo(name = "occurrence_key") val occurrenceKey: String?,
     @ColumnInfo(name = "amount_minor") val amountMinor: Long,
     val type: TransactionType,

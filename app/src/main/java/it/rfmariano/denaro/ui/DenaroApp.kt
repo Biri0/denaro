@@ -31,9 +31,11 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import it.rfmariano.denaro.R
+import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -50,6 +52,17 @@ private data object ActivityRoute : NavKey
 
 @Serializable
 private data object SettingsRoute : NavKey
+
+@Serializable
+private data object CategoriesRoute : NavKey
+
+@Serializable
+private data class CategoryEditorRoute(
+    val categoryId: String? = null,
+    val type: String,
+    val parentId: String? = null,
+    val selectForActivityEditor: Boolean = false,
+) : NavKey
 
 @Serializable
 private data class AccountDetailRoute(val accountId: String) : NavKey
@@ -91,12 +104,13 @@ fun DenaroApp(
         mutableStateOf(TopLevelDestination.HOME)
     }
     var amountsVisible by rememberSaveable { mutableStateOf(true) }
+    var pendingActivityCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val recurrenceFailure = stringResource(R.string.recurrence_update_failed)
 
     val homeViewModel: HomeViewModel = viewModel(
-        factory = viewModelFactory { HomeViewModel(repository) },
+        factory = viewModelFactory { HomeViewModel(repository, preferences.defaultCurrency) },
     )
     val accountsViewModel: AccountsViewModel = viewModel(
         factory = viewModelFactory { AccountsViewModel(repository) },
@@ -148,21 +162,52 @@ fun DenaroApp(
                         viewModel = homeViewModel,
                         amountsVisible = amountsVisible,
                         onToggleAmounts = { amountsVisible = !amountsVisible },
-                        onAccountClick = { homeBackStack.add(AccountDetailRoute(it)) },
                         onAddAccount = { homeBackStack.add(AccountEditorRoute()) },
-                        onSeeAllActivity = {
+                        onSettings = { homeBackStack.add(SettingsRoute) },
+                        onCategoryClick = { kind, categoryId, fromDate, toDate, currency, accountId ->
+                            activityViewModel.applyFilter(
+                                ActivityFilter(
+                                    kind,
+                                    accountId,
+                                    currency,
+                                    categoryId,
+                                    fromDate,
+                                    toDate
+                                ),
+                            )
                             currentDestination = TopLevelDestination.ACTIVITY
                         },
-                        onActivityClick = { item ->
-                            homeBackStack.add(item.editorRoute())
-                        },
-                        onSettings = { homeBackStack.add(SettingsRoute) },
                     )
                 }
                     entry<SettingsRoute> {
                         SettingsScreen(
                             preferencesRepository = preferencesRepository,
                             onBack = { homeBackStack.removeLastOrNull() },
+                            onCategories = { homeBackStack.add(CategoriesRoute) },
+                        )
+                    }
+                    entry<CategoriesRoute> {
+                        CategoryManagementScreen(
+                            repository = repository,
+                            onBack = { homeBackStack.removeLastOrNull() },
+                            onEdit = { id, type, parentId ->
+                                homeBackStack.add(CategoryEditorRoute(id, type.name, parentId))
+                            },
+                        )
+                    }
+                    entry<CategoryEditorRoute> { route ->
+                        CategoryEditorScreen(
+                            repository = repository,
+                            categoryId = route.categoryId,
+                            type = TransactionType.valueOf(route.type),
+                            initialParentId = route.parentId,
+                            onBack = { backStack.removeLastOrNull() },
+                            onFinished = { categoryId ->
+                                if (route.selectForActivityEditor) {
+                                    pendingActivityCategoryId = categoryId
+                                }
+                                backStack.removeLastOrNull()
+                            },
                     )
                 }
                 entry<AccountsRoute> {
@@ -248,6 +293,16 @@ fun DenaroApp(
                         onEditSchedule = {
                             backStack.add(ActivityEditorRoute(recurringRuleId = it))
                         },
+                        createdCategoryId = pendingActivityCategoryId,
+                        onCreatedCategoryConsumed = { pendingActivityCategoryId = null },
+                        onAddCategory = { type ->
+                            backStack.add(
+                                CategoryEditorRoute(
+                                    type = type.name,
+                                    selectForActivityEditor = true,
+                                ),
+                            )
+                        },
                     )
                 }
                 },
@@ -261,10 +316,11 @@ fun DenaroApp(
             )
         }
     }
-    val settingsVisible =
-        currentDestination == TopLevelDestination.HOME &&
-                homeBackStack.lastOrNull() is SettingsRoute
-    if (settingsVisible) {
+    val fullScreenSettings = when (backStack.lastOrNull()) {
+        is SettingsRoute, is CategoriesRoute, is CategoryEditorRoute -> true
+        else -> false
+    }
+    if (fullScreenSettings) {
         appContent()
     } else {
         NavigationSuiteScaffold(

@@ -7,18 +7,24 @@ import androidx.paging.map
 import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.ActivityRecord
+import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.RecurringRuleEntity
 import it.rfmariano.denaro.data.local.TransactionEntity
+import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.local.TransferEntity
 import it.rfmariano.denaro.data.local.TransferPairUsage
 import it.rfmariano.denaro.data.local.UuidV7
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 class FinanceRepository(
@@ -26,6 +32,125 @@ class FinanceRepository(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val recurrenceProcessor = RecurrenceProcessor(database, clock)
+
+    fun observeCategories(includeArchived: Boolean = false): Flow<List<CategorySummary>> =
+        database.categoryDao().observeAll().map { categories ->
+            categories
+                .filter { includeArchived || it.archivedAt == null }
+                .map { it.toSummary() }
+        }
+
+    suspend fun getCategory(categoryId: String): CategoryEntity? =
+        database.categoryDao().getById(categoryId)
+
+    suspend fun createCategory(input: CategoryInput): String {
+        validateCategory(input)
+        val timestamp = clock()
+        val id = UuidV7.generate()
+        database.categoryDao().insert(
+            CategoryEntity(
+                id = id,
+                type = input.type,
+                parentId = input.parentId,
+                name = input.name.trim(),
+                iconName = input.iconName,
+                colorIndex = input.colorIndex.coerceIn(0, 11),
+                archivedAt = null,
+                createdAt = timestamp,
+                updatedAt = timestamp,
+            ),
+        )
+        return id
+    }
+
+    suspend fun updateCategory(categoryId: String, input: CategoryInput) {
+        validateCategory(input, categoryId)
+        val existing = requireNotNull(database.categoryDao().getById(categoryId)) {
+            "Category not found"
+        }
+        require(existing.type == input.type) { "Category type cannot be changed" }
+        database.categoryDao().update(
+            existing.copy(
+                parentId = input.parentId,
+                name = input.name.trim(),
+                iconName = input.iconName,
+                colorIndex = input.colorIndex.coerceIn(0, 11),
+                updatedAt = clock(),
+            ),
+        )
+    }
+
+    suspend fun archiveCategory(categoryId: String) {
+        val category = requireNotNull(database.categoryDao().getById(categoryId)) {
+            "Category not found"
+        }
+        val now = clock()
+        database.withTransaction {
+            database.categoryDao().setArchived(categoryId, now, now)
+            if (category.parentId == null) {
+                database.categoryDao().archiveActiveChildren(categoryId, now, now)
+            }
+        }
+    }
+
+    suspend fun restoreCategory(categoryId: String) {
+        val category = requireNotNull(database.categoryDao().getById(categoryId)) {
+            "Category not found"
+        }
+        category.parentId?.let { parentId ->
+            require(database.categoryDao().getById(parentId)?.archivedAt == null) {
+                "Restore the parent category first"
+            }
+        }
+        val now = clock()
+        database.withTransaction {
+            database.categoryDao().setArchived(categoryId, null, now)
+            if (category.parentId == null) {
+                database.categoryDao().restoreChildrenArchivedByParent(categoryId, now)
+            }
+        }
+    }
+
+    suspend fun applyStarterCategories(language: StarterCategoryLanguage) {
+        require(database.categoryDao().count() == 0) {
+            "Starter categories can only be added to an empty list"
+        }
+        val now = clock()
+        val palette = (0..11).shuffled()
+        database.withTransaction {
+            starterCategories(language).forEachIndexed { index, starter ->
+                val parentId = UuidV7.generate()
+                database.categoryDao().insert(
+                    CategoryEntity(
+                        id = parentId,
+                        type = starter.type,
+                        parentId = null,
+                        name = starter.name,
+                        iconName = starter.iconName,
+                        colorIndex = palette[index % palette.size],
+                        archivedAt = null,
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
+                )
+                starter.children.forEach { (name, icon) ->
+                    database.categoryDao().insert(
+                        CategoryEntity(
+                            id = UuidV7.generate(),
+                            type = starter.type,
+                            parentId = parentId,
+                            name = name,
+                            iconName = icon,
+                            colorIndex = palette[index % palette.size],
+                            archivedAt = null,
+                            createdAt = now,
+                            updatedAt = now,
+                        ),
+                    )
+                }
+            }
+        }
+    }
 
     fun observeActiveAccounts(): Flow<List<AccountSummary>> =
         combine(
@@ -72,19 +197,19 @@ class FinanceRepository(
                     intervalCount = it.intervalCount,
                     nextOccurrenceAt = it.nextOccurrenceAt,
                     isActive = it.isActive,
+                    categoryId = it.categoryId,
                 )
             }
-        }
-
-    fun observeRecentActivity(limit: Int = 8): Flow<List<ActivityItem>> =
-        database.activityDao().observeRecent(limit).map { records ->
-            records.map { it.toItem() }
         }
 
     fun activityPager(
         kind: ActivityKind?,
         accountId: String?,
-    ): Flow<PagingData<ActivityItem>> = Pager(
+    ): Flow<PagingData<ActivityItem>> = activityPager(
+        ActivityFilter(kind = kind, accountId = accountId),
+    )
+
+    fun activityPager(filter: ActivityFilter): Flow<PagingData<ActivityItem>> = Pager(
         config = PagingConfig(
             pageSize = 40,
             initialLoadSize = 40,
@@ -92,9 +217,65 @@ class FinanceRepository(
             enablePlaceholders = false,
         ),
         pagingSourceFactory = {
-            database.activityDao().pagingSource(kind?.name, accountId)
+            database.activityDao().pagingSource(
+                kind = filter.kind?.name,
+                accountId = filter.accountId,
+                currency = filter.currency,
+                categoryId = filter.categoryId,
+                fromDate = filter.fromDate,
+                toDate = filter.toDate,
+            )
         },
     ).flow.map { data -> data.map { it.toItem() } }
+
+    fun observeDashboard(filter: DashboardFilter): Flow<DashboardSnapshot> {
+        val selectedMonth = YearMonth.parse(filter.selectedMonth)
+        val fromMonth = selectedMonth.minusMonths(6)
+        return combine(
+            database.activityDao().observeAnalytics(
+                fromDate = fromMonth.atDay(1).toString(),
+                toDate = selectedMonth.plusMonths(1).atDay(1).toString(),
+                currency = filter.currency,
+                accountId = filter.accountId,
+            ),
+            observeCategories(includeArchived = true),
+        ) { records, categories ->
+            val categoriesById = categories.associateBy(CategorySummary::id)
+            val months = (5L downTo 0L).map { offset ->
+                val month = selectedMonth.minusMonths(offset)
+                records.monthSummary(month)
+            }
+            val selectedRecords =
+                records.filter { YearMonth.from(LocalDate.parse(it.localDate)) == selectedMonth }
+            val previousMonth = selectedMonth.minusMonths(1)
+            val now = LocalDate.now()
+            val comparableDay = if (selectedMonth == YearMonth.from(now)) {
+                minOf(now.dayOfMonth, previousMonth.lengthOfMonth())
+            } else {
+                previousMonth.lengthOfMonth()
+            }
+            val previousComparable = records
+                .filter {
+                    val date = LocalDate.parse(it.localDate)
+                    YearMonth.from(date) == previousMonth && date.dayOfMonth <= comparableDay
+                }
+                .monthSummary(previousMonth)
+            DashboardSnapshot(
+                filter = filter,
+                months = months,
+                selected = selectedRecords.monthSummary(selectedMonth),
+                previousComparable = previousComparable,
+                incomeCategories = selectedRecords.categoryShares(
+                    TransactionType.INCOME,
+                    categoriesById,
+                ),
+                expenseCategories = selectedRecords.categoryShares(
+                    TransactionType.EXPENSE,
+                    categoriesById,
+                ),
+            )
+        }.flowOn(Dispatchers.Default)
+    }
 
     suspend fun createAccount(input: AccountInput): String {
         validateAccount(input)
@@ -165,6 +346,7 @@ class FinanceRepository(
                 id = id,
                 accountId = account.id,
                 recurringRuleId = null,
+                categoryId = input.categoryId,
                 occurrenceKey = null,
                 amountMinor = input.amountMinor,
                 type = input.type,
@@ -179,14 +361,15 @@ class FinanceRepository(
     }
 
     suspend fun updateTransaction(id: String, input: TransactionInput) {
-        validateTransaction(input)
-        requireActiveAccount(input.accountId)
         val existing = requireNotNull(database.transactionDao().getById(id)) {
             "Transaction not found"
         }
+        validateTransaction(input, existing.categoryId)
+        requireActiveAccount(input.accountId)
         database.transactionDao().update(
             existing.copy(
                 accountId = input.accountId,
+                categoryId = input.categoryId,
                 amountMinor = input.amountMinor,
                 type = input.type,
                 occurredAt = input.occurredAt,
@@ -256,6 +439,7 @@ class FinanceRepository(
             RecurringRuleEntity(
                 id = id,
                 accountId = input.accountId,
+                categoryId = input.categoryId,
                 amountMinor = input.amountMinor,
                 transactionType = input.transactionType,
                 description = input.description.normalized(),
@@ -277,16 +461,17 @@ class FinanceRepository(
     }
 
     suspend fun updateRecurringRule(id: String, input: RecurringRuleInput) {
-        validateRecurringRule(input)
-        requireActiveAccount(input.accountId)
         val existing = requireNotNull(database.recurringRuleDao().getById(id)) {
             "Scheduled transaction not found"
         }
+        validateRecurringRule(input, existing.categoryId)
+        requireActiveAccount(input.accountId)
         val zoneId = ZoneId.of(existing.timezoneId)
         val occurrence = Instant.ofEpochMilli(input.nextOccurrenceAt).atZone(zoneId)
         database.recurringRuleDao().update(
             existing.copy(
                 accountId = input.accountId,
+                categoryId = input.categoryId,
                 amountMinor = input.amountMinor,
                 transactionType = input.transactionType,
                 description = input.description.normalized(),
@@ -362,15 +547,71 @@ class FinanceRepository(
         require(input.currency in SupportedCurrencies) { "Unsupported currency" }
     }
 
-    private fun validateTransaction(input: TransactionInput) {
+    private suspend fun validateTransaction(
+        input: TransactionInput,
+        allowedArchivedCategoryId: String? = null,
+    ) {
         require(input.amountMinor > 0) { "Amount must be greater than zero" }
         require(input.occurredAt >= 0) { "Date is invalid" }
+        validateCategoryForType(input.categoryId, input.type, allowedArchivedCategoryId)
     }
 
-    private fun validateRecurringRule(input: RecurringRuleInput) {
+    private suspend fun validateRecurringRule(
+        input: RecurringRuleInput,
+        allowedArchivedCategoryId: String? = null,
+    ) {
         require(input.amountMinor > 0) { "Amount must be greater than zero" }
         require(input.intervalCount > 0) { "Interval must be greater than zero" }
         require(input.nextOccurrenceAt >= 0) { "Date is invalid" }
+        validateCategoryForType(
+            input.categoryId,
+            input.transactionType,
+            allowedArchivedCategoryId,
+        )
+    }
+
+    private suspend fun validateCategory(input: CategoryInput, editingId: String? = null) {
+        require(input.name.isNotBlank()) { "Name is required" }
+        require(editingId == null || input.parentId != editingId) {
+            "A category cannot be its own parent"
+        }
+        input.parentId?.let { parentId ->
+            val parent = requireNotNull(database.categoryDao().getById(parentId)) {
+                "Parent category not found"
+            }
+            require(parent.parentId == null) { "Only one subcategory level is supported" }
+            require(parent.type == input.type) { "Parent category has a different type" }
+            require(parent.archivedAt == null) { "Parent category is archived" }
+            if (editingId != null) {
+                require(database.categoryDao().getAll().none { it.parentId == editingId }) {
+                    "A category with subcategories cannot become a subcategory"
+                }
+            }
+        }
+        val normalizedName = input.name.trim()
+        require(
+            database.categoryDao().getAll().none {
+                it.id != editingId &&
+                        it.type == input.type &&
+                        it.parentId == input.parentId &&
+                        it.name.equals(normalizedName, ignoreCase = true)
+            },
+        ) { "A category with this name already exists" }
+    }
+
+    private suspend fun validateCategoryForType(
+        categoryId: String?,
+        type: TransactionType,
+        allowedArchivedCategoryId: String? = null,
+    ) {
+        if (categoryId == null) return
+        val category = requireNotNull(database.categoryDao().getById(categoryId)) {
+            "Category not found"
+        }
+        require(category.type == type) { "Category has a different type" }
+        require(category.archivedAt == null || category.id == allowedArchivedCategoryId) {
+            "Category is archived"
+        }
     }
 
     private fun TransferInput.toEntity(
@@ -430,8 +671,56 @@ class FinanceRepository(
             localDate = localDate,
             description = description,
             recurringRuleId = recurringRuleId,
+            categoryId = categoryId,
+            categoryParentId = categoryParentId,
+            categoryName = categoryName,
+            categoryIconName = categoryIconName,
+            categoryColorIndex = categoryColorIndex,
         )
+
+    private fun CategoryEntity.toSummary() = CategorySummary(
+        id = id,
+        type = type,
+        parentId = parentId,
+        name = name,
+        iconName = iconName,
+        colorIndex = colorIndex,
+        archivedAt = archivedAt,
+    )
 }
+
+private fun List<it.rfmariano.denaro.data.local.AnalyticsRecord>.monthSummary(
+    month: YearMonth,
+): MonthlyCashFlow {
+    val monthlyRecords = filter { YearMonth.from(LocalDate.parse(it.localDate)) == month }
+    return MonthlyCashFlow(
+        month = month.toString(),
+        incomeMinor = monthlyRecords.filter { it.transactionType == TransactionType.INCOME.name }
+            .sumOf { it.amountMinor },
+        expenseMinor = monthlyRecords.filter { it.transactionType == TransactionType.EXPENSE.name }
+            .sumOf { it.amountMinor },
+    )
+}
+
+private fun List<it.rfmariano.denaro.data.local.AnalyticsRecord>.categoryShares(
+    type: TransactionType,
+    categoriesById: Map<String, CategorySummary>,
+): List<CategoryShare> = filter { it.transactionType == type.name }
+    .groupBy { record ->
+        record.categoryId?.let { id -> categoriesById[id]?.parentId ?: id }
+    }
+    .map { (categoryId, records) ->
+        val category = categoryId?.let(categoriesById::get)
+        CategoryShare(
+            categoryId = categoryId,
+            name = category?.name,
+            iconName = category?.iconName,
+            colorIndex = category?.colorIndex,
+            amountMinor = records.sumOf { it.amountMinor },
+            transactionCount = records.size,
+        )
+    }
+    .sortedByDescending(CategoryShare::amountMinor)
 
 internal fun buildTransferAccountSuggestions(
     accounts: List<AccountEntity>,

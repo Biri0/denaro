@@ -14,12 +14,12 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class DatabaseKeyManager(context: Context) {
+open class DatabaseKeyManager(context: Context) {
     private val envelopeFile = AtomicFile(
         File(ensureNoBackupDirectory(context), KEY_ENVELOPE_FILE),
     )
 
-    fun getOrCreatePassphrase(): ByteArray {
+    open fun getOrCreatePassphrase(): ByteArray {
         val wrappingKey = getOrCreateWrappingKey()
         if (envelopeFile.baseFile.exists()) {
             return decryptEnvelope(wrappingKey)
@@ -30,7 +30,7 @@ class DatabaseKeyManager(context: Context) {
         return passphrase
     }
 
-    fun deleteKeyMaterial() {
+    open fun deleteKeyMaterial() {
         envelopeFile.delete()
         val keyStore = loadKeyStore()
         if (keyStore.containsAlias(KEYSTORE_ALIAS)) {

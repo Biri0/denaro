@@ -127,7 +127,11 @@ fun ActivityRow(
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ActivityIcon(item.kind)
+        if (item.kind != ActivityKind.TRANSFER && item.categoryId != null) {
+            CategoryIcon(item.categoryIconName, item.categoryColorIndex)
+        } else {
+            ActivityIcon(item.kind)
+        }
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -143,7 +147,7 @@ fun ActivityRow(
                 text = if (item.kind == ActivityKind.TRANSFER) {
                     "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
                 } else {
-                    item.accountName
+                    listOfNotNull(item.accountName, item.categoryName).joinToString(" · ")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -297,6 +301,44 @@ fun HomeLoadingSkeleton(modifier: Modifier = Modifier) {
         }
         SkeletonSectionHeader(alpha)
         repeat(6) { AccountSkeletonRow(alpha) }
+    }
+}
+
+@Composable
+fun DashboardLoadingSkeleton(modifier: Modifier = Modifier) {
+    val alpha = rememberSkeletonAlpha()
+    LoadingSkeletonContainer(modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(3) {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(76.dp),
+                    alpha = alpha,
+                )
+            }
+        }
+        SkeletonBlock(
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .width(142.dp)
+                .height(18.dp),
+            alpha = alpha,
+        )
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .height(170.dp),
+            alpha = alpha,
+        )
+        SkeletonSectionHeader(alpha)
+        repeat(4) { ActivitySkeletonRow(alpha) }
     }
 }
 

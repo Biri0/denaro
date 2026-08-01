@@ -1,6 +1,7 @@
 package it.rfmariano.denaro.ui
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -15,8 +16,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountInput
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.CategoryInput
 import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.finance.TransactionInput
 import it.rfmariano.denaro.data.local.DenaroDatabase
+import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.ui.theme.DenaroTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -44,6 +48,10 @@ class EditorSubmissionTest {
 
     @After
     fun tearDown() {
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.setContent {}
+        }
+        composeRule.waitForIdle()
         database.close()
     }
 
@@ -201,5 +209,53 @@ class EditorSubmissionTest {
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
         composeRule.onNodeWithText("Name is required").assertExists()
         composeRule.onNodeWithText(context.getString(R.string.save)).assertIsEnabled()
+    }
+
+    @Test
+    fun archivedCategoryRemainsVisibleAndAllowsUnrelatedTransactionEdit() = runBlocking {
+        val accountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val categoryId = repository.createCategory(
+            CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+        )
+        val transactionId = repository.createTransaction(
+            TransactionInput(
+                accountId = accountId,
+                amountMinor = 1_000,
+                type = TransactionType.EXPENSE,
+                occurredAt = 1,
+                description = "Lunch",
+                categoryId = categoryId,
+            ),
+        )
+        repository.archiveCategory(categoryId)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+
+        composeRule.setContent {
+            DenaroTheme {
+                ActivityEditorScreen(
+                    repository = repository,
+                    route = ActivityEditorRoute(
+                        kind = ActivityKind.EXPENSE,
+                        id = transactionId,
+                    ),
+                    onFinished = { completions.incrementAndGet() },
+                    onBack = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        val archivedLabel = "Food (${context.getString(R.string.archived)})"
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText(archivedLabel).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(archivedLabel).assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completions.get() == 1 }
+        assertEquals(categoryId, repository.getTransaction(transactionId)?.categoryId)
     }
 }

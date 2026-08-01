@@ -9,6 +9,8 @@ enum class ActivityKind {
     TRANSFER,
 }
 
+const val UNCATEGORIZED_CATEGORY_FILTER = "__uncategorized__"
+
 data class AccountSummary(
     val id: String,
     val name: String,
@@ -32,6 +34,11 @@ data class ActivityItem(
     val localDate: String,
     val description: String?,
     val recurringRuleId: String?,
+    val categoryId: String? = null,
+    val categoryParentId: String? = null,
+    val categoryName: String? = null,
+    val categoryIconName: String? = null,
+    val categoryColorIndex: Int? = null,
 )
 
 data class RecurringRuleSummary(
@@ -43,6 +50,66 @@ data class RecurringRuleSummary(
     val intervalCount: Int,
     val nextOccurrenceAt: Long,
     val isActive: Boolean,
+    val categoryId: String? = null,
+)
+
+data class CategorySummary(
+    val id: String,
+    val type: TransactionType,
+    val parentId: String?,
+    val name: String,
+    val iconName: String,
+    val colorIndex: Int,
+    val archivedAt: Long?,
+)
+
+data class CategoryInput(
+    val type: TransactionType,
+    val parentId: String?,
+    val name: String,
+    val iconName: String,
+    val colorIndex: Int,
+)
+
+data class ActivityFilter(
+    val kind: ActivityKind? = null,
+    val accountId: String? = null,
+    val currency: String? = null,
+    val categoryId: String? = null,
+    val fromDate: String? = null,
+    val toDate: String? = null,
+)
+
+data class DashboardFilter(
+    val currency: String,
+    val accountId: String?,
+    val selectedMonth: String,
+)
+
+data class MonthlyCashFlow(
+    val month: String,
+    val incomeMinor: Long,
+    val expenseMinor: Long,
+) {
+    val netMinor: Long get() = incomeMinor - expenseMinor
+}
+
+data class CategoryShare(
+    val categoryId: String?,
+    val name: String?,
+    val iconName: String?,
+    val colorIndex: Int?,
+    val amountMinor: Long,
+    val transactionCount: Int,
+)
+
+data class DashboardSnapshot(
+    val filter: DashboardFilter,
+    val months: List<MonthlyCashFlow>,
+    val selected: MonthlyCashFlow,
+    val previousComparable: MonthlyCashFlow,
+    val incomeCategories: List<CategoryShare>,
+    val expenseCategories: List<CategoryShare>,
 )
 
 data class AccountInput(
@@ -58,6 +125,7 @@ data class TransactionInput(
     val type: TransactionType,
     val occurredAt: Long,
     val description: String?,
+    val categoryId: String? = null,
 )
 
 data class TransferInput(
@@ -76,6 +144,7 @@ data class RecurringRuleInput(
     val frequency: RecurrenceFrequency,
     val intervalCount: Int,
     val nextOccurrenceAt: Long,
+    val categoryId: String? = null,
 )
 
 data class TransferAccountSuggestions(

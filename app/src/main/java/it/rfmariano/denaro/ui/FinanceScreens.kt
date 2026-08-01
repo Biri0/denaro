@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -43,6 +44,7 @@ import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.Money
+import it.rfmariano.denaro.data.finance.UNCATEGORIZED_CATEGORY_FILTER
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.TransactionType
 import com.composables.icons.lucide.R as LucideR
@@ -52,13 +54,24 @@ fun HomeRouteContent(
     viewModel: HomeViewModel,
     amountsVisible: Boolean,
     onToggleAmounts: () -> Unit,
-    onAccountClick: (String) -> Unit,
     onAddAccount: () -> Unit,
-    onSeeAllActivity: () -> Unit,
-    onActivityClick: (ActivityItem) -> Unit,
     onSettings: () -> Unit,
+    onCategoryClick: (
+        ActivityKind,
+        String?,
+        String,
+        String,
+        String,
+        String?,
+    ) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.accounts, state.selectedCurrency) {
+        if (state.accounts.isNotEmpty() && state.accounts.none { it.currency == state.selectedCurrency }) {
+            viewModel.selectedCurrency.value = state.accounts.first().currency
+            viewModel.selectedAccountId.value = null
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -121,45 +134,53 @@ fun HomeRouteContent(
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
                     item {
-                        BalanceBand(state.totalsByCurrency, amountsVisible)
-                    }
-                    item {
-                        SectionHeader(stringResource(R.string.accounts))
-                    }
-                    items(state.accounts, key = AccountSummary::id) { account ->
-                        AccountRow(
-                            account = account,
-                            amountsVisible = amountsVisible,
-                            onClick = { onAccountClick(account.id) },
+                        BalanceBand(
+                            state.totalsByCurrency.filterKeys { it == state.selectedCurrency },
+                            amountsVisible,
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
                     }
                     item {
-                        SectionHeader(
-                            title = stringResource(R.string.recent_activity),
-                            action = {
-                                TextButton(onClick = onSeeAllActivity) {
-                                    Text(stringResource(R.string.see_all))
-                                }
+                        DashboardControls(
+                            state = state,
+                            onCurrency = {
+                                viewModel.selectedCurrency.value = it
+                                viewModel.selectedAccountId.value = null
                             },
+                            onAccount = { viewModel.selectedAccountId.value = it },
+                            onPreviousMonth = viewModel::previousMonth,
+                            onNextMonth = viewModel::nextMonth,
                         )
                     }
-                    if (state.recentActivity.isEmpty()) {
-                        item {
-                            EmptyState(
-                                icon = LucideR.drawable.lucide_ic_receipt,
-                                title = stringResource(R.string.no_activity),
-                                description = stringResource(R.string.no_activity_description),
-                            )
-                        }
+                    if (state.isDashboardLoading) {
+                        item { DashboardLoadingSkeleton() }
                     } else {
-                        items(state.recentActivity, key = ActivityItem::id) { activity ->
-                            ActivityRow(
-                                item = activity,
+                        state.dashboard?.let { dashboard ->
+                            item { DashboardSummary(dashboard, amountsVisible) }
+                            item {
+                                MonthlyCashFlowChart(
+                                    dashboard.months,
+                                    dashboard.filter.currency,
+                                    amountsVisible
+                                )
+                            }
+                            item {
+                                CategoryBreakdown(
+                                    dashboard = dashboard,
                                 amountsVisible = amountsVisible,
-                                onClick = { onActivityClick(activity) },
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(start = 58.dp))
+                                    onCategoryClick = { kind, categoryId ->
+                                        val month =
+                                            java.time.YearMonth.parse(dashboard.filter.selectedMonth)
+                                        onCategoryClick(
+                                            kind,
+                                            categoryId ?: UNCATEGORIZED_CATEGORY_FILTER,
+                                            month.atDay(1).toString(),
+                                            month.plusMonths(1).atDay(1).toString(),
+                                            dashboard.filter.currency,
+                                            dashboard.filter.accountId,
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -459,7 +480,12 @@ fun ActivityRouteContent(
 ) {
     val selectedKind by viewModel.selectedKind.collectAsStateWithLifecycle()
     val selectedAccountId by viewModel.selectedAccountId.collectAsStateWithLifecycle()
+    val selectedCategoryId by viewModel.selectedCategoryId.collectAsStateWithLifecycle()
+    val selectedCurrency by viewModel.selectedCurrency.collectAsStateWithLifecycle()
+    val fromDate by viewModel.fromDate.collectAsStateWithLifecycle()
+    val toDate by viewModel.toDate.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     val activity = viewModel.activity.collectAsLazyPagingItems()
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.activity)) }) },
@@ -484,15 +510,23 @@ fun ActivityRouteContent(
             ) {
                 FilterChip(
                     selected = selectedKind == null,
-                    onClick = { viewModel.selectedKind.value = null },
+                    onClick = {
+                        viewModel.selectedKind.value = null
+                        viewModel.selectedCategoryId.value = null
+                    },
                     label = { Text(stringResource(R.string.all)) },
                 )
                 ActivityKind.entries.forEach { kind ->
                     FilterChip(
                         selected = selectedKind == kind,
                         onClick = {
-                            viewModel.selectedKind.value =
-                                if (selectedKind == kind) null else kind
+                            val next = if (selectedKind == kind) null else kind
+                            viewModel.selectedKind.value = next
+                            if (next == null || next == ActivityKind.TRANSFER) {
+                                viewModel.selectedCategoryId.value = null
+                            } else if (categories.find { it.id == selectedCategoryId }?.type?.name != next.name) {
+                                viewModel.selectedCategoryId.value = null
+                            }
                         },
                         label = {
                             Text(
@@ -506,6 +540,37 @@ fun ActivityRouteContent(
                             )
                         },
                     )
+                }
+            }
+            if (selectedKind == ActivityKind.INCOME || selectedKind == ActivityKind.EXPENSE) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        CategorySelector(
+                            categories = categories.filter { it.type.name == selectedKind?.name },
+                            selectedId = selectedCategoryId,
+                            onSelected = { viewModel.selectedCategoryId.value = it },
+                        )
+                    }
+                }
+            }
+            if (selectedCurrency != null || fromDate != null || toDate != null || selectedCategoryId != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Text(
+                        listOfNotNull(
+                            selectedCurrency,
+                            fromDate?.let { "$it – ${toDate.orEmpty()}" }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = viewModel::clearExtendedFilters) {
+                        Text(stringResource(R.string.clear_filter))
+                    }
                 }
             }
             Row(

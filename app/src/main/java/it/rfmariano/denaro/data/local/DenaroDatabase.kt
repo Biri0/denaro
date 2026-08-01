@@ -7,18 +7,20 @@ import androidx.room.TypeConverters
 @Database(
     entities = [
         AccountEntity::class,
+        CategoryEntity::class,
         RecurringRuleEntity::class,
         TransactionEntity::class,
         TransferEntity::class,
         LegacyImportEntity::class,
     ],
     views = [AccountBalance::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class DenaroDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
+    abstract fun categoryDao(): CategoryDao
     abstract fun transactionDao(): TransactionDao
     abstract fun recurringRuleDao(): RecurringRuleDao
     abstract fun transferDao(): TransferDao

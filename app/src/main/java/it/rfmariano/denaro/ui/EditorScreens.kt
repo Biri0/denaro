@@ -2,6 +2,7 @@
 
 package it.rfmariano.denaro.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -19,6 +21,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -48,6 +52,7 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountInput
 import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.CategorySummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.RecurringRuleInput
@@ -63,6 +68,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun AccountEditorScreen(
@@ -280,13 +286,19 @@ fun ActivityEditorScreen(
     onBack: () -> Unit,
     onMessage: (String) -> Unit,
     onEditSchedule: (String) -> Unit = {},
+    createdCategoryId: String? = null,
+    onCreatedCategoryConsumed: () -> Unit = {},
+    onAddCategory: (TransactionType) -> Unit = {},
 ) {
     val accounts by repository.observeActiveAccounts().collectAsStateWithLifecycle(emptyList())
+    val categories by repository.observeCategories(includeArchived = true)
+        .collectAsStateWithLifecycle(emptyList())
     var kind by rememberSaveable { mutableStateOf(route.kind) }
     var accountId by rememberSaveable { mutableStateOf(route.accountId.orEmpty()) }
     var destinationId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
+    var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
     var occurredAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var recurringRuleId by rememberSaveable { mutableStateOf<String?>(null) }
     var isScheduled by rememberSaveable {
@@ -315,6 +327,13 @@ fun ActivityEditorScreen(
     val deletedMessage = stringResource(R.string.activity_deleted)
     val pausedMessage = stringResource(R.string.schedule_paused)
     val resumedMessage = stringResource(R.string.schedule_resumed)
+
+    LaunchedEffect(createdCategoryId) {
+        createdCategoryId?.let {
+            categoryId = it
+            onCreatedCategoryConsumed()
+        }
+    }
 
     LaunchedEffect(accounts, route.id, kind) {
         if (
@@ -390,6 +409,7 @@ fun ActivityEditorScreen(
                     description = it.description.orEmpty()
                     occurredAt = it.occurredAt
                     recurringRuleId = it.recurringRuleId
+                    categoryId = it.categoryId
                 }
             }
             loaded = true
@@ -411,6 +431,7 @@ fun ActivityEditorScreen(
                 intervalCount = it.intervalCount.toString()
                 ruleActive = it.isActive
                 isScheduled = true
+                categoryId = it.categoryId
             }
             loaded = true
         }
@@ -460,6 +481,7 @@ fun ActivityEditorScreen(
                                                     "Interval must be greater than zero",
                                                 ),
                                             nextOccurrenceAt = occurredAt,
+                                            categoryId = categoryId,
                                         )
                                         if (route.recurringRuleId == null) {
                                             repository.createRecurringRule(input)
@@ -493,6 +515,7 @@ fun ActivityEditorScreen(
                                             },
                                             occurredAt = occurredAt,
                                             description = description,
+                                            categoryId = categoryId,
                                         )
                                         if (route.id == null) {
                                             repository.createTransaction(input)
@@ -537,6 +560,11 @@ fun ActivityEditorScreen(
                                 transferDestinationCustomized = false
                             }
                             kind = option
+                            if (option == ActivityKind.TRANSFER ||
+                                categories.find { it.id == categoryId }?.type?.name != option.name
+                            ) {
+                                categoryId = null
+                            }
                             destinationId = ""
                             if (option == ActivityKind.TRANSFER) {
                                 isScheduled = false
@@ -623,6 +651,13 @@ fun ActivityEditorScreen(
                     stringResource(R.string.choose_same_currency),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                CategorySelector(
+                    categories = categories.filter { it.type.name == kind.name },
+                    selectedId = categoryId,
+                    onSelected = { categoryId = it },
+                    onAddCategory = { onAddCategory(TransactionType.valueOf(kind.name)) },
                 )
             }
             OutlinedTextField(
@@ -741,6 +776,10 @@ fun ActivityEditorScreen(
                 OutlinedButton(
                     onClick = { confirmDelete = true },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                 ) {
                     Text(stringResource(R.string.delete))
                 }
@@ -749,6 +788,10 @@ fun ActivityEditorScreen(
                 OutlinedButton(
                     onClick = { confirmDelete = true },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                 ) {
                     Text(stringResource(R.string.delete))
                 }
@@ -828,6 +871,9 @@ fun ActivityEditorScreen(
                             }.onFailure { error = it.message }
                         }
                     },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) {
                     Text(stringResource(R.string.delete))
                 }
@@ -897,6 +943,92 @@ fun AccountSelector(
                     onClick = {
                         onSelected(account.id)
                         expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CategorySelector(
+    categories: List<CategorySummary>,
+    selectedId: String?,
+    onSelected: (String?) -> Unit,
+    onAddCategory: (() -> Unit)? = null,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = categories.find { it.id == selectedId }
+    val categoriesById = categories.associateBy(CategorySummary::id)
+    val activeCategories = categories.filter { it.archivedAt == null }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+    ) {
+        OutlinedTextField(
+            value = selected?.let { category ->
+                val label = category.parentId?.let { parentId ->
+                    "${categoriesById[parentId]?.name.orEmpty()} · ${category.name}"
+                } ?: category.name
+                if (category.archivedAt == null) label
+                else "$label (${stringResource(R.string.archived)})"
+            }.orEmpty(),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(R.string.category)) },
+            placeholder = { Text(stringResource(R.string.no_category)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(
+                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = true,
+                ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.no_category)) },
+                onClick = {
+                    onSelected(null)
+                    expanded = false
+                },
+            )
+            activeCategories.filter { it.parentId == null }.forEach { parent ->
+                DropdownMenuItem(
+                    leadingIcon = { CategoryIcon(parent.iconName, parent.colorIndex) },
+                    text = { Text(parent.name) },
+                    onClick = {
+                        onSelected(parent.id)
+                        expanded = false
+                    },
+                )
+                activeCategories.filter { it.parentId == parent.id }.forEach { child ->
+                    DropdownMenuItem(
+                        leadingIcon = { CategoryIcon(child.iconName, child.colorIndex) },
+                        text = { Text("  ${child.name}") },
+                        onClick = {
+                            onSelected(child.id)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+            if (onAddCategory != null) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(stringResource(R.string.add_category)) },
+                    onClick = {
+                        expanded = false
+                        onAddCategory()
                     },
                 )
             }

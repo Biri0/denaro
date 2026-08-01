@@ -46,6 +46,7 @@ private enum class SettingsDialog {
 fun SettingsScreen(
     preferencesRepository: AppPreferencesRepository,
     onBack: () -> Unit,
+    onCategories: () -> Unit,
 ) {
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<SettingsDialog?>(null) }
@@ -88,6 +89,11 @@ fun SettingsScreen(
                 title = stringResource(R.string.default_currency),
                 value = preferences.defaultCurrency,
                 onClick = { dialog = SettingsDialog.CURRENCY },
+            )
+            SettingsItem(
+                title = stringResource(R.string.categories),
+                value = stringResource(R.string.manage_categories),
+                onClick = onCategories,
             )
         }
     }

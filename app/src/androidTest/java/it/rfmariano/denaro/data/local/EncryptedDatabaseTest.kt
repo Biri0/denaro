@@ -2,6 +2,7 @@ package it.rfmariano.denaro.data.local
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import it.rfmariano.denaro.data.security.DatabaseKeyManager
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,7 +15,16 @@ class EncryptedDatabaseTest {
     @Test
     fun encryptedRoomDatabasePersistsAndCalculatesBalance() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val factory = EncryptedDatabaseFactory(context)
+        val keyManager = object : DatabaseKeyManager(context) {
+            private val passphrase = ByteArray(32) { it.toByte() }
+            override fun getOrCreatePassphrase(): ByteArray = passphrase.copyOf()
+            override fun deleteKeyMaterial() = Unit
+        }
+        val factory = EncryptedDatabaseFactory(
+            context = context,
+            keyManager = keyManager,
+            databaseName = TEST_DATABASE_NAME,
+        )
         factory.deleteDatabaseAndKey()
 
         try {
@@ -66,7 +76,7 @@ class EncryptedDatabaseTest {
             }
 
             val databaseFile = context.getDatabasePath(
-                EncryptedDatabaseFactory.DATABASE_NAME,
+                TEST_DATABASE_NAME,
             )
             val header = ByteArray(SQLITE_HEADER.size)
             FileInputStream(databaseFile).use { input ->
@@ -80,5 +90,6 @@ class EncryptedDatabaseTest {
 
     private companion object {
         val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+        const val TEST_DATABASE_NAME = "denaro-encryption-test.db"
     }
 }

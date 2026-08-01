@@ -30,6 +30,7 @@ class RecurrenceProcessor(
                     id = UuidV7.generate(),
                     accountId = rule.accountId,
                     recurringRuleId = rule.id,
+                    categoryId = rule.categoryId,
                     occurrenceKey = occurrenceKey,
                     amountMinor = rule.amountMinor,
                     type = rule.transactionType,

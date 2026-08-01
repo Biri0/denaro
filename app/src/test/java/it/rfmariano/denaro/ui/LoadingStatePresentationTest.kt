@@ -20,6 +20,7 @@ class LoadingStatePresentationTest {
     @Test
     fun viewModelStatesStartLoading() {
         assertTrue(HomeUiState().isLoading)
+        assertTrue(HomeUiState().isDashboardLoading)
         assertTrue(AccountsUiState().isLoading)
         assertTrue(AccountDetailUiState().isLoading)
     }

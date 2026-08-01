@@ -9,6 +9,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 class EncryptedDatabaseFactory(
     private val context: Context,
     private val keyManager: DatabaseKeyManager = DatabaseKeyManager(context),
+    private val databaseName: String = DATABASE_NAME,
 ) {
     fun open(): DenaroDatabase {
         SqlCipherLoader.load()
@@ -16,14 +17,15 @@ class EncryptedDatabaseFactory(
         return Room.databaseBuilder(
             context.applicationContext,
             DenaroDatabase::class.java,
-            DATABASE_NAME,
+            databaseName,
         )
             .openHelperFactory(factory)
+            .addMigrations(MIGRATION_1_2)
             .build()
     }
 
     fun deleteDatabaseAndKey() {
-        context.deleteDatabase(DATABASE_NAME)
+        context.deleteDatabase(databaseName)
         keyManager.deleteKeyMaterial()
     }
 
