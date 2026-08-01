@@ -8,13 +8,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import it.rfmariano.denaro.data.finance.AccountSummary
+import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
-import it.rfmariano.denaro.data.finance.ActivityFilter
-import it.rfmariano.denaro.data.finance.FinanceRepository
-import it.rfmariano.denaro.data.finance.RecurringRuleSummary
 import it.rfmariano.denaro.data.finance.DashboardFilter
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
+import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.finance.RecurringRuleSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,11 +47,12 @@ private data class DashboardLoadState(
 class HomeViewModel(
     private val repository: FinanceRepository,
     defaultCurrency: String,
+    initialDashboardMonth: String = YearMonth.now().toString(),
 ) : ViewModel() {
     private val refreshRequests = MutableStateFlow(0L)
     val selectedCurrency = MutableStateFlow(defaultCurrency)
     val selectedAccountId = MutableStateFlow<String?>(null)
-    val selectedMonth = MutableStateFlow(YearMonth.now().toString())
+    val selectedMonth = MutableStateFlow(initialDashboardMonth)
 
     private val dashboard = combine(
         selectedCurrency,

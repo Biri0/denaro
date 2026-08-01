@@ -14,7 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -34,15 +36,28 @@ class MainActivity : AppCompatActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         val denaroApplication = application as DenaroApplication
+        val financeSessionProvider = denaroApplication.financeSessionProvider
         denaroApplication.preferencesRepository.applyStoredLanguage(force = true)
         splashScreen.setKeepOnScreenCondition {
-            migrationViewModel.result.value == null
+            migrationViewModel.result.value == null || financeSessionProvider.session.value == null
         }
         enableEdgeToEdge()
         setContent {
             val preferences by denaroApplication.preferencesRepository.state
                 .collectAsStateWithLifecycle()
             val migrationResult by migrationViewModel.result.collectAsStateWithLifecycle()
+            val financeSession by financeSessionProvider.session.collectAsStateWithLifecycle()
+            LaunchedEffect(migrationResult) {
+                when (migrationResult) {
+                    MigrationResult.NotNeeded, is MigrationResult.Success -> {
+                        financeSessionProvider.initialize(
+                            resources.configuration.locales[0].toLanguageTag(),
+                        )
+                    }
+
+                    null, is MigrationResult.Failure -> Unit
+                }
+            }
             DenaroTheme(
                 darkTheme = when (preferences.themeMode) {
                     ThemeMode.SYSTEM -> null
@@ -59,10 +74,15 @@ class MainActivity : AppCompatActivity() {
                         result = migrationResult,
                         onRetry = migrationViewModel::retry,
                     ) {
-                        DenaroApp(
-                            repository = denaroApplication.financeRepository,
-                            preferencesRepository = denaroApplication.preferencesRepository,
-                        )
+                        financeSession?.let { session ->
+                            key(session.id) {
+                                DenaroApp(
+                                    session = session,
+                                    financeSessionProvider = financeSessionProvider,
+                                    preferencesRepository = denaroApplication.preferencesRepository,
+                                )
+                            }
+                        }
                     }
                 }
             }

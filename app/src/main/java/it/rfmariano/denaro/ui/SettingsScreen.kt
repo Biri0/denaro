@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
+import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import it.rfmariano.denaro.data.preferences.LanguageOption
@@ -44,6 +45,7 @@ private enum class SettingsDialog {
 
 @Composable
 fun SettingsScreen(
+    financeSessionProvider: FinanceSessionProvider,
     preferencesRepository: AppPreferencesRepository,
     onBack: () -> Unit,
     onCategories: () -> Unit,
@@ -95,6 +97,7 @@ fun SettingsScreen(
                 value = stringResource(R.string.manage_categories),
                 onClick = onCategories,
             )
+            DeveloperSettingsSection(financeSessionProvider)
         }
     }
 

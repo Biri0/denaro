@@ -34,7 +34,8 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
-import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.finance.FinanceSession
+import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import kotlinx.coroutines.launch
@@ -93,9 +94,11 @@ private enum class TopLevelDestination(
 
 @Composable
 fun DenaroApp(
-    repository: FinanceRepository,
+    session: FinanceSession,
+    financeSessionProvider: FinanceSessionProvider,
     preferencesRepository: AppPreferencesRepository,
 ) {
+    val repository = session.repository
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     val homeBackStack = rememberNavBackStack(HomeRoute)
     val accountsBackStack = rememberNavBackStack(AccountsRoute)
@@ -110,12 +113,21 @@ fun DenaroApp(
     val recurrenceFailure = stringResource(R.string.recurrence_update_failed)
 
     val homeViewModel: HomeViewModel = viewModel(
-        factory = viewModelFactory { HomeViewModel(repository, preferences.defaultCurrency) },
+        key = "home-${session.id}",
+        factory = viewModelFactory {
+            HomeViewModel(
+                repository,
+                preferences.defaultCurrency,
+                session.initialDashboardMonth,
+            )
+        },
     )
     val accountsViewModel: AccountsViewModel = viewModel(
+        key = "accounts-${session.id}",
         factory = viewModelFactory { AccountsViewModel(repository) },
     )
     val activityViewModel: ActivityViewModel = viewModel(
+        key = "activity-${session.id}",
         factory = viewModelFactory { ActivityViewModel(repository) },
     )
 
@@ -181,6 +193,7 @@ fun DenaroApp(
                 }
                     entry<SettingsRoute> {
                         SettingsScreen(
+                            financeSessionProvider = financeSessionProvider,
                             preferencesRepository = preferencesRepository,
                             onBack = { homeBackStack.removeLastOrNull() },
                             onCategories = { homeBackStack.add(CategoriesRoute) },
@@ -239,7 +252,7 @@ fun DenaroApp(
                 }
                 entry<AccountDetailRoute> { route ->
                     val detailViewModel: AccountDetailViewModel = viewModel(
-                        key = "account-${route.accountId}",
+                        key = "account-${session.id}-${route.accountId}",
                         factory = viewModelFactory {
                             AccountDetailViewModel(repository, route.accountId)
                         },
