@@ -25,12 +25,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -43,6 +49,7 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.UNCATEGORIZED_CATEGORY_FILTER
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
@@ -477,7 +484,11 @@ fun ActivityRouteContent(
     amountsVisible: Boolean,
     onAddActivity: () -> Unit,
     onActivityClick: (ActivityItem) -> Unit,
+    debts: List<DebtSummary> = emptyList(),
+    onAddDebt: () -> Unit = {},
+    onDebtClick: (String) -> Unit = {},
 ) {
+    var showDebts by rememberSaveable { mutableStateOf(false) }
     val selectedKind by viewModel.selectedKind.collectAsStateWithLifecycle()
     val selectedAccountId by viewModel.selectedAccountId.collectAsStateWithLifecycle()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsStateWithLifecycle()
@@ -490,10 +501,10 @@ fun ActivityRouteContent(
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.activity)) }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddActivity) {
+            FloatingActionButton(onClick = if (showDebts) onAddDebt else onAddActivity) {
                 Icon(
                     painterResource(LucideR.drawable.lucide_ic_plus),
-                    contentDescription = stringResource(R.string.add_activity),
+                    contentDescription = stringResource(if (showDebts) R.string.add_debt else R.string.add_activity),
                 )
             }
         },
@@ -501,6 +512,24 @@ fun ActivityRouteContent(
         Column(modifier = Modifier
             .fillMaxSize()
             .padding(padding)) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                listOf(false, true).forEachIndexed { index, debtsSelected ->
+                    SegmentedButton(
+                        selected = showDebts == debtsSelected,
+                        onClick = { showDebts = debtsSelected },
+                        shape = SegmentedButtonDefaults.itemShape(index, 2),
+                    ) {
+                        Text(stringResource(if (debtsSelected) R.string.debts else R.string.movements))
+                    }
+                }
+            }
+            if (showDebts) {
+                DebtsPanel(debts, amountsVisible, onAddDebt, onDebtClick)
+            } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -516,7 +545,7 @@ fun ActivityRouteContent(
                     },
                     label = { Text(stringResource(R.string.all)) },
                 )
-                ActivityKind.entries.forEach { kind ->
+                ActivityKind.entries.filterNot { it == ActivityKind.DEBT }.forEach { kind ->
                     FilterChip(
                         selected = selectedKind == kind,
                         onClick = {
@@ -535,6 +564,7 @@ fun ActivityRouteContent(
                                         ActivityKind.INCOME -> R.string.income
                                         ActivityKind.EXPENSE -> R.string.expense
                                         ActivityKind.TRANSFER -> R.string.transfer
+                                        ActivityKind.DEBT -> R.string.debt
                                     },
                                 ),
                             )
@@ -544,7 +574,9 @@ fun ActivityRouteContent(
             }
             if (selectedKind == ActivityKind.INCOME || selectedKind == ActivityKind.EXPENSE) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -558,7 +590,9 @@ fun ActivityRouteContent(
             }
             if (selectedCurrency != null || fromDate != null || toDate != null || selectedCategoryId != null) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text(
@@ -599,6 +633,7 @@ fun ActivityRouteContent(
                 perspectiveAccountId = selectedAccountId,
                 onActivityClick = onActivityClick,
             )
+            }
         }
     }
 }

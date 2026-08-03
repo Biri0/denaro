@@ -98,6 +98,36 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration3To4PreservesBalancesAndAddsDebtLedger() {
+        helper.createDatabase(TEST_DATABASE, 3).apply {
+            execSQL(
+                """
+                INSERT INTO accounts
+                    (id, name, description, opening_balance_minor, currency, archived_at, created_at, updated_at)
+                VALUES ('account-1', 'Cash', NULL, 1000, 'EUR', NULL, 10, 10)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 4, true, MIGRATION_3_4).use { db ->
+            db.query("SELECT balance_minor FROM account_balances WHERE account_id = 'account-1'")
+                .use {
+                    it.moveToFirst()
+                    assertEquals(1000L, it.getLong(0))
+                }
+            db.query("SELECT COUNT(*) FROM debts").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+            db.query("SELECT COUNT(*) FROM counterparties").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "migration-test"
     }

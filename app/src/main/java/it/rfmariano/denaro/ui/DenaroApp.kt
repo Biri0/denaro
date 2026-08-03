@@ -58,6 +58,9 @@ private data object SettingsRoute : NavKey
 private data object CategoriesRoute : NavKey
 
 @Serializable
+private data object CounterpartiesRoute : NavKey
+
+@Serializable
 private data class CategoryEditorRoute(
     val categoryId: String? = null,
     val type: String,
@@ -82,6 +85,16 @@ data class ActivityEditorRoute(
     val scheduled: Boolean = false,
     val accountId: String? = null,
 ) : NavKey
+
+@Serializable
+private data class DebtDetailRoute(val debtId: String) : NavKey
+
+@Serializable
+private data class DebtEditorRoute(val debtId: String? = null) : NavKey
+
+@Serializable
+private data class DebtRepaymentEditorRoute(val debtId: String, val repaymentId: String? = null) :
+    NavKey
 
 private enum class TopLevelDestination(
     val label: Int,
@@ -128,6 +141,10 @@ fun DenaroApp(
     val activityViewModel: ActivityViewModel = viewModel(
         key = "activity-${session.id}",
         factory = viewModelFactory { ActivityViewModel(repository) },
+    )
+    val debtsViewModel: DebtsViewModel = viewModel(
+        key = "debts-${session.id}",
+        factory = viewModelFactory { DebtsViewModel(repository) },
     )
 
     fun processRecurrences() {
@@ -198,7 +215,11 @@ fun DenaroApp(
                             preferencesRepository = preferencesRepository,
                             onBack = { homeBackStack.removeLastOrNull() },
                             onCategories = { homeBackStack.add(CategoriesRoute) },
+                            onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
                         )
+                    }
+                    entry<CounterpartiesRoute> {
+                        CounterpartiesScreen(repository) { homeBackStack.removeLastOrNull() }
                     }
                     entry<CategoriesRoute> {
                         CategoryManagementScreen(
@@ -240,6 +261,7 @@ fun DenaroApp(
                     )
                 }
                 entry<ActivityRoute> {
+                    val debtsState by debtsViewModel.uiState.collectAsStateWithLifecycle()
                     ActivityRouteContent(
                         viewModel = activityViewModel,
                         amountsVisible = preferences.amountsVisible,
@@ -247,8 +269,63 @@ fun DenaroApp(
                             activityBackStack.add(ActivityEditorRoute())
                         },
                         onActivityClick = { item ->
-                            activityBackStack.add(item.editorRoute())
+                            if (item.kind == ActivityKind.DEBT && item.debtId != null) {
+                                activityBackStack.add(DebtDetailRoute(item.debtId))
+                            } else {
+                                activityBackStack.add(item.editorRoute())
+                            }
                         },
+                        debts = debtsState.debts,
+                        onAddDebt = { activityBackStack.add(DebtEditorRoute()) },
+                        onDebtClick = { activityBackStack.add(DebtDetailRoute(it)) },
+                    )
+                }
+                    entry<DebtDetailRoute> { route ->
+                        val detail: DebtDetailViewModel = viewModel(
+                            key = "debt-${session.id}-${route.debtId}",
+                            factory = viewModelFactory {
+                                DebtDetailViewModel(
+                                    repository,
+                                    route.debtId
+                                )
+                            },
+                        )
+                        val state by detail.uiState.collectAsStateWithLifecycle()
+                        val accounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
+                            emptyList()
+                        )
+                        DebtDetailScreen(
+                            state = state,
+                            accounts = accounts,
+                            amountsVisible = preferences.amountsVisible,
+                            onBack = { backStack.removeLastOrNull() },
+                            onEdit = { backStack.add(DebtEditorRoute(it)) },
+                            onAddRepayment = { backStack.add(DebtRepaymentEditorRoute(it)) },
+                            onEditRepayment = { debtId, repaymentId ->
+                                backStack.add(
+                                    DebtRepaymentEditorRoute(debtId, repaymentId)
+                                )
+                            },
+                        )
+                    }
+                    entry<DebtEditorRoute> { route ->
+                        DebtEditorScreen(
+                            repository, route.debtId,
+                            onBack = { backStack.removeLastOrNull() },
+                            onFinished = { backStack.removeLastOrNull() },
+                            onDeleted = {
+                                backStack.removeLastOrNull()
+                                backStack.removeLastOrNull()
+                            },
+                            onMessage = ::showMessage,
+                        )
+                    }
+                    entry<DebtRepaymentEditorRoute> { route ->
+                        DebtRepaymentEditorScreen(
+                            repository, route.debtId, route.repaymentId,
+                            onBack = { backStack.removeLastOrNull() },
+                            onFinished = { backStack.removeLastOrNull() },
+                            onMessage = ::showMessage,
                     )
                 }
                 entry<AccountDetailRoute> { route ->
@@ -331,7 +408,7 @@ fun DenaroApp(
         }
     }
     val fullScreenSettings = when (backStack.lastOrNull()) {
-        is SettingsRoute, is CategoriesRoute, is CategoryEditorRoute -> true
+        is SettingsRoute, is CategoriesRoute, is CategoryEditorRoute, is CounterpartiesRoute -> true
         else -> false
     }
     if (fullScreenSettings) {

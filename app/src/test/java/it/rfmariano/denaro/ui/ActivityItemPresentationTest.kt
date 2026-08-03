@@ -2,6 +2,8 @@ package it.rfmariano.denaro.ui
 
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.DebtMovementKind
+import it.rfmariano.denaro.data.local.DebtDirection
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -46,6 +48,31 @@ class ActivityItemPresentationTest {
         assertEquals(
             -1_000L,
             activityItem(ActivityKind.EXPENSE).signedAmount("account"),
+        )
+    }
+
+    @Test
+    fun debtMovementSignsFollowDirectionAndMovement() {
+        assertEquals(
+            1_000L,
+            activityItem(ActivityKind.DEBT).copy(
+                debtDirection = DebtDirection.BORROWED,
+                debtMovement = DebtMovementKind.OPENING,
+            ).signedAmount(null),
+        )
+        assertEquals(
+            -1_000L,
+            activityItem(ActivityKind.DEBT).copy(
+                debtDirection = DebtDirection.BORROWED,
+                debtMovement = DebtMovementKind.REPAYMENT,
+            ).signedAmount(null),
+        )
+        assertEquals(
+            -1_000L,
+            activityItem(ActivityKind.DEBT).copy(
+                debtDirection = DebtDirection.LENT,
+                debtMovement = DebtMovementKind.OPENING,
+            ).signedAmount(null),
         )
     }
 

@@ -26,6 +26,10 @@ class DemoFixtureTest {
         assertTrue(first.transfers.all { it.fromAccountId in accountIds && it.toAccountId in accountIds })
         assertTrue(first.rules.all { it.accountId in accountIds && it.categoryId in categoryIds })
         assertTrue(first.categories.all { it.parentId == null || it.parentId in categoryIds })
+        val counterpartyIds = first.counterparties.mapTo(mutableSetOf()) { it.id }
+        val debtIds = first.debts.mapTo(mutableSetOf()) { it.id }
+        assertTrue(first.debts.all { it.accountId in accountIds && it.counterpartyId in counterpartyIds })
+        assertTrue(first.repayments.all { it.debtId in debtIds && it.accountId in accountIds })
     }
 
     @Test

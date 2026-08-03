@@ -23,6 +23,11 @@ enum class LegacyImportStatus {
     COMPLETE,
 }
 
+enum class DebtDirection {
+    BORROWED,
+    LENT,
+}
+
 @Entity(
     tableName = "categories",
     foreignKeys = [
@@ -182,6 +187,86 @@ data class TransferEntity(
     @ColumnInfo(name = "occurred_at") val occurredAt: Long,
     @ColumnInfo(name = "local_date") val localDate: String,
     val description: String?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "counterparties",
+    indices = [Index(value = ["archived_at", "name"])],
+)
+data class CounterpartyEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val note: String?,
+    @ColumnInfo(name = "archived_at") val archivedAt: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "debts",
+    foreignKeys = [
+        ForeignKey(
+            entity = CounterpartyEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["counterparty_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+        ForeignKey(
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["account_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [
+        Index(value = ["counterparty_id"]),
+        Index(value = ["account_id"]),
+        Index(value = ["due_date"]),
+    ],
+)
+data class DebtEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "counterparty_id") val counterpartyId: String,
+    @ColumnInfo(name = "account_id") val accountId: String,
+    val direction: DebtDirection,
+    @ColumnInfo(name = "principal_minor") val principalMinor: Long,
+    val currency: String,
+    @ColumnInfo(name = "opened_at") val openedAt: Long,
+    @ColumnInfo(name = "local_date") val localDate: String,
+    @ColumnInfo(name = "due_date") val dueDate: String?,
+    val note: String?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "debt_repayments",
+    foreignKeys = [
+        ForeignKey(
+            entity = DebtEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["debt_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["account_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [Index(value = ["debt_id"]), Index(value = ["account_id", "occurred_at"])],
+)
+data class DebtRepaymentEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "debt_id") val debtId: String,
+    @ColumnInfo(name = "account_id") val accountId: String,
+    @ColumnInfo(name = "amount_minor") val amountMinor: Long,
+    @ColumnInfo(name = "occurred_at") val occurredAt: Long,
+    @ColumnInfo(name = "local_date") val localDate: String,
+    val note: String?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )

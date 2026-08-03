@@ -13,6 +13,8 @@ import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.DashboardFilter
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
+import it.rfmariano.denaro.data.finance.DebtRepaymentSummary
+import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.RecurringRuleSummary
 import kotlinx.coroutines.flow.Flow
@@ -212,6 +214,31 @@ class ActivityViewModel(private val repository: FinanceRepository) : ViewModel()
     fun refresh() {
         refreshRequests.update { it + 1 }
     }
+}
+
+data class DebtsUiState(
+    val debts: List<DebtSummary> = emptyList(),
+    val isLoading: Boolean = true,
+)
+
+class DebtsViewModel(repository: FinanceRepository) : ViewModel() {
+    val uiState = repository.observeDebts()
+        .map { DebtsUiState(it, isLoading = false) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DebtsUiState())
+}
+
+data class DebtDetailUiState(
+    val debt: DebtSummary? = null,
+    val repayments: List<DebtRepaymentSummary> = emptyList(),
+    val isLoading: Boolean = true,
+)
+
+class DebtDetailViewModel(repository: FinanceRepository, debtId: String) : ViewModel() {
+    val uiState = combine(
+        repository.observeDebt(debtId),
+        repository.observeDebtRepayments(debtId),
+    ) { debt, repayments -> DebtDetailUiState(debt, repayments, isLoading = false) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DebtDetailUiState())
 }
 
 inline fun <reified T : ViewModel> viewModelFactory(

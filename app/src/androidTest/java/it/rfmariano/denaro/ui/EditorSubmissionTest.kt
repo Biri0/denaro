@@ -5,7 +5,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -17,14 +19,18 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountInput
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.CategoryInput
+import it.rfmariano.denaro.data.finance.CounterpartyInput
+import it.rfmariano.denaro.data.finance.DebtInput
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.TransactionInput
+import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.ui.theme.DenaroTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -209,6 +215,56 @@ class EditorSubmissionTest {
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
         composeRule.onNodeWithText("Name is required").assertExists()
         composeRule.onNodeWithText(context.getString(R.string.save)).assertIsEnabled()
+    }
+
+    @Test
+    fun dueDateClearIconRemovesDate() = runBlocking {
+        val accountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val counterpartyId = repository.createCounterparty(
+            CounterpartyInput("Alex", null),
+        )
+        val debtId = repository.createDebt(
+            DebtInput(
+                counterpartyId = counterpartyId,
+                accountId = accountId,
+                direction = DebtDirection.BORROWED,
+                principalMinor = 1_000,
+                openedAt = 1,
+                dueDate = "2026-08-12",
+                note = null,
+            ),
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+        val clearLabel = context.getString(R.string.clear_due_date)
+
+        composeRule.setContent {
+            DenaroTheme {
+                DebtEditorScreen(
+                    repository = repository,
+                    debtId = debtId,
+                    onBack = {},
+                    onFinished = { completions.incrementAndGet() },
+                    onDeleted = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Alex").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(clearLabel).performClick()
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithContentDescription(clearLabel)
+                .fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completions.get() == 1 }
+        assertNull(database.debtDao().getById(debtId)?.dueDate)
     }
 
     @Test

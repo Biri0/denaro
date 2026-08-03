@@ -39,7 +39,10 @@ class MainActivity : AppCompatActivity() {
         val financeSessionProvider = denaroApplication.financeSessionProvider
         denaroApplication.preferencesRepository.applyStoredLanguage(force = true)
         splashScreen.setKeepOnScreenCondition {
-            migrationViewModel.result.value == null || financeSessionProvider.session.value == null
+            shouldKeepSplashVisible(
+                migrationResult = migrationViewModel.result.value,
+                hasFinanceSession = financeSessionProvider.session.value != null,
+            )
         }
         enableEdgeToEdge()
         setContent {
@@ -88,6 +91,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+}
+
+internal fun shouldKeepSplashVisible(
+    migrationResult: MigrationResult?,
+    hasFinanceSession: Boolean,
+): Boolean = when (migrationResult) {
+    null -> true
+    is MigrationResult.Failure -> false
+    MigrationResult.NotNeeded, is MigrationResult.Success -> !hasFinanceSession
 }
 
 @Composable

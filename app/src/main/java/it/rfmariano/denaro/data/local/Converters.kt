@@ -23,4 +23,10 @@ class Converters {
     @TypeConverter
     fun stringToLegacyImportStatus(value: String): LegacyImportStatus =
         LegacyImportStatus.valueOf(value)
+
+    @TypeConverter
+    fun debtDirectionToString(value: DebtDirection): String = value.name
+
+    @TypeConverter
+    fun stringToDebtDirection(value: String): DebtDirection = DebtDirection.valueOf(value)
 }

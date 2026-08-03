@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
+import it.rfmariano.denaro.data.local.CounterpartyEntity
+import it.rfmariano.denaro.data.local.DebtDirection
+import it.rfmariano.denaro.data.local.DebtEntity
+import it.rfmariano.denaro.data.local.DebtRepaymentEntity
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.EncryptedDatabaseFactory
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
@@ -119,6 +123,9 @@ internal class DemoDataSeeder(
             val sqlite = database.openHelper.writableDatabase
             sqlite.execSQL("DELETE FROM transactions")
             sqlite.execSQL("DELETE FROM transfers")
+            sqlite.execSQL("DELETE FROM debt_repayments")
+            sqlite.execSQL("DELETE FROM debts")
+            sqlite.execSQL("DELETE FROM counterparties")
             sqlite.execSQL("DELETE FROM recurring_rules")
             sqlite.execSQL("DELETE FROM categories")
             sqlite.execSQL("DELETE FROM accounts")
@@ -128,6 +135,9 @@ internal class DemoDataSeeder(
             database.recurringRuleDao().insertAll(fixture.rules)
             database.transactionDao().insertAll(fixture.transactions)
             database.transferDao().insertAll(fixture.transfers)
+            fixture.counterparties.forEach { database.counterpartyDao().insert(it) }
+            fixture.debts.forEach { database.debtDao().insert(it) }
+            fixture.repayments.forEach { database.debtDao().insertRepayment(it) }
         }
     }
 }
@@ -138,6 +148,9 @@ internal data class DemoFixture(
     val rules: List<RecurringRuleEntity>,
     val transactions: List<TransactionEntity>,
     val transfers: List<TransferEntity>,
+    val counterparties: List<CounterpartyEntity>,
+    val debts: List<DebtEntity>,
+    val repayments: List<DebtRepaymentEntity>,
 )
 
 internal fun demoFixture(
@@ -307,5 +320,79 @@ internal fun demoFixture(
         rule("gym", 3_900, TransactionType.EXPENSE, "health", 10, "Gym membership", "Abbonamento palestra", active = false),
     )
 
-    return DemoFixture(accounts, categories, rules, transactions, transfers)
+    val counterparties = listOf(
+        CounterpartyEntity(
+            id("counterparty", "alex"),
+            "Alex",
+            text("Friend", "Amico"),
+            null,
+            timestamp,
+            timestamp
+        ),
+        CounterpartyEntity(
+            id("counterparty", "studio"),
+            text("Design studio", "Studio di design"),
+            null,
+            null,
+            timestamp + 1,
+            timestamp + 1
+        ),
+    )
+    val borrowedDate = showcaseMonth.atDay(5)
+    val lentDate = showcaseMonth.atDay(12)
+    val debts = listOf(
+        DebtEntity(
+            id("debt", "alex"),
+            id("counterparty", "alex"),
+            checkingId,
+            DebtDirection.BORROWED,
+            60_000,
+            "EUR",
+            epoch(borrowedDate),
+            borrowedDate.toString(),
+            referenceDate.plusDays(10).toString(),
+            text("Shared trip", "Viaggio insieme"),
+            timestamp,
+            timestamp
+        ),
+        DebtEntity(
+            id("debt", "studio"),
+            id("counterparty", "studio"),
+            checkingId,
+            DebtDirection.LENT,
+            35_000,
+            "EUR",
+            epoch(lentDate),
+            lentDate.toString(),
+            null,
+            text("Equipment deposit", "Deposito attrezzatura"),
+            timestamp + 1,
+            timestamp + 1
+        ),
+    )
+    val repaymentDate = showcaseMonth.atDay(20)
+    val repayments = listOf(
+        DebtRepaymentEntity(
+            id("repayment", "alex-1"),
+            id("debt", "alex"),
+            checkingId,
+            15_000,
+            epoch(repaymentDate),
+            repaymentDate.toString(),
+            null,
+            timestamp,
+            timestamp
+        ),
+    )
+
+    return DemoFixture(
+        accounts,
+        categories,
+        rules,
+        transactions,
+        transfers,
+        counterparties,
+        debts,
+        repayments
+    )
 }

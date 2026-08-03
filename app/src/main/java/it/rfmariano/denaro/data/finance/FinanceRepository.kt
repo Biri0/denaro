@@ -8,6 +8,11 @@ import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.ActivityRecord
 import it.rfmariano.denaro.data.local.CategoryEntity
+import it.rfmariano.denaro.data.local.CounterpartyEntity
+import it.rfmariano.denaro.data.local.DebtDirection
+import it.rfmariano.denaro.data.local.DebtEntity
+import it.rfmariano.denaro.data.local.DebtRecord
+import it.rfmariano.denaro.data.local.DebtRepaymentEntity
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.RecurringRuleEntity
@@ -182,6 +187,172 @@ class FinanceRepository(
                 account.toSummary(balancesById[account.id]?.balanceMinor)
             }
         }
+
+    fun observeAllAccounts(): Flow<List<AccountSummary>> =
+        combine(
+            database.accountDao().observeAll(),
+            database.accountBalanceDao().observeAll(),
+        ) { accounts, balances ->
+            val balancesById = balances.associateBy { it.accountId }
+            accounts.map { it.toSummary(balancesById[it.id]?.balanceMinor) }
+        }
+
+    fun observeCounterparties(includeArchived: Boolean = false): Flow<List<CounterpartySummary>> =
+        database.counterpartyDao().observeAll().map { items ->
+            items.filter { includeArchived || it.archivedAt == null }.map {
+                CounterpartySummary(it.id, it.name, it.note, it.archivedAt)
+            }
+        }
+
+    suspend fun createCounterparty(input: CounterpartyInput): String {
+        require(input.name.isNotBlank()) { "Name is required" }
+        val now = clock()
+        return UuidV7.generate().also { id ->
+            database.counterpartyDao().insert(
+                CounterpartyEntity(id, input.name.trim(), input.note.normalized(), null, now, now),
+            )
+        }
+    }
+
+    suspend fun updateCounterparty(id: String, input: CounterpartyInput) {
+        require(input.name.isNotBlank()) { "Name is required" }
+        val existing = requireNotNull(database.counterpartyDao().getById(id)) {
+            "Counterparty not found"
+        }
+        database.counterpartyDao().update(
+            existing.copy(
+                name = input.name.trim(),
+                note = input.note.normalized(),
+                updatedAt = clock()
+            ),
+        )
+    }
+
+    suspend fun setCounterpartyArchived(id: String, archived: Boolean) {
+        requireNotNull(database.counterpartyDao().getById(id)) { "Counterparty not found" }
+        val now = clock()
+        database.counterpartyDao().setArchived(id, if (archived) now else null, now)
+    }
+
+    fun observeDebts(): Flow<List<DebtSummary>> = database.debtDao().observeAll().map { records ->
+        records.map { it.toSummary() }
+    }
+
+    fun observeDebt(id: String): Flow<DebtSummary?> =
+        database.debtDao().observeById(id).map { it?.toSummary() }
+
+    fun observeDebtRepayments(debtId: String): Flow<List<DebtRepaymentSummary>> =
+        database.debtDao().observeRepayments(debtId).map { repayments ->
+            repayments.map {
+                DebtRepaymentSummary(
+                    it.id,
+                    it.debtId,
+                    it.accountId,
+                    it.amountMinor,
+                    it.occurredAt,
+                    it.note
+                )
+            }
+        }
+
+    suspend fun getDebt(id: String): DebtEntity? = database.debtDao().getById(id)
+
+    suspend fun createDebt(input: DebtInput): String {
+        val account = validateDebt(input)
+        val now = clock()
+        return UuidV7.generate().also { id ->
+            database.debtDao().insert(
+                DebtEntity(
+                    id, input.counterpartyId, input.accountId, input.direction,
+                    input.principalMinor, account.currency, input.openedAt,
+                    input.openedAt.localDate(), input.dueDate, input.note.normalized(), now, now,
+                ),
+            )
+        }
+    }
+
+    suspend fun updateDebt(id: String, input: DebtInput) = database.withTransaction {
+        val existing = requireNotNull(database.debtDao().getById(id)) { "Debt not found" }
+        val account = validateDebt(
+            input,
+            allowedArchivedCounterpartyId = existing.counterpartyId,
+            allowedArchivedAccountId = existing.accountId,
+        )
+        val repayments = database.debtDao().getRepayments(id)
+        require(account.currency == existing.currency) { "Debt currency cannot be changed" }
+        require(repayments.isEmpty() || input.direction == existing.direction) {
+            "Direction cannot be changed after a repayment"
+        }
+        require(input.principalMinor >= repayments.sumOf { it.amountMinor }) {
+            "Principal cannot be less than repayments"
+        }
+        require(repayments.all { it.occurredAt >= input.openedAt }) {
+            "Opening date cannot be after a repayment"
+        }
+        database.debtDao().update(
+            existing.copy(
+                counterpartyId = input.counterpartyId,
+                accountId = input.accountId,
+                direction = input.direction,
+                principalMinor = input.principalMinor,
+                openedAt = input.openedAt,
+                localDate = input.openedAt.localDate(),
+                dueDate = input.dueDate,
+                note = input.note.normalized(),
+                updatedAt = clock(),
+            ),
+        )
+    }
+
+    suspend fun deleteDebt(id: String) {
+        database.debtDao()
+            .delete(requireNotNull(database.debtDao().getById(id)) { "Debt not found" })
+    }
+
+    suspend fun getDebtRepayment(id: String): DebtRepaymentEntity? =
+        database.debtDao().getRepaymentById(id)
+
+    suspend fun createDebtRepayment(input: DebtRepaymentInput): String = database.withTransaction {
+        validateDebtRepayment(input)
+        val now = clock()
+        UuidV7.generate().also { id ->
+            database.debtDao().insertRepayment(
+                DebtRepaymentEntity(
+                    id, input.debtId, input.accountId, input.amountMinor, input.occurredAt,
+                    input.occurredAt.localDate(), input.note.normalized(), now, now,
+                ),
+            )
+            database.debtDao().touch(input.debtId, now)
+        }
+    }
+
+    suspend fun updateDebtRepayment(id: String, input: DebtRepaymentInput) =
+        database.withTransaction {
+            val existing =
+                requireNotNull(database.debtDao().getRepaymentById(id)) { "Repayment not found" }
+            require(existing.debtId == input.debtId) { "Repayment debt cannot be changed" }
+            validateDebtRepayment(input, existing.amountMinor)
+            database.debtDao().updateRepayment(
+                existing.copy(
+                    accountId = input.accountId,
+                    amountMinor = input.amountMinor,
+                    occurredAt = input.occurredAt,
+                    localDate = input.occurredAt.localDate(),
+                    note = input.note.normalized(),
+                    updatedAt = clock(),
+                ),
+            )
+            database.debtDao().touch(input.debtId, clock())
+        }
+
+    suspend fun deleteDebtRepayment(id: String) {
+        database.withTransaction {
+            val existing =
+                requireNotNull(database.debtDao().getRepaymentById(id)) { "Repayment not found" }
+            database.debtDao().deleteRepayment(existing)
+            database.debtDao().touch(existing.debtId, clock())
+        }
+    }
 
     fun observeArchivedAccounts(): Flow<List<AccountSummary>> =
         combine(
@@ -554,6 +725,51 @@ class FinanceRepository(
         }
     }
 
+    private suspend fun validateDebt(
+        input: DebtInput,
+        allowedArchivedCounterpartyId: String? = null,
+        allowedArchivedAccountId: String? = null,
+    ): AccountEntity {
+        require(input.principalMinor > 0) { "Amount must be greater than zero" }
+        require(input.openedAt >= 0) { "Date is invalid" }
+        val counterparty =
+            requireNotNull(database.counterpartyDao().getById(input.counterpartyId)) {
+                "Counterparty not found"
+            }
+        require(counterparty.archivedAt == null || counterparty.id == allowedArchivedCounterpartyId) {
+            "Counterparty is archived"
+        }
+        input.dueDate?.let { due ->
+            val parsed = runCatching { LocalDate.parse(due) }.getOrNull()
+            require(parsed != null && parsed >= LocalDate.parse(input.openedAt.localDate())) {
+                "Due date cannot be before the opening date"
+            }
+        }
+        val account = requireNotNull(database.accountDao().getById(input.accountId)) {
+            "Account not found"
+        }
+        require(account.archivedAt == null || account.id == allowedArchivedAccountId) {
+            "Archived accounts cannot be changed"
+        }
+        return account
+    }
+
+    private suspend fun validateDebtRepayment(
+        input: DebtRepaymentInput,
+        replacingAmountMinor: Long = 0,
+    ) {
+        require(input.amountMinor > 0) { "Amount must be greater than zero" }
+        require(input.occurredAt >= 0) { "Date is invalid" }
+        val debt = requireNotNull(database.debtDao().getById(input.debtId)) { "Debt not found" }
+        require(input.occurredAt >= debt.openedAt) { "Repayment cannot be before the opening date" }
+        val account = requireActiveAccount(input.accountId)
+        require(account.currency == debt.currency) { "Repayment account must use ${debt.currency}" }
+        val alreadyRepaid = database.debtDao().getRepayments(input.debtId).sumOf { it.amountMinor }
+        require(input.amountMinor <= debt.principalMinor - alreadyRepaid + replacingAmountMinor) {
+            "Repayment cannot exceed the outstanding amount"
+        }
+    }
+
     private suspend fun requireActiveAccount(id: String): AccountEntity {
         val account = requireNotNull(database.accountDao().getById(id)) {
             "Account not found"
@@ -696,7 +912,27 @@ class FinanceRepository(
             categoryName = categoryName,
             categoryIconName = categoryIconName,
             categoryColorIndex = categoryColorIndex,
+            debtId = debtId,
+            debtDirection = debtDirection?.let(DebtDirection::valueOf),
+            debtMovement = debtMovement?.let(DebtMovementKind::valueOf),
+            externalCounterpartyName = externalCounterpartyName,
         )
+
+    private fun DebtRecord.toSummary() = DebtSummary(
+        id = id,
+        counterpartyId = counterpartyId,
+        counterpartyName = counterpartyName,
+        accountId = accountId,
+        accountName = accountName,
+        direction = direction,
+        principalMinor = principalMinor,
+        repaidMinor = repaidMinor,
+        currency = currency,
+        openedAt = openedAt,
+        localDate = localDate,
+        dueDate = dueDate,
+        note = note,
+    )
 
     private fun CategoryEntity.toSummary() = CategorySummary(
         id = id,

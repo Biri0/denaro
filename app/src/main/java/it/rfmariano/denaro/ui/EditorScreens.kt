@@ -449,6 +449,7 @@ fun ActivityEditorScreen(
                                 isScheduled -> R.string.add_scheduled_transaction
                                 route.id == null -> R.string.add_transaction
                                 route.kind == ActivityKind.TRANSFER -> R.string.edit_transfer
+                                route.kind == ActivityKind.DEBT -> R.string.edit_debt
                                 else -> R.string.edit_transaction
                             },
                         ),
@@ -549,7 +550,11 @@ fun ActivityEditorScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ActivityKind.entries.forEachIndexed { index, option ->
+                listOf(
+                    ActivityKind.INCOME,
+                    ActivityKind.EXPENSE,
+                    ActivityKind.TRANSFER
+                ).forEachIndexed { index, option ->
                     SegmentedButton(
                         selected = kind == option,
                         enabled = route.id == null && route.recurringRuleId == null,
@@ -572,7 +577,7 @@ fun ActivityEditorScreen(
                         },
                         shape = SegmentedButtonDefaults.itemShape(
                             index,
-                            ActivityKind.entries.size,
+                            3,
                         ),
                     ) {
                         Text(
@@ -581,6 +586,7 @@ fun ActivityEditorScreen(
                                     ActivityKind.INCOME -> R.string.income
                                     ActivityKind.EXPENSE -> R.string.expense
                                     ActivityKind.TRANSFER -> R.string.transfer
+                                    ActivityKind.DEBT -> R.string.debt
                                 },
                             ),
                         )

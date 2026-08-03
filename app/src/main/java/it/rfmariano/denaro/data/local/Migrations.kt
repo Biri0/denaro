@@ -55,3 +55,51 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `counterparties` (
+                `id` TEXT NOT NULL, `name` TEXT NOT NULL, `note` TEXT,
+                `archived_at` INTEGER, `created_at` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_counterparties_archived_at_name` ON `counterparties` (`archived_at`, `name`)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `debts` (
+                `id` TEXT NOT NULL, `counterparty_id` TEXT NOT NULL,
+                `account_id` TEXT NOT NULL, `direction` TEXT NOT NULL,
+                `principal_minor` INTEGER NOT NULL, `currency` TEXT NOT NULL,
+                `opened_at` INTEGER NOT NULL, `local_date` TEXT NOT NULL,
+                `due_date` TEXT, `note` TEXT, `created_at` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`),
+                FOREIGN KEY(`counterparty_id`) REFERENCES `counterparties`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT,
+                FOREIGN KEY(`account_id`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_debts_counterparty_id` ON `debts` (`counterparty_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_debts_account_id` ON `debts` (`account_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_debts_due_date` ON `debts` (`due_date`)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `debt_repayments` (
+                `id` TEXT NOT NULL, `debt_id` TEXT NOT NULL, `account_id` TEXT NOT NULL,
+                `amount_minor` INTEGER NOT NULL, `occurred_at` INTEGER NOT NULL,
+                `local_date` TEXT NOT NULL, `note` TEXT, `created_at` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`),
+                FOREIGN KEY(`debt_id`) REFERENCES `debts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`account_id`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_repayments_debt_id` ON `debt_repayments` (`debt_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_debt_repayments_account_id_occurred_at` ON `debt_repayments` (`account_id`, `occurred_at`)")
+        db.execSQL("DROP VIEW IF EXISTS `account_balances`")
+        db.execSQL("CREATE VIEW `account_balances` AS $ACCOUNT_BALANCE_QUERY")
+    }
+}

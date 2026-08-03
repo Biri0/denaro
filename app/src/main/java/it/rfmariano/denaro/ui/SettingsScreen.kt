@@ -49,6 +49,7 @@ fun SettingsScreen(
     preferencesRepository: AppPreferencesRepository,
     onBack: () -> Unit,
     onCategories: () -> Unit,
+    onCounterparties: () -> Unit,
 ) {
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<SettingsDialog?>(null) }
@@ -96,6 +97,11 @@ fun SettingsScreen(
                 title = stringResource(R.string.categories),
                 value = stringResource(R.string.manage_categories),
                 onClick = onCategories,
+            )
+            SettingsItem(
+                title = stringResource(R.string.counterparties),
+                value = stringResource(R.string.manage_counterparties),
+                onClick = onCounterparties,
             )
             DeveloperSettingsSection(financeSessionProvider)
         }

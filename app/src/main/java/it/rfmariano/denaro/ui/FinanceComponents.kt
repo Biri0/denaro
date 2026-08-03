@@ -139,15 +139,32 @@ fun ActivityRow(
                     ActivityKind.INCOME -> stringResource(R.string.income)
                     ActivityKind.EXPENSE -> stringResource(R.string.expense)
                     ActivityKind.TRANSFER -> stringResource(R.string.transfer)
+                    ActivityKind.DEBT -> when (item.debtMovement) {
+                        it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> stringResource(
+                            if (item.debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED) R.string.borrowed_from else R.string.lent_to,
+                            item.externalCounterpartyName.orEmpty(),
+                        )
+
+                        it.rfmariano.denaro.data.finance.DebtMovementKind.REPAYMENT -> stringResource(
+                            if (item.debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED) R.string.repaid_to else R.string.repaid_by,
+                            item.externalCounterpartyName.orEmpty(),
+                        )
+
+                        null -> stringResource(R.string.debt)
+                    }
                 },
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
             )
             Text(
-                text = if (item.kind == ActivityKind.TRANSFER) {
-                    "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
-                } else {
-                    listOfNotNull(item.accountName, item.categoryName).joinToString(" · ")
+                text = when (item.kind) {
+                    ActivityKind.TRANSFER -> "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
+                    ActivityKind.DEBT -> listOfNotNull(
+                        item.accountName,
+                        item.externalCounterpartyName
+                    ).joinToString(" · ")
+
+                    else -> listOfNotNull(item.accountName, item.categoryName).joinToString(" · ")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -169,6 +186,9 @@ fun ActivityRow(
 
                     ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
                     ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onSurface
+                    ActivityKind.DEBT -> if (signedAmount >= 0) {
+                        if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
+                    } else MaterialTheme.colorScheme.error
                 },
             )
             Text(
@@ -194,6 +214,15 @@ internal fun ActivityItem.signedAmount(
                 -amountMinor
             }
         }
+        ActivityKind.DEBT -> when {
+            debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED &&
+                    debtMovement == it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> amountMinor
+
+            debtDirection == it.rfmariano.denaro.data.local.DebtDirection.LENT &&
+                    debtMovement == it.rfmariano.denaro.data.finance.DebtMovementKind.REPAYMENT -> amountMinor
+
+            else -> -amountMinor
+        }
     }
 
 @Composable
@@ -202,6 +231,7 @@ private fun ActivityIcon(kind: ActivityKind) {
         ActivityKind.INCOME -> LucideR.drawable.lucide_ic_arrow_down
         ActivityKind.EXPENSE -> LucideR.drawable.lucide_ic_arrow_up
         ActivityKind.TRANSFER -> LucideR.drawable.lucide_ic_arrow_down_up
+        ActivityKind.DEBT -> LucideR.drawable.lucide_ic_hand_coins
     }
     val tint = when (kind) {
         ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {
@@ -212,6 +242,7 @@ private fun ActivityIcon(kind: ActivityKind) {
 
         ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
         ActivityKind.TRANSFER -> MaterialTheme.colorScheme.tertiary
+        ActivityKind.DEBT -> MaterialTheme.colorScheme.secondary
     }
     Box(
         modifier = Modifier.size(36.dp),

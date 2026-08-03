@@ -1,8 +1,10 @@
 package it.rfmariano.denaro.data.finance
 
+import androidx.paging.PagingSource
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.TransactionType
@@ -16,6 +18,136 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FinanceRepositoryTest {
+    @Test
+    fun movementsExcludeDebtOpeningsAndRepayments() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val primaryId = repository.createAccount(accountInput("Primary"))
+            val secondaryId = repository.createAccount(accountInput("Secondary"))
+            val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+            repository.createTransaction(
+                TransactionInput(
+                    accountId = primaryId,
+                    amountMinor = 1_000,
+                    type = TransactionType.EXPENSE,
+                    occurredAt = 1,
+                    description = null,
+                    categoryId = null,
+                ),
+            )
+            repository.createTransfer(transferInput(primaryId, secondaryId, occurredAt = 2))
+            val debtId = repository.createDebt(
+                DebtInput(
+                    counterpartyId,
+                    primaryId,
+                    DebtDirection.BORROWED,
+                    10_000,
+                    3,
+                    null,
+                    null,
+                ),
+            )
+            repository.createDebtRepayment(
+                DebtRepaymentInput(debtId, primaryId, 2_500, 4, null),
+            )
+
+            val result = database.activityDao().pagingSource(
+                kind = null,
+                accountId = null,
+                currency = null,
+                categoryId = null,
+                fromDate = null,
+                toDate = null,
+            ).load(
+                PagingSource.LoadParams.Refresh(
+                    key = null,
+                    loadSize = 40,
+                    placeholdersEnabled = false,
+                ),
+            ) as PagingSource.LoadResult.Page
+
+            assertEquals(setOf("EXPENSE", "TRANSFER"), result.data.map { it.kind }.toSet())
+            assertTrue(result.data.all { it.debtId == null })
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun debtOpeningsAndRepaymentsAffectBalancesButNotCashFlow() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val primaryId = repository.createAccount(accountInput("Primary"))
+            val secondaryId = repository.createAccount(accountInput("Secondary"))
+            val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+            val openedAt = java.time.LocalDate.of(2026, 7, 1)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val debtId = repository.createDebt(
+                DebtInput(
+                    counterpartyId,
+                    primaryId,
+                    DebtDirection.BORROWED,
+                    10_000,
+                    openedAt,
+                    null,
+                    null
+                ),
+            )
+
+            assertEquals(10_000L, repository.observeAccount(primaryId).first()?.balanceMinor)
+            val repaymentId = repository.createDebtRepayment(
+                DebtRepaymentInput(debtId, secondaryId, 2_500, openedAt + 86_400_000, null),
+            )
+
+            assertEquals(10_000L, repository.observeAccount(primaryId).first()?.balanceMinor)
+            assertEquals(-2_500L, repository.observeAccount(secondaryId).first()?.balanceMinor)
+            assertEquals(7_500L, repository.observeDebt(debtId).first()?.outstandingMinor)
+            val dashboard =
+                repository.observeDashboard(DashboardFilter("EUR", null, "2026-07")).first()
+            assertEquals(0L, dashboard.selected.incomeMinor)
+            assertEquals(0L, dashboard.selected.expenseMinor)
+
+            repository.deleteDebtRepayment(repaymentId)
+            assertEquals(0L, repository.observeAccount(secondaryId).first()?.balanceMinor)
+            repository.deleteDebt(debtId)
+            assertEquals(0L, repository.observeAccount(primaryId).first()?.balanceMinor)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun debtRepaymentCannotExceedOutstandingAmount() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+            val debtId = repository.createDebt(
+                DebtInput(counterpartyId, accountId, DebtDirection.LENT, 1_000, 1, null, null),
+            )
+            val failure = runCatching {
+                repository.createDebtRepayment(
+                    DebtRepaymentInput(
+                        debtId,
+                        accountId,
+                        1_001,
+                        2,
+                        null
+                    )
+                )
+            }.exceptionOrNull()
+            assertEquals("Repayment cannot exceed the outstanding amount", failure?.message)
+        } finally {
+            database.close()
+        }
+    }
+
     @Test
     fun subcategoriesAlwaysUseAndFollowParentColor() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

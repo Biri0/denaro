@@ -244,6 +244,132 @@ interface TransferDao {
 
 }
 
+@Dao
+interface CounterpartyDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(counterparty: CounterpartyEntity)
+
+    @Query("SELECT * FROM counterparties ORDER BY archived_at IS NOT NULL, name COLLATE NOCASE, created_at")
+    fun observeAll(): Flow<List<CounterpartyEntity>>
+
+    @Query("SELECT * FROM counterparties WHERE id = :id")
+    suspend fun getById(id: String): CounterpartyEntity?
+
+    @Update
+    suspend fun update(counterparty: CounterpartyEntity)
+
+    @Query("UPDATE counterparties SET archived_at = :archivedAt, updated_at = :updatedAt WHERE id = :id")
+    suspend fun setArchived(id: String, archivedAt: Long?, updatedAt: Long)
+}
+
+data class DebtRecord(
+    val id: String,
+    val counterpartyId: String,
+    val counterpartyName: String,
+    val accountId: String,
+    val accountName: String,
+    val direction: DebtDirection,
+    val principalMinor: Long,
+    val repaidMinor: Long,
+    val currency: String,
+    val openedAt: Long,
+    val localDate: String,
+    val dueDate: String?,
+    val note: String?,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+@Dao
+interface DebtDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(debt: DebtEntity)
+
+    @Query("SELECT * FROM debts WHERE id = :id")
+    suspend fun getById(id: String): DebtEntity?
+
+    @Update
+    suspend fun update(debt: DebtEntity)
+
+    @Delete
+    suspend fun delete(debt: DebtEntity)
+
+    @Query("UPDATE debts SET updated_at = :updatedAt WHERE id = :id")
+    suspend fun touch(id: String, updatedAt: Long)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRepayment(repayment: DebtRepaymentEntity)
+
+    @Query("SELECT * FROM debt_repayments WHERE id = :id")
+    suspend fun getRepaymentById(id: String): DebtRepaymentEntity?
+
+    @Query("SELECT * FROM debt_repayments WHERE debt_id = :debtId ORDER BY occurred_at DESC, id DESC")
+    fun observeRepayments(debtId: String): Flow<List<DebtRepaymentEntity>>
+
+    @Query("SELECT * FROM debt_repayments WHERE debt_id = :debtId ORDER BY occurred_at DESC, id DESC")
+    suspend fun getRepayments(debtId: String): List<DebtRepaymentEntity>
+
+    @Update
+    suspend fun updateRepayment(repayment: DebtRepaymentEntity)
+
+    @Delete
+    suspend fun deleteRepayment(repayment: DebtRepaymentEntity)
+
+    @Query(
+        """
+        SELECT debts.id AS id,
+               debts.counterparty_id AS counterpartyId,
+               counterparties.name AS counterpartyName,
+               debts.account_id AS accountId,
+               accounts.name AS accountName,
+               debts.direction AS direction,
+               debts.principal_minor AS principalMinor,
+               COALESCE(SUM(debt_repayments.amount_minor), 0) AS repaidMinor,
+               debts.currency AS currency,
+               debts.opened_at AS openedAt,
+               debts.local_date AS localDate,
+               debts.due_date AS dueDate,
+               debts.note AS note,
+               debts.created_at AS createdAt,
+               debts.updated_at AS updatedAt
+        FROM debts
+        JOIN counterparties ON counterparties.id = debts.counterparty_id
+        JOIN accounts ON accounts.id = debts.account_id
+        LEFT JOIN debt_repayments ON debt_repayments.debt_id = debts.id
+        GROUP BY debts.id
+        ORDER BY debts.updated_at DESC, debts.id DESC
+        """,
+    )
+    fun observeAll(): Flow<List<DebtRecord>>
+
+    @Query(
+        """
+        SELECT debts.id AS id,
+               debts.counterparty_id AS counterpartyId,
+               counterparties.name AS counterpartyName,
+               debts.account_id AS accountId,
+               accounts.name AS accountName,
+               debts.direction AS direction,
+               debts.principal_minor AS principalMinor,
+               COALESCE(SUM(debt_repayments.amount_minor), 0) AS repaidMinor,
+               debts.currency AS currency,
+               debts.opened_at AS openedAt,
+               debts.local_date AS localDate,
+               debts.due_date AS dueDate,
+               debts.note AS note,
+               debts.created_at AS createdAt,
+               debts.updated_at AS updatedAt
+        FROM debts
+        JOIN counterparties ON counterparties.id = debts.counterparty_id
+        JOIN accounts ON accounts.id = debts.account_id
+        LEFT JOIN debt_repayments ON debt_repayments.debt_id = debts.id
+        WHERE debts.id = :id
+        GROUP BY debts.id
+        """,
+    )
+    fun observeById(id: String): Flow<DebtRecord?>
+}
+
 data class TransferPairUsage(
     val fromAccountId: String,
     val toAccountId: String,
@@ -282,6 +408,10 @@ data class ActivityRecord(
     val categoryName: String?,
     val categoryIconName: String?,
     val categoryColorIndex: Int?,
+    val debtId: String?,
+    val debtDirection: String?,
+    val debtMovement: String?,
+    val externalCounterpartyName: String?,
 )
 
 data class AnalyticsRecord(
@@ -314,7 +444,11 @@ interface ActivityDao {
                    categories.parent_id AS categoryParentId,
                    categories.name AS categoryName,
                    categories.icon_name AS categoryIconName,
-                   categories.color_index AS categoryColorIndex
+                   categories.color_index AS categoryColorIndex,
+                   NULL AS debtId,
+                   NULL AS debtDirection,
+                   NULL AS debtMovement,
+                   NULL AS externalCounterpartyName
             FROM transactions
             JOIN accounts ON accounts.id = transactions.account_id
             LEFT JOIN categories ON categories.id = transactions.category_id
@@ -336,7 +470,11 @@ interface ActivityDao {
                    NULL AS categoryParentId,
                    NULL AS categoryName,
                    NULL AS categoryIconName,
-                   NULL AS categoryColorIndex
+                   NULL AS categoryColorIndex,
+                   NULL AS debtId,
+                   NULL AS debtDirection,
+                   NULL AS debtMovement,
+                   NULL AS externalCounterpartyName
             FROM transfers
             JOIN accounts AS source ON source.id = transfers.from_account_id
             JOIN accounts AS target ON target.id = transfers.to_account_id
