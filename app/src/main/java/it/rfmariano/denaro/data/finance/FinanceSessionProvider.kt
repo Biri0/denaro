@@ -8,6 +8,7 @@ data class FinanceSession(
     val repository: FinanceRepository,
     val isDemo: Boolean,
     val initialDashboardMonth: String,
+    val recurrenceStartupFailed: Boolean = false,
 )
 
 interface FinanceSessionProvider {
@@ -16,6 +17,8 @@ interface FinanceSessionProvider {
     suspend fun initialize(localeTag: String)
 
     suspend fun setDemoMode(enabled: Boolean, localeTag: String)
+
+    fun clearRecurrenceStartupFailure(sessionId: Long)
 }
 
 fun createFinanceSessionProvider(context: Context): FinanceSessionProvider =

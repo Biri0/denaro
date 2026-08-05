@@ -29,6 +29,15 @@ interface AccountDao {
     )
     fun observeActive(): Flow<List<AccountEntity>>
 
+    @Query(ACCOUNT_WITH_BALANCE_QUERY + " WHERE accounts.archived_at IS NULL ORDER BY accounts.name COLLATE NOCASE, accounts.created_at, accounts.id")
+    fun observeActiveWithBalance(): Flow<List<AccountWithBalance>>
+
+    @Query(ACCOUNT_WITH_BALANCE_QUERY + " ORDER BY accounts.created_at, accounts.id")
+    fun observeAllWithBalance(): Flow<List<AccountWithBalance>>
+
+    @Query(ACCOUNT_WITH_BALANCE_QUERY + " WHERE accounts.id = :id")
+    fun observeByIdWithBalance(id: String): Flow<AccountWithBalance?>
+
     @Query("SELECT * FROM accounts WHERE id = :id")
     fun observeById(id: String): Flow<AccountEntity?>
 
@@ -414,12 +423,16 @@ data class ActivityRecord(
     val externalCounterpartyName: String?,
 )
 
-data class AnalyticsRecord(
-    val amountMinor: Long,
-    val transactionType: String,
-    val localDate: String,
+data class DashboardAggregateRecord(
+    val rowKind: String,
+    val month: String?,
+    val transactionType: String?,
     val categoryId: String?,
-    val categoryParentId: String?,
+    val categoryName: String?,
+    val categoryIconName: String?,
+    val categoryColorIndex: Int?,
+    val amountMinor: Long,
+    val transactionCount: Int,
 )
 
 @Dao
@@ -508,27 +521,71 @@ interface ActivityDao {
 
     @Query(
         """
-        SELECT transactions.amount_minor AS amountMinor,
+        SELECT 'MONTH' AS rowKind,
+               substr(transactions.local_date, 1, 7) AS month,
                transactions.type AS transactionType,
-               transactions.local_date AS localDate,
-               transactions.category_id AS categoryId,
-               categories.parent_id AS categoryParentId
+               NULL AS categoryId,
+               NULL AS categoryName,
+               NULL AS categoryIconName,
+               NULL AS categoryColorIndex,
+               SUM(transactions.amount_minor) AS amountMinor,
+               COUNT(*) AS transactionCount
         FROM transactions
         JOIN accounts ON accounts.id = transactions.account_id
-        LEFT JOIN categories ON categories.id = transactions.category_id
         WHERE transactions.local_date >= :fromDate
           AND transactions.local_date < :toDate
           AND accounts.currency = :currency
           AND (:accountId IS NULL OR accounts.id = :accountId)
-        ORDER BY transactions.local_date, transactions.id
+        GROUP BY substr(transactions.local_date, 1, 7), transactions.type
+        UNION ALL
+        SELECT 'CATEGORY' AS rowKind,
+               NULL AS month,
+               transactions.type AS transactionType,
+               COALESCE(parent.id, category.id) AS categoryId,
+               COALESCE(parent.name, category.name) AS categoryName,
+               COALESCE(parent.icon_name, category.icon_name) AS categoryIconName,
+               COALESCE(parent.color_index, category.color_index) AS categoryColorIndex,
+               SUM(transactions.amount_minor) AS amountMinor,
+               COUNT(*) AS transactionCount
+        FROM transactions
+        JOIN accounts ON accounts.id = transactions.account_id
+        LEFT JOIN categories AS category ON category.id = transactions.category_id
+        LEFT JOIN categories AS parent ON parent.id = category.parent_id
+        WHERE transactions.local_date >= :selectedFromDate
+          AND transactions.local_date < :selectedToDate
+          AND accounts.currency = :currency
+          AND (:accountId IS NULL OR accounts.id = :accountId)
+        GROUP BY transactions.type, COALESCE(parent.id, category.id)
+        UNION ALL
+        SELECT 'PREVIOUS' AS rowKind,
+               :previousMonth AS month,
+               transactions.type AS transactionType,
+               NULL AS categoryId,
+               NULL AS categoryName,
+               NULL AS categoryIconName,
+               NULL AS categoryColorIndex,
+               SUM(transactions.amount_minor) AS amountMinor,
+               COUNT(*) AS transactionCount
+        FROM transactions
+        JOIN accounts ON accounts.id = transactions.account_id
+        WHERE transactions.local_date >= :previousFromDate
+          AND transactions.local_date < :previousToDate
+          AND accounts.currency = :currency
+          AND (:accountId IS NULL OR accounts.id = :accountId)
+        GROUP BY transactions.type
         """,
     )
-    fun observeAnalytics(
+    fun observeDashboardAggregates(
         fromDate: String,
         toDate: String,
+        selectedFromDate: String,
+        selectedToDate: String,
+        previousMonth: String,
+        previousFromDate: String,
+        previousToDate: String,
         currency: String,
         accountId: String?,
-    ): Flow<List<AnalyticsRecord>>
+    ): Flow<List<DashboardAggregateRecord>>
 }
 
 @Dao

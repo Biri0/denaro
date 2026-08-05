@@ -40,3 +40,26 @@ data class AccountBalance(
     val currency: String,
     @ColumnInfo(name = "balance_minor") val balanceMinor: Long,
 )
+
+internal const val ACCOUNT_WITH_BALANCE_QUERY = """SELECT accounts.*,
+       accounts.opening_balance_minor
+       + COALESCE((SELECT SUM(CASE type WHEN 'INCOME' THEN amount_minor ELSE -amount_minor END) FROM transactions WHERE account_id = accounts.id), 0)
+       + COALESCE((SELECT SUM(-amount_minor) FROM transfers WHERE from_account_id = accounts.id), 0)
+       + COALESCE((SELECT SUM(amount_minor) FROM transfers WHERE to_account_id = accounts.id), 0)
+       + COALESCE((SELECT SUM(CASE direction WHEN 'BORROWED' THEN principal_minor ELSE -principal_minor END) FROM debts WHERE account_id = accounts.id), 0)
+       + COALESCE((SELECT SUM(CASE debts.direction WHEN 'BORROWED' THEN -debt_repayments.amount_minor ELSE debt_repayments.amount_minor END)
+                   FROM debt_repayments JOIN debts ON debts.id = debt_repayments.debt_id
+                   WHERE debt_repayments.account_id = accounts.id), 0) AS balanceMinor
+FROM accounts"""
+
+data class AccountWithBalance(
+    val id: String,
+    val name: String,
+    val description: String?,
+    @ColumnInfo(name = "opening_balance_minor") val openingBalanceMinor: Long,
+    val currency: String,
+    @ColumnInfo(name = "archived_at") val archivedAt: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    val balanceMinor: Long,
+)

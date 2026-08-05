@@ -65,8 +65,8 @@ class AppPreferencesRepository(context: Context) {
         }
     }
 
-    fun applyStoredLanguage(force: Boolean = false) {
-        applyLanguage(_state.value.language, force)
+    fun applyStoredLanguage() {
+        applyLanguage(_state.value.language)
     }
 
     fun applyStoredTheme() {
@@ -91,14 +91,11 @@ class AppPreferencesRepository(context: Context) {
         return AppPreferences(theme, language, currency, amountsVisible)
     }
 
-    private fun applyLanguage(
-        value: LanguageOption,
-        force: Boolean = false,
-    ) {
+    private fun applyLanguage(value: LanguageOption) {
         val locales = value.languageTag
             ?.let(LocaleListCompat::forLanguageTags)
             ?: LocaleListCompat.getEmptyLocaleList()
-        if (force || AppCompatDelegate.getApplicationLocales() != locales) {
+        if (AppCompatDelegate.getApplicationLocales() != locales) {
             AppCompatDelegate.setApplicationLocales(locales)
         }
     }

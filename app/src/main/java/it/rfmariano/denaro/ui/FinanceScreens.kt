@@ -2,6 +2,7 @@
 
 package it.rfmariano.denaro.ui
 
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +74,7 @@ fun HomeRouteContent(
     ) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    ReportDrawnWhen { isHomeFullyDrawn(state) }
     LaunchedEffect(state.accounts, state.selectedCurrency) {
         if (state.accounts.isNotEmpty() && state.accounts.none { it.currency == state.selectedCurrency }) {
             viewModel.selectedCurrency.value = state.accounts.first().currency
@@ -195,6 +197,9 @@ fun HomeRouteContent(
         }
     }
 }
+
+internal fun isHomeFullyDrawn(state: HomeUiState): Boolean =
+    !state.isLoading && (state.accounts.isEmpty() || !state.isDashboardLoading)
 
 @Composable
 private fun BalanceBand(

@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -68,6 +69,16 @@ internal class DebugFinanceSessionProvider(
         }
     }
 
+    override fun clearRecurrenceStartupFailure(sessionId: Long) {
+        _session.update { current ->
+            if (current?.id == sessionId && current.recurrenceStartupFailed) {
+                current.copy(recurrenceStartupFailed = false)
+            } else {
+                current
+            }
+        }
+    }
+
     internal suspend fun prepareCapture(
         localeTag: String,
         referenceDate: LocalDate,
@@ -79,11 +90,14 @@ internal class DebugFinanceSessionProvider(
         val database = productionDatabase ?: EncryptedDatabaseFactory(context).open().also {
             productionDatabase = it
         }
+        val repository = FinanceRepository(database)
+        val recurrenceStartupFailed = runCatching { repository.processDueRecurrences() }.isFailure
         FinanceSession(
             id = ++nextSessionId,
-            repository = FinanceRepository(database),
+            repository = repository,
             isDemo = false,
             initialDashboardMonth = YearMonth.from(clock()).toString(),
+            recurrenceStartupFailed = recurrenceStartupFailed,
         )
     }
 
@@ -100,11 +114,14 @@ internal class DebugFinanceSessionProvider(
             zoneId = ZoneId.systemDefault(),
             italian = localeTag.startsWith("it", ignoreCase = true),
         )
+        val repository = FinanceRepository(database)
+        val recurrenceStartupFailed = runCatching { repository.processDueRecurrences() }.isFailure
         FinanceSession(
             id = ++nextSessionId,
-            repository = FinanceRepository(database),
+            repository = repository,
             isDemo = true,
             initialDashboardMonth = YearMonth.from(referenceDate).minusMonths(1).toString(),
+            recurrenceStartupFailed = recurrenceStartupFailed,
         )
     }
 

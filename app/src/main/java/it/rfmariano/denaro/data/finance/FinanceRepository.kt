@@ -6,6 +6,7 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
+import it.rfmariano.denaro.data.local.AccountWithBalance
 import it.rfmariano.denaro.data.local.ActivityRecord
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
@@ -23,7 +24,6 @@ import it.rfmariano.denaro.data.local.TransferPairUsage
 import it.rfmariano.denaro.data.local.UuidV7
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -178,23 +178,13 @@ class FinanceRepository(
     }
 
     fun observeActiveAccounts(): Flow<List<AccountSummary>> =
-        combine(
-            database.accountDao().observeActive(),
-            database.accountBalanceDao().observeAll(),
-        ) { accounts, balances ->
-            val balancesById = balances.associateBy { it.accountId }
-            accounts.map { account ->
-                account.toSummary(balancesById[account.id]?.balanceMinor)
-            }
+        database.accountDao().observeActiveWithBalance().map { accounts ->
+            accounts.map { it.toSummary() }
         }
 
     fun observeAllAccounts(): Flow<List<AccountSummary>> =
-        combine(
-            database.accountDao().observeAll(),
-            database.accountBalanceDao().observeAll(),
-        ) { accounts, balances ->
-            val balancesById = balances.associateBy { it.accountId }
-            accounts.map { it.toSummary(balancesById[it.id]?.balanceMinor) }
+        database.accountDao().observeAllWithBalance().map { accounts ->
+            accounts.map { it.toSummary() }
         }
 
     fun observeCounterparties(includeArchived: Boolean = false): Flow<List<CounterpartySummary>> =
@@ -355,26 +345,15 @@ class FinanceRepository(
     }
 
     fun observeArchivedAccounts(): Flow<List<AccountSummary>> =
-        combine(
-            database.accountDao().observeAll(),
-            database.accountBalanceDao().observeAll(),
-        ) { accounts, balances ->
-            val balancesById = balances.associateBy { it.accountId }
+        database.accountDao().observeAllWithBalance().map { accounts ->
             accounts
                 .filter { it.archivedAt != null }
                 .sortedBy { it.name.lowercase() }
-                .map { account ->
-                    account.toSummary(balancesById[account.id]?.balanceMinor)
-                }
+                .map { it.toSummary() }
         }
 
     fun observeAccount(accountId: String): Flow<AccountSummary?> =
-        combine(
-            database.accountDao().observeById(accountId),
-            database.accountBalanceDao().observeByAccount(accountId),
-        ) { account, balance ->
-            account?.toSummary(balance?.balanceMinor)
-        }
+        database.accountDao().observeByIdWithBalance(accountId).map { it?.toSummary() }
 
     fun observeRecurringRules(accountId: String): Flow<List<RecurringRuleSummary>> =
         database.recurringRuleDao().observeForAccount(accountId).map { rules ->
@@ -422,48 +401,59 @@ class FinanceRepository(
     fun observeDashboard(filter: DashboardFilter): Flow<DashboardSnapshot> {
         val selectedMonth = YearMonth.parse(filter.selectedMonth)
         val fromMonth = selectedMonth.minusMonths(6)
-        return combine(
-            database.activityDao().observeAnalytics(
+        val previousMonth = selectedMonth.minusMonths(1)
+        val now = LocalDate.now()
+        val comparableDay = if (selectedMonth == YearMonth.from(now)) {
+            minOf(now.dayOfMonth, previousMonth.lengthOfMonth())
+        } else {
+            previousMonth.lengthOfMonth()
+        }
+        return database.activityDao().observeDashboardAggregates(
                 fromDate = fromMonth.atDay(1).toString(),
                 toDate = selectedMonth.plusMonths(1).atDay(1).toString(),
+            selectedFromDate = selectedMonth.atDay(1).toString(),
+            selectedToDate = selectedMonth.plusMonths(1).atDay(1).toString(),
+            previousMonth = previousMonth.toString(),
+            previousFromDate = previousMonth.atDay(1).toString(),
+            previousToDate = previousMonth.atDay(comparableDay).plusDays(1).toString(),
                 currency = filter.currency,
                 accountId = filter.accountId,
-            ),
-            observeCategories(includeArchived = true),
-        ) { records, categories ->
-            val categoriesById = categories.associateBy(CategorySummary::id)
+        ).map { records ->
+            fun summary(month: YearMonth, kind: String = "MONTH"): MonthlyCashFlow {
+                val rows = records.filter { it.rowKind == kind && it.month == month.toString() }
+                return MonthlyCashFlow(
+                    month.toString(),
+                    rows.filter { it.transactionType == TransactionType.INCOME.name }
+                        .sumOf { it.amountMinor },
+                    rows.filter { it.transactionType == TransactionType.EXPENSE.name }
+                        .sumOf { it.amountMinor },
+                )
+            }
             val months = (5L downTo 0L).map { offset ->
                 val month = selectedMonth.minusMonths(offset)
-                records.monthSummary(month)
+                summary(month)
             }
-            val selectedRecords =
-                records.filter { YearMonth.from(LocalDate.parse(it.localDate)) == selectedMonth }
-            val previousMonth = selectedMonth.minusMonths(1)
-            val now = LocalDate.now()
-            val comparableDay = if (selectedMonth == YearMonth.from(now)) {
-                minOf(now.dayOfMonth, previousMonth.lengthOfMonth())
-            } else {
-                previousMonth.lengthOfMonth()
-            }
-            val previousComparable = records
-                .filter {
-                    val date = LocalDate.parse(it.localDate)
-                    YearMonth.from(date) == previousMonth && date.dayOfMonth <= comparableDay
+
+            fun categoryShares(type: TransactionType) = records
+                .filter { it.rowKind == "CATEGORY" && it.transactionType == type.name }
+                .map {
+                    CategoryShare(
+                        it.categoryId,
+                        it.categoryName,
+                        it.categoryIconName,
+                        it.categoryColorIndex,
+                        it.amountMinor,
+                        it.transactionCount
+                    )
                 }
-                .monthSummary(previousMonth)
+                .sortedByDescending(CategoryShare::amountMinor)
             DashboardSnapshot(
                 filter = filter,
                 months = months,
-                selected = selectedRecords.monthSummary(selectedMonth),
-                previousComparable = previousComparable,
-                incomeCategories = selectedRecords.categoryShares(
-                    TransactionType.INCOME,
-                    categoriesById,
-                ),
-                expenseCategories = selectedRecords.categoryShares(
-                    TransactionType.EXPENSE,
-                    categoriesById,
-                ),
+                selected = summary(selectedMonth),
+                previousComparable = summary(previousMonth, "PREVIOUS"),
+                incomeCategories = categoryShares(TransactionType.INCOME),
+                expenseCategories = categoryShares(TransactionType.EXPENSE),
             )
         }.flowOn(Dispatchers.Default)
     }
@@ -893,6 +883,10 @@ class FinanceRepository(
             archivedAt = archivedAt,
         )
 
+    private fun AccountWithBalance.toSummary() = AccountSummary(
+        id, name, description, openingBalanceMinor, balanceMinor, currency, archivedAt,
+    )
+
     private fun ActivityRecord.toItem(): ActivityItem =
         ActivityItem(
             id = id,
@@ -944,39 +938,6 @@ class FinanceRepository(
         archivedAt = archivedAt,
     )
 }
-
-private fun List<it.rfmariano.denaro.data.local.AnalyticsRecord>.monthSummary(
-    month: YearMonth,
-): MonthlyCashFlow {
-    val monthlyRecords = filter { YearMonth.from(LocalDate.parse(it.localDate)) == month }
-    return MonthlyCashFlow(
-        month = month.toString(),
-        incomeMinor = monthlyRecords.filter { it.transactionType == TransactionType.INCOME.name }
-            .sumOf { it.amountMinor },
-        expenseMinor = monthlyRecords.filter { it.transactionType == TransactionType.EXPENSE.name }
-            .sumOf { it.amountMinor },
-    )
-}
-
-private fun List<it.rfmariano.denaro.data.local.AnalyticsRecord>.categoryShares(
-    type: TransactionType,
-    categoriesById: Map<String, CategorySummary>,
-): List<CategoryShare> = filter { it.transactionType == type.name }
-    .groupBy { record ->
-        record.categoryId?.let { id -> categoriesById[id]?.parentId ?: id }
-    }
-    .map { (categoryId, records) ->
-        val category = categoryId?.let(categoriesById::get)
-        CategoryShare(
-            categoryId = categoryId,
-            name = category?.name,
-            iconName = category?.iconName,
-            colorIndex = category?.colorIndex,
-            amountMinor = records.sumOf { it.amountMinor },
-            transactionCount = records.size,
-        )
-    }
-    .sortedByDescending(CategoryShare::amountMinor)
 
 internal fun buildTransferAccountSuggestions(
     accounts: List<AccountEntity>,

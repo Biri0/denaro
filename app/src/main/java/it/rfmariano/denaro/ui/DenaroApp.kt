@@ -150,6 +150,9 @@ fun DenaroApp(
     fun processRecurrences() {
         scope.launch {
             runCatching { repository.processDueRecurrences() }
+                .onSuccess {
+                    financeSessionProvider.clearRecurrenceStartupFailure(session.id)
+                }
                 .onFailure { snackbarHostState.showSnackbar(recurrenceFailure) }
         }
     }
@@ -160,11 +163,22 @@ fun DenaroApp(
         }
     }
 
-    LaunchedEffect(repository) {
-        processRecurrences()
+    var wasPaused by remember(repository) { mutableStateOf(false) }
+    RecurrenceStartupFailureEffect(
+        failurePending = session.recurrenceStartupFailed,
+        onFailureConsumed = {
+            financeSessionProvider.clearRecurrenceStartupFailure(session.id)
+        },
+        showFailure = { snackbarHostState.showSnackbar(recurrenceFailure) },
+    )
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        wasPaused = true
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        processRecurrences()
+        if (wasPaused) {
+            wasPaused = false
+            processRecurrences()
+        }
     }
 
     val backStack = when (currentDestination) {
@@ -432,6 +446,21 @@ fun DenaroApp(
             },
         ) {
             appContent()
+        }
+    }
+}
+
+@Composable
+internal fun RecurrenceStartupFailureEffect(
+    failurePending: Boolean,
+    onFailureConsumed: () -> Unit,
+    showFailure: suspend () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(failurePending) {
+        if (failurePending) {
+            onFailureConsumed()
+            scope.launch { showFailure() }
         }
     }
 }

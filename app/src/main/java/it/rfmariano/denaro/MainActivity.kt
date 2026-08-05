@@ -1,6 +1,7 @@
 package it.rfmariano.denaro
 
 import android.os.Bundle
+import androidx.activity.compose.ReportDrawn
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -37,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val denaroApplication = application as DenaroApplication
         val financeSessionProvider = denaroApplication.financeSessionProvider
-        denaroApplication.preferencesRepository.applyStoredLanguage(force = true)
+        denaroApplication.preferencesRepository.applyStoredLanguage()
         splashScreen.setKeepOnScreenCondition {
             shouldKeepSplashVisible(
                 migrationResult = migrationViewModel.result.value,
@@ -126,6 +127,7 @@ private fun MigrationFailure(
     message: String,
     onRetry: () -> Unit,
 ) {
+    ReportDrawn()
     Column(
         modifier = Modifier
             .fillMaxSize()

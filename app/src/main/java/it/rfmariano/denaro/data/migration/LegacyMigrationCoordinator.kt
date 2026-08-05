@@ -32,6 +32,15 @@ class LegacyMigrationCoordinator(
     private val transformer: LegacyTransformer = LegacyTransformer(),
 ) {
     suspend fun migrateIfNeeded(): MigrationResult = withContext(Dispatchers.IO) {
+        when (legacyMigrationAction(legacyReader.exists())) {
+            LegacyMigrationAction.CLEANUP_ONLY -> {
+                retryLegacyCleanup()
+                return@withContext MigrationResult.NotNeeded
+            }
+
+            LegacyMigrationAction.AUDIT_AND_MIGRATE -> Unit
+        }
+
         val nativeDatabaseExisted = context.getDatabasePath(
             EncryptedDatabaseFactory.DATABASE_NAME,
         ).exists()
@@ -49,13 +58,6 @@ class LegacyMigrationCoordinator(
                 retryLegacyCleanup()
                 return@withContext MigrationResult.NotNeeded
             }
-            if (!legacyReader.exists()) {
-                database.close()
-                database = null
-                retryLegacyCleanup()
-                return@withContext MigrationResult.NotNeeded
-            }
-
             val snapshot = legacyReader.readSnapshot()
             val transformed = transformer.transform(snapshot)
 
@@ -195,3 +197,15 @@ class LegacyMigrationCoordinator(
         const val SOURCE = "expo_v1"
     }
 }
+
+internal enum class LegacyMigrationAction {
+    CLEANUP_ONLY,
+    AUDIT_AND_MIGRATE,
+}
+
+internal fun legacyMigrationAction(legacyDatabaseExists: Boolean): LegacyMigrationAction =
+    if (legacyDatabaseExists) {
+        LegacyMigrationAction.AUDIT_AND_MIGRATE
+    } else {
+        LegacyMigrationAction.CLEANUP_ONLY
+    }
