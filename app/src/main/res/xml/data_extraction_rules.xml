@@ -22,6 +22,9 @@
         <exclude
             domain="sharedpref"
             path="SecureStore.xml" />
+        <exclude
+            domain="sharedpref"
+            path="denaro_security_preferences.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude
@@ -45,5 +48,8 @@
         <exclude
             domain="sharedpref"
             path="SecureStore.xml" />
+        <exclude
+            domain="sharedpref"
+            path="denaro_security_preferences.xml" />
     </device-transfer>
 </data-extraction-rules>

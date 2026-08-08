@@ -21,4 +21,7 @@
     <exclude
         domain="sharedpref"
         path="SecureStore.xml" />
+    <exclude
+        domain="sharedpref"
+        path="denaro_security_preferences.xml" />
 </full-backup-content>

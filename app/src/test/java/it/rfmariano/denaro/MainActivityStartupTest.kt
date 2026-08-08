@@ -47,6 +47,17 @@ class MainActivityStartupTest {
         )
     }
 
+    @Test
+    fun splashDismissesImmediatelyToShowAppLock() {
+        assertFalse(
+            shouldKeepSplashVisible(
+                migrationResult = null,
+                hasFinanceSession = false,
+                appLocked = true,
+            ),
+        )
+    }
+
     private fun successfulMigration() = MigrationResult.Success(
         accountCount = 0,
         transactionCount = 0,

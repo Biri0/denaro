@@ -30,6 +30,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import androidx.paging.compose.collectAsLazyPagingItems
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
@@ -38,6 +39,9 @@ import it.rfmariano.denaro.data.finance.FinanceSession
 import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
+import it.rfmariano.denaro.data.security.DeviceAuthenticator
+import it.rfmariano.denaro.data.security.ProcessUnlockSession
+import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.composables.icons.lucide.R as LucideR
@@ -105,31 +109,26 @@ private enum class TopLevelDestination(
     ACTIVITY(R.string.activity, LucideR.drawable.lucide_ic_list),
 }
 
-@Composable
-fun DenaroApp(
-    session: FinanceSession,
-    financeSessionProvider: FinanceSessionProvider,
-    preferencesRepository: AppPreferencesRepository,
-) {
-    val repository = session.repository
-    val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
-    val homeBackStack = rememberNavBackStack(HomeRoute)
-    val accountsBackStack = rememberNavBackStack(AccountsRoute)
-    val activityBackStack = rememberNavBackStack(ActivityRoute)
-    var currentDestination by rememberSaveable {
-        mutableStateOf(TopLevelDestination.HOME)
-    }
-    var pendingActivityCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val recurrenceFailure = stringResource(R.string.recurrence_update_failed)
+data class DenaroAppState(
+    val session: FinanceSession,
+    val homeViewModel: HomeViewModel,
+    val accountsViewModel: AccountsViewModel,
+    val activityViewModel: ActivityViewModel,
+    val debtsViewModel: DebtsViewModel,
+)
 
+@Composable
+fun rememberDenaroAppState(
+    session: FinanceSession,
+    defaultCurrency: String,
+): DenaroAppState {
+    val repository = session.repository
     val homeViewModel: HomeViewModel = viewModel(
         key = "home-${session.id}",
         factory = viewModelFactory {
             HomeViewModel(
                 repository,
-                preferences.defaultCurrency,
+                defaultCurrency,
                 session.initialDashboardMonth,
             )
         },
@@ -146,6 +145,70 @@ fun DenaroApp(
         key = "debts-${session.id}",
         factory = viewModelFactory { DebtsViewModel(repository) },
     )
+    return remember(
+        session,
+        homeViewModel,
+        accountsViewModel,
+        activityViewModel,
+        debtsViewModel,
+    ) {
+        DenaroAppState(
+            session,
+            homeViewModel,
+            accountsViewModel,
+            activityViewModel,
+            debtsViewModel,
+        )
+    }
+}
+
+@Composable
+fun DenaroAppPreloader(state: DenaroAppState) {
+    val homeState by state.homeViewModel.uiState.collectAsStateWithLifecycle()
+    if (shouldPreloadSecondaryTopLevel(homeState)) {
+        SecondaryTopLevelPreloader(state)
+    }
+}
+
+internal fun shouldPreloadSecondaryTopLevel(homeState: HomeUiState): Boolean =
+    isHomeFullyDrawn(homeState)
+
+@Composable
+private fun SecondaryTopLevelPreloader(state: DenaroAppState) {
+    state.accountsViewModel.uiState.collectAsStateWithLifecycle()
+    state.debtsViewModel.uiState.collectAsStateWithLifecycle()
+    state.activityViewModel.accounts.collectAsStateWithLifecycle()
+    state.activityViewModel.categories.collectAsStateWithLifecycle()
+    state.activityViewModel.activity.collectAsLazyPagingItems()
+}
+
+@Composable
+fun DenaroApp(
+    state: DenaroAppState,
+    financeSessionProvider: FinanceSessionProvider,
+    preferencesRepository: AppPreferencesRepository,
+    securityPreferencesRepository: SecurityPreferencesRepository,
+    processUnlockSession: ProcessUnlockSession,
+    authenticator: DeviceAuthenticator,
+) {
+    val session = state.session
+    val repository = session.repository
+    val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
+    val homeBackStack = rememberNavBackStack(HomeRoute)
+    val accountsBackStack = rememberNavBackStack(AccountsRoute)
+    val activityBackStack = rememberNavBackStack(ActivityRoute)
+    var currentDestination by rememberSaveable {
+        mutableStateOf(TopLevelDestination.HOME)
+    }
+    var pendingActivityCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val recurrenceFailure = stringResource(R.string.recurrence_update_failed)
+
+    val homeViewModel = state.homeViewModel
+    val accountsViewModel = state.accountsViewModel
+    val activityViewModel = state.activityViewModel
+    val debtsViewModel = state.debtsViewModel
 
     fun processRecurrences() {
         scope.launch {
@@ -227,6 +290,9 @@ fun DenaroApp(
                         SettingsScreen(
                             financeSessionProvider = financeSessionProvider,
                             preferencesRepository = preferencesRepository,
+                            securityPreferencesRepository = securityPreferencesRepository,
+                            processUnlockSession = processUnlockSession,
+                            authenticator = authenticator,
                             onBack = { homeBackStack.removeLastOrNull() },
                             onCategories = { homeBackStack.add(CategoriesRoute) },
                             onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
