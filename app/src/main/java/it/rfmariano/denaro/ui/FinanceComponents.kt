@@ -214,6 +214,7 @@ internal fun ActivityItem.signedAmount(
                 -amountMinor
             }
         }
+
         ActivityKind.DEBT -> when {
             debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED &&
                     debtMovement == it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> amountMinor

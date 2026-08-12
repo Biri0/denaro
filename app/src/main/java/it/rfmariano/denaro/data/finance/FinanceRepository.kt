@@ -75,6 +75,19 @@ class FinanceRepository(
         return id
     }
 
+    suspend fun createCategoryWithNewParent(
+        parentInput: CategoryInput,
+        childInput: CategoryInput,
+    ): String {
+        require(parentInput.parentId == null) { "The new parent must be a top-level category" }
+        require(childInput.parentId == null) { "The child must not already have a parent" }
+        require(parentInput.type == childInput.type) { "Parent and child must have the same type" }
+        return database.withTransaction {
+            val parentId = createCategory(parentInput)
+            createCategory(childInput.copy(parentId = parentId))
+        }
+    }
+
     suspend fun updateCategory(categoryId: String, input: CategoryInput) {
         validateCategory(input, categoryId)
         val existing = requireNotNull(database.categoryDao().getById(categoryId)) {
@@ -409,15 +422,15 @@ class FinanceRepository(
             previousMonth.lengthOfMonth()
         }
         return database.activityDao().observeDashboardAggregates(
-                fromDate = fromMonth.atDay(1).toString(),
-                toDate = selectedMonth.plusMonths(1).atDay(1).toString(),
+            fromDate = fromMonth.atDay(1).toString(),
+            toDate = selectedMonth.plusMonths(1).atDay(1).toString(),
             selectedFromDate = selectedMonth.atDay(1).toString(),
             selectedToDate = selectedMonth.plusMonths(1).atDay(1).toString(),
             previousMonth = previousMonth.toString(),
             previousFromDate = previousMonth.atDay(1).toString(),
             previousToDate = previousMonth.atDay(comparableDay).plusDays(1).toString(),
-                currency = filter.currency,
-                accountId = filter.accountId,
+            currency = filter.currency,
+            accountId = filter.accountId,
         ).map { records ->
             fun summary(month: YearMonth, kind: String = "MONTH"): MonthlyCashFlow {
                 val rows = records.filter { it.rowKind == kind && it.month == month.toString() }
@@ -429,6 +442,7 @@ class FinanceRepository(
                         .sumOf { it.amountMinor },
                 )
             }
+
             val months = (5L downTo 0L).map { offset ->
                 val month = selectedMonth.minusMonths(offset)
                 summary(month)

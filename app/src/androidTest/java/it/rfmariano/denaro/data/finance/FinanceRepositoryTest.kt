@@ -176,6 +176,113 @@ class FinanceRepositoryTest {
     }
 
     @Test
+    fun categoryAndNewParentAreCreatedAtomically() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+
+            val childId = repository.createCategoryWithNewParent(
+                parentInput = CategoryInput(
+                    TransactionType.EXPENSE,
+                    null,
+                    "Food",
+                    "utensils",
+                    4,
+                ),
+                childInput = CategoryInput(
+                    TransactionType.EXPENSE,
+                    null,
+                    "Groceries",
+                    "shopping_basket",
+                    9,
+                ),
+            )
+
+            val categories = database.categoryDao().getAll()
+            val child = categories.single { it.id == childId }
+            val parent = categories.single { it.id == child.parentId }
+            assertEquals("Food", parent.name)
+            assertEquals("Groceries", child.name)
+            assertEquals(TransactionType.EXPENSE, parent.type)
+            assertEquals(parent.type, child.type)
+            assertEquals(4, parent.colorIndex)
+            assertEquals(parent.colorIndex, child.colorIndex)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun invalidChildRollsBackNewParentCreation() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+
+            val failure = runCatching {
+                repository.createCategoryWithNewParent(
+                    parentInput = CategoryInput(
+                        TransactionType.INCOME,
+                        null,
+                        "Work",
+                        "briefcase_business",
+                        2,
+                    ),
+                    childInput = CategoryInput(
+                        TransactionType.INCOME,
+                        null,
+                        "   ",
+                        "banknote",
+                        7,
+                    ),
+                )
+            }.exceptionOrNull()
+
+            assertEquals("Name is required", failure?.message)
+            assertEquals(0, database.categoryDao().count())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun duplicateNewParentDoesNotInsertChild() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+            )
+
+            val failure = runCatching {
+                repository.createCategoryWithNewParent(
+                    parentInput = CategoryInput(
+                        TransactionType.EXPENSE,
+                        null,
+                        "food",
+                        "shapes",
+                        3,
+                    ),
+                    childInput = CategoryInput(
+                        TransactionType.EXPENSE,
+                        null,
+                        "Dining",
+                        "utensils",
+                        8,
+                    ),
+                )
+            }.exceptionOrNull()
+
+            assertEquals("A category with this name already exists", failure?.message)
+            assertEquals(1, database.categoryDao().count())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun dashboardGroupsSubcategoriesAndExcludesTransfers() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()

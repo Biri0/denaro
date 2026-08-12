@@ -184,9 +184,36 @@ internal fun demoFixture(
     val savingsId = id("account", "savings")
     val cashId = id("account", "cash")
     val accounts = listOf(
-        AccountEntity(checkingId, text("Everyday", "Conto quotidiano"), text("Salary and daily spending", "Stipendio e spese quotidiane"), 320_000, "EUR", null, timestamp, timestamp),
-        AccountEntity(savingsId, text("Savings", "Risparmi"), text("Long-term goals", "Obiettivi a lungo termine"), 850_000, "EUR", null, timestamp + 1, timestamp + 1),
-        AccountEntity(cashId, text("Cash", "Contanti"), null, 9_000, "EUR", null, timestamp + 2, timestamp + 2),
+        AccountEntity(
+            checkingId,
+            text("Everyday", "Conto quotidiano"),
+            text("Salary and daily spending", "Stipendio e spese quotidiane"),
+            320_000,
+            "EUR",
+            null,
+            timestamp,
+            timestamp
+        ),
+        AccountEntity(
+            savingsId,
+            text("Savings", "Risparmi"),
+            text("Long-term goals", "Obiettivi a lungo termine"),
+            850_000,
+            "EUR",
+            null,
+            timestamp + 1,
+            timestamp + 1
+        ),
+        AccountEntity(
+            cashId,
+            text("Cash", "Contanti"),
+            null,
+            9_000,
+            "EUR",
+            null,
+            timestamp + 2,
+            timestamp + 2
+        ),
     )
 
     data class CategorySpec(
@@ -198,22 +225,103 @@ internal fun demoFixture(
         val icon: String,
         val color: Int,
     )
+
     val specs = listOf(
         CategorySpec("home", TransactionType.EXPENSE, null, "Home", "Casa", "house", 0),
         CategorySpec("rent", TransactionType.EXPENSE, "home", "Rent", "Affitto", "house", 0),
-        CategorySpec("utilities", TransactionType.EXPENSE, "home", "Utilities", "Utenze", "lightbulb", 0),
+        CategorySpec(
+            "utilities",
+            TransactionType.EXPENSE,
+            "home",
+            "Utilities",
+            "Utenze",
+            "lightbulb",
+            0
+        ),
         CategorySpec("food", TransactionType.EXPENSE, null, "Food", "Alimentazione", "utensils", 2),
-        CategorySpec("groceries", TransactionType.EXPENSE, "food", "Groceries", "Spesa", "shopping_basket", 2),
-        CategorySpec("dining", TransactionType.EXPENSE, "food", "Restaurants", "Ristoranti", "utensils", 2),
-        CategorySpec("transport", TransactionType.EXPENSE, null, "Transport", "Trasporti", "car", 4),
+        CategorySpec(
+            "groceries",
+            TransactionType.EXPENSE,
+            "food",
+            "Groceries",
+            "Spesa",
+            "shopping_basket",
+            2
+        ),
+        CategorySpec(
+            "dining",
+            TransactionType.EXPENSE,
+            "food",
+            "Restaurants",
+            "Ristoranti",
+            "utensils",
+            2
+        ),
+        CategorySpec(
+            "transport",
+            TransactionType.EXPENSE,
+            null,
+            "Transport",
+            "Trasporti",
+            "car",
+            4
+        ),
         CategorySpec("health", TransactionType.EXPENSE, null, "Health", "Salute", "heart_pulse", 6),
-        CategorySpec("services", TransactionType.EXPENSE, null, "Services", "Servizi", "receipt_text", 8),
-        CategorySpec("subscriptions", TransactionType.EXPENSE, "services", "Subscriptions", "Abbonamenti", "refresh_cw", 8),
-        CategorySpec("leisure", TransactionType.EXPENSE, null, "Leisure", "Tempo libero", "gamepad_2", 10),
+        CategorySpec(
+            "services",
+            TransactionType.EXPENSE,
+            null,
+            "Services",
+            "Servizi",
+            "receipt_text",
+            8
+        ),
+        CategorySpec(
+            "subscriptions",
+            TransactionType.EXPENSE,
+            "services",
+            "Subscriptions",
+            "Abbonamenti",
+            "refresh_cw",
+            8
+        ),
+        CategorySpec(
+            "leisure",
+            TransactionType.EXPENSE,
+            null,
+            "Leisure",
+            "Tempo libero",
+            "gamepad_2",
+            10
+        ),
         CategorySpec("travel", TransactionType.EXPENSE, "leisure", "Travel", "Viaggi", "plane", 10),
-        CategorySpec("work", TransactionType.INCOME, null, "Work", "Lavoro", "briefcase_business", 1),
-        CategorySpec("salary", TransactionType.INCOME, "work", "Salary", "Stipendio", "banknote", 1),
-        CategorySpec("freelance", TransactionType.INCOME, null, "Freelance", "Attività autonoma", "laptop", 7),
+        CategorySpec(
+            "work",
+            TransactionType.INCOME,
+            null,
+            "Work",
+            "Lavoro",
+            "briefcase_business",
+            1
+        ),
+        CategorySpec(
+            "salary",
+            TransactionType.INCOME,
+            "work",
+            "Salary",
+            "Stipendio",
+            "banknote",
+            1
+        ),
+        CategorySpec(
+            "freelance",
+            TransactionType.INCOME,
+            null,
+            "Freelance",
+            "Attività autonoma",
+            "laptop",
+            7
+        ),
     )
     val categories = specs.mapIndexed { index, spec ->
         CategoryEntity(
@@ -232,7 +340,16 @@ internal fun demoFixture(
     val transactions = mutableListOf<TransactionEntity>()
     val transfers = mutableListOf<TransferEntity>()
     var sequence = 0
-    fun transaction(month: YearMonth, day: Int, amount: Long, type: TransactionType, category: String, descriptionEn: String, descriptionIt: String, accountId: String = checkingId) {
+    fun transaction(
+        month: YearMonth,
+        day: Int,
+        amount: Long,
+        type: TransactionType,
+        category: String,
+        descriptionEn: String,
+        descriptionIt: String,
+        accountId: String = checkingId
+    ) {
         val date = month.atDay(day.coerceAtMost(month.lengthOfMonth()))
         val eventTime = epoch(date)
         transactions += TransactionEntity(
@@ -250,7 +367,15 @@ internal fun demoFixture(
             updatedAt = eventTime,
         )
     }
-    fun transfer(month: YearMonth, day: Int, amount: Long, from: String = checkingId, to: String = savingsId, label: String) {
+
+    fun transfer(
+        month: YearMonth,
+        day: Int,
+        amount: Long,
+        from: String = checkingId,
+        to: String = savingsId,
+        label: String
+    ) {
         val date = month.atDay(day.coerceAtMost(month.lengthOfMonth()))
         val eventTime = epoch(date)
         transfers += TransferEntity(
@@ -270,43 +395,141 @@ internal fun demoFixture(
     (5 downTo 0).forEach { offset ->
         val month = showcaseMonth.minusMonths(offset.toLong())
         val monthIndex = 5 - offset
-        transaction(month, 27, 285_000, TransactionType.INCOME, "salary", "Monthly salary", "Stipendio mensile")
+        transaction(
+            month,
+            27,
+            285_000,
+            TransactionType.INCOME,
+            "salary",
+            "Monthly salary",
+            "Stipendio mensile"
+        )
         if (monthIndex % 2 == 0) {
-            transaction(month, 18, 32_000, TransactionType.INCOME, "freelance", "Design project", "Progetto di design")
+            transaction(
+                month,
+                18,
+                32_000,
+                TransactionType.INCOME,
+                "freelance",
+                "Design project",
+                "Progetto di design"
+            )
         }
         transaction(month, 2, 92_000, TransactionType.EXPENSE, "rent", "Rent", "Affitto")
         listOf(4, 11, 18, 25).forEachIndexed { index, day ->
-            transaction(month, day, 7_200L + index * 450L, TransactionType.EXPENSE, "groceries", "Groceries", "Spesa")
+            transaction(
+                month,
+                day,
+                7_200L + index * 450L,
+                TransactionType.EXPENSE,
+                "groceries",
+                "Groceries",
+                "Spesa"
+            )
         }
-        transaction(month, 8, 14_500, TransactionType.EXPENSE, "utilities", "Energy and internet", "Energia e internet")
-        transaction(month, 12, 8_900, TransactionType.EXPENSE, "transport", "Public transport", "Trasporto pubblico")
-        transaction(month, 16, 12_500, TransactionType.EXPENSE, "dining", "Dinner with friends", "Cena con amici")
-        transaction(month, 20, 1_499, TransactionType.EXPENSE, "subscriptions", "Music subscription", "Abbonamento musica")
+        transaction(
+            month,
+            8,
+            14_500,
+            TransactionType.EXPENSE,
+            "utilities",
+            "Energy and internet",
+            "Energia e internet"
+        )
+        transaction(
+            month,
+            12,
+            8_900,
+            TransactionType.EXPENSE,
+            "transport",
+            "Public transport",
+            "Trasporto pubblico"
+        )
+        transaction(
+            month,
+            16,
+            12_500,
+            TransactionType.EXPENSE,
+            "dining",
+            "Dinner with friends",
+            "Cena con amici"
+        )
+        transaction(
+            month,
+            20,
+            1_499,
+            TransactionType.EXPENSE,
+            "subscriptions",
+            "Music subscription",
+            "Abbonamento musica"
+        )
         transaction(month, 23, 4_200, TransactionType.EXPENSE, "health", "Pharmacy", "Farmacia")
         if (monthIndex == 1 || monthIndex == 4) {
-            transaction(month, 14, 175_000, TransactionType.EXPENSE, "travel", "Weekend trip", "Viaggio nel weekend")
+            transaction(
+                month,
+                14,
+                175_000,
+                TransactionType.EXPENSE,
+                "travel",
+                "Weekend trip",
+                "Viaggio nel weekend"
+            )
         }
         transfer(month, 28, 25_000, label = text("Monthly savings", "Risparmio mensile"))
     }
 
     val currentMonth = YearMonth.from(referenceDate)
     if (referenceDate.dayOfMonth >= 1) {
-        transaction(currentMonth, 1, 4_850, TransactionType.EXPENSE, "groceries", "Groceries", "Spesa")
+        transaction(
+            currentMonth,
+            1,
+            4_850,
+            TransactionType.EXPENSE,
+            "groceries",
+            "Groceries",
+            "Spesa"
+        )
     }
     if (referenceDate.dayOfMonth >= 5) {
-        transaction(currentMonth, 5, 3_200, TransactionType.EXPENSE, "transport", "Train tickets", "Biglietti del treno")
+        transaction(
+            currentMonth,
+            5,
+            3_200,
+            TransactionType.EXPENSE,
+            "transport",
+            "Train tickets",
+            "Biglietti del treno"
+        )
     }
     if (referenceDate.dayOfMonth >= 15) {
         transaction(currentMonth, 15, 6_800, TransactionType.EXPENSE, "dining", "Lunch", "Pranzo")
     }
     if (referenceDate.dayOfMonth >= 27) {
-        transaction(currentMonth, 27, 285_000, TransactionType.INCOME, "salary", "Monthly salary", "Stipendio mensile")
+        transaction(
+            currentMonth,
+            27,
+            285_000,
+            TransactionType.INCOME,
+            "salary",
+            "Monthly salary",
+            "Stipendio mensile"
+        )
     }
 
     val nextMonth = YearMonth.from(referenceDate).plusMonths(1)
-    fun rule(key: String, amount: Long, type: TransactionType, category: String, day: Int, descriptionEn: String, descriptionIt: String, active: Boolean = true): RecurringRuleEntity {
+    fun rule(
+        key: String,
+        amount: Long,
+        type: TransactionType,
+        category: String,
+        day: Int,
+        descriptionEn: String,
+        descriptionIt: String,
+        active: Boolean = true
+    ): RecurringRuleEntity {
         val nextDate = if (referenceDate.dayOfMonth < day) {
-            YearMonth.from(referenceDate).atDay(day.coerceAtMost(YearMonth.from(referenceDate).lengthOfMonth()))
+            YearMonth.from(referenceDate)
+                .atDay(day.coerceAtMost(YearMonth.from(referenceDate).lengthOfMonth()))
         } else {
             nextMonth.atDay(day.coerceAtMost(nextMonth.lengthOfMonth()))
         }
@@ -330,11 +553,37 @@ internal fun demoFixture(
             updatedAt = timestamp,
         )
     }
+
     val rules = listOf(
-        rule("salary", 285_000, TransactionType.INCOME, "salary", 27, "Monthly salary", "Stipendio mensile"),
+        rule(
+            "salary",
+            285_000,
+            TransactionType.INCOME,
+            "salary",
+            27,
+            "Monthly salary",
+            "Stipendio mensile"
+        ),
         rule("rent", 92_000, TransactionType.EXPENSE, "rent", 2, "Rent", "Affitto"),
-        rule("music", 1_499, TransactionType.EXPENSE, "subscriptions", 20, "Music subscription", "Abbonamento musica"),
-        rule("gym", 3_900, TransactionType.EXPENSE, "health", 10, "Gym membership", "Abbonamento palestra", active = false),
+        rule(
+            "music",
+            1_499,
+            TransactionType.EXPENSE,
+            "subscriptions",
+            20,
+            "Music subscription",
+            "Abbonamento musica"
+        ),
+        rule(
+            "gym",
+            3_900,
+            TransactionType.EXPENSE,
+            "health",
+            10,
+            "Gym membership",
+            "Abbonamento palestra",
+            active = false
+        ),
     )
 
     val counterparties = listOf(

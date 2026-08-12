@@ -26,7 +26,6 @@ import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
 import it.rfmariano.denaro.ui.theme.DenaroTheme
-import java.time.YearMonth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -37,6 +36,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.YearMonth
 
 @RunWith(AndroidJUnit4::class)
 class DenaroNavigationStateTest {

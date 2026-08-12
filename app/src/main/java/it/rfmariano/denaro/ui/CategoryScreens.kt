@@ -98,9 +98,11 @@ fun CategoryManagementScreen(
             }
         },
     ) { padding ->
-        Column(Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,20 +148,27 @@ fun CategoryManagementScreen(
                                 onEdit = { onEdit(parent.id, parent.type, null) },
                                 onArchive = {
                                     scope.launch {
-                                        if (parent.archivedAt == null) repository.archiveCategory(parent.id)
+                                        if (parent.archivedAt == null) repository.archiveCategory(
+                                            parent.id
+                                        )
                                         else repository.restoreCategory(parent.id)
                                     }
                                 },
                             )
                         }
-                        items(visible.filter { it.parentId == parent.id }, key = CategorySummary::id) { child ->
+                        items(
+                            visible.filter { it.parentId == parent.id },
+                            key = CategorySummary::id
+                        ) { child ->
                             CategoryRow(
                                 category = child,
                                 prefix = "    ",
                                 onEdit = { onEdit(child.id, child.type, parent.id) },
                                 onArchive = {
                                     scope.launch {
-                                        if (child.archivedAt == null) repository.archiveCategory(child.id)
+                                        if (child.archivedAt == null) repository.archiveCategory(
+                                            child.id
+                                        )
                                         else repository.restoreCategory(child.id)
                                     }
                                 },
@@ -221,7 +230,10 @@ private fun CategoryRow(
         CategoryIcon(category.iconName, category.colorIndex)
         Column(Modifier.weight(1f)) {
             Text(category.name, style = MaterialTheme.typography.titleMedium)
-            if (category.archivedAt != null) Text(stringResource(R.string.archived), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (category.archivedAt != null) Text(
+                stringResource(R.string.archived),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         IconButton(onClick = onArchive) {
             Icon(
@@ -249,15 +261,25 @@ fun CategoryEditorScreen(
     var iconManuallySelected by rememberSaveable { mutableStateOf(false) }
     var colorIndex by rememberSaveable { mutableStateOf(Random.nextInt(CategoryPalette.size)) }
     var iconPicker by remember { mutableStateOf(false) }
+    var hasDraftParent by rememberSaveable { mutableStateOf(false) }
+    var draftParentName by rememberSaveable { mutableStateOf("") }
+    var draftParentIconName by rememberSaveable { mutableStateOf("shapes") }
+    var draftParentColorIndex by rememberSaveable { mutableStateOf(0) }
+    var parentDialog by rememberSaveable { mutableStateOf(false) }
+    var parentDialogName by rememberSaveable { mutableStateOf("") }
+    var parentDialogIconName by rememberSaveable { mutableStateOf("shapes") }
+    var parentDialogIconManuallySelected by rememberSaveable { mutableStateOf(false) }
+    var parentDialogColorIndex by rememberSaveable { mutableStateOf(0) }
+    var parentIconPicker by remember { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var loaded by rememberSaveable(categoryId) { mutableStateOf(categoryId == null) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val displayedColorIndex = parentId
-        ?.let { selectedParentId ->
-            categories.find { it.id == selectedParentId }?.colorIndex
-        }
-        ?: colorIndex
+    val displayedColorIndex = when {
+        hasDraftParent -> draftParentColorIndex
+        parentId != null -> categories.find { it.id == parentId }?.colorIndex ?: colorIndex
+        else -> colorIndex
+    }
 
     LaunchedEffect(categoryId) {
         categoryId?.let { id ->
@@ -276,6 +298,13 @@ fun CategoryEditorScreen(
         if (loaded && !iconManuallySelected) {
             delay(CATEGORY_ICON_SUGGESTION_DEBOUNCE_MS)
             iconName = suggestCategoryIcon(name)
+        }
+    }
+
+    LaunchedEffect(parentDialogName, parentDialogIconManuallySelected, parentDialog) {
+        if (parentDialog && !parentDialogIconManuallySelected) {
+            delay(CATEGORY_ICON_SUGGESTION_DEBOUNCE_MS)
+            parentDialogIconName = suggestCategoryIcon(parentDialogName)
         }
     }
 
@@ -303,7 +332,18 @@ fun CategoryEditorScreen(
                                         resolvedIcon,
                                         displayedColorIndex,
                                     )
-                                    if (categoryId == null) {
+                                    if (categoryId == null && hasDraftParent) {
+                                        repository.createCategoryWithNewParent(
+                                            parentInput = CategoryInput(
+                                                type = type,
+                                                parentId = null,
+                                                name = draftParentName,
+                                                iconName = draftParentIconName,
+                                                colorIndex = draftParentColorIndex,
+                                            ),
+                                            childInput = input.copy(parentId = null),
+                                        )
+                                    } else if (categoryId == null) {
                                         repository.createCategory(input)
                                     } else {
                                         repository.updateCategory(categoryId, input)
@@ -338,29 +378,38 @@ fun CategoryEditorScreen(
             ParentCategorySelector(
                 categories = categories.filter { it.type == type && it.parentId == null && it.id != categoryId },
                 selectedId = parentId,
-                onSelected = { parentId = it },
+                newParentName = draftParentName.takeIf { hasDraftParent },
+                onSelected = {
+                    parentId = it
+                    hasDraftParent = false
+                },
+                onCreateOrEditParent = if (categoryId == null) {
+                    {
+                        if (hasDraftParent) {
+                            parentDialogName = draftParentName
+                            parentDialogIconName = draftParentIconName
+                            parentDialogIconManuallySelected = true
+                            parentDialogColorIndex = draftParentColorIndex
+                        } else {
+                            parentDialogName = ""
+                            parentDialogIconName = "shapes"
+                            parentDialogIconManuallySelected = false
+                            parentDialogColorIndex = Random.nextInt(CategoryPalette.size)
+                        }
+                        parentDialog = true
+                    }
+                } else null,
             )
             OutlinedButton(onClick = { iconPicker = true }, modifier = Modifier.fillMaxWidth()) {
                 CategoryIcon(iconName, displayedColorIndex)
-                Text(categoryIconOption(iconName).name.replace('_', ' '), modifier = Modifier.padding(start = 12.dp))
+                Text(
+                    categoryIconOption(iconName).name.replace('_', ' '),
+                    modifier = Modifier.padding(start = 12.dp)
+                )
             }
             Text(stringResource(R.string.color))
-            if (parentId == null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CategoryPalette.forEachIndexed { index, color ->
-                        Box(
-                            modifier = Modifier
-                                .size(if (colorIndex == index) 30.dp else 24.dp)
-                                .background(color, CircleShape)
-                                .clickable { colorIndex = index },
-                        )
-                    }
-                }
+            if (parentId == null && !hasDraftParent) {
+                CategoryColorPicker(colorIndex, onSelected = { colorIndex = it })
             } else {
                 Box(
                     modifier = Modifier
@@ -376,49 +425,88 @@ fun CategoryEditorScreen(
     }
 
     if (iconPicker) {
-        var query by remember { mutableStateOf("") }
-        val options = remember(query) {
-            searchCategoryIcons(query)
-        }
+        CategoryIconPickerDialog(
+            colorIndex = displayedColorIndex,
+            onSelected = {
+                iconName = it
+                iconManuallySelected = true
+                iconPicker = false
+            },
+            onDismiss = { iconPicker = false },
+        )
+    }
+
+    if (parentDialog) {
         AlertDialog(
-            onDismissRequest = { iconPicker = false },
-            title = { Text(stringResource(R.string.choose_icon)) },
+            onDismissRequest = { parentDialog = false },
+            title = {
+                Text(
+                    stringResource(
+                        if (hasDraftParent) R.string.edit_new_parent
+                        else R.string.create_parent_category,
+                    ),
+                )
+            },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = { Text(stringResource(R.string.search)) },
+                        value = parentDialogName,
+                        onValueChange = { parentDialogName = it },
+                        label = { Text(stringResource(R.string.parent_category_name)) },
                         singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 76.dp),
-                        modifier = Modifier.heightIn(max = 400.dp),
+                    OutlinedButton(
+                        onClick = { parentIconPicker = true },
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        gridItems(options, key = CategoryIconOption::name) { option ->
-                            Column(
-                                modifier = Modifier
-                                    .clickable {
-                                        iconName = option.name
-                                        iconManuallySelected = true
-                                        iconPicker = false
-                                    }
-                                    .padding(horizontal = 4.dp, vertical = 10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                CategoryIcon(option.name, displayedColorIndex)
-                                Text(
-                                    text = option.name.replace('_', ' '),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                        CategoryIcon(parentDialogIconName, parentDialogColorIndex)
+                        Text(
+                            categoryIconOption(parentDialogIconName).name.replace('_', ' '),
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
                     }
+                    Text(stringResource(R.string.color))
+                    CategoryColorPicker(
+                        selectedColorIndex = parentDialogColorIndex,
+                        onSelected = { parentDialogColorIndex = it },
+                    )
                 }
             },
-            confirmButton = { TextButton(onClick = { iconPicker = false }) { Text(stringResource(R.string.cancel)) } },
+            confirmButton = {
+                TextButton(
+                    enabled = parentDialogName.isNotBlank(),
+                    onClick = {
+                        draftParentName = parentDialogName.trim()
+                        draftParentIconName = if (parentDialogIconManuallySelected) {
+                            parentDialogIconName
+                        } else {
+                            suggestCategoryIcon(parentDialogName)
+                        }
+                        draftParentColorIndex = parentDialogColorIndex
+                        hasDraftParent = true
+                        parentId = null
+                        parentDialog = false
+                    },
+                ) { Text(stringResource(R.string.use_parent)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { parentDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (parentIconPicker) {
+        CategoryIconPickerDialog(
+            colorIndex = parentDialogColorIndex,
+            onSelected = {
+                parentDialogIconName = it
+                parentDialogIconManuallySelected = true
+                parentIconPicker = false
+            },
+            onDismiss = { parentIconPicker = false },
         )
     }
 }
@@ -427,13 +515,15 @@ fun CategoryEditorScreen(
 private fun ParentCategorySelector(
     categories: List<CategorySummary>,
     selectedId: String?,
+    newParentName: String?,
     onSelected: (String?) -> Unit,
+    onCreateOrEditParent: (() -> Unit)?,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = categories.find { it.id == selectedId }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = selected?.name.orEmpty(),
+            value = newParentName ?: selected?.name.orEmpty(),
             onValueChange = {},
             readOnly = true,
             label = { Text(stringResource(R.string.parent_category)) },
@@ -444,10 +534,107 @@ private fun ParentCategorySelector(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = { onSelected(null); expanded = false })
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.none)) },
+                onClick = { onSelected(null); expanded = false })
             categories.forEach { category ->
-                DropdownMenuItem(text = { Text(category.name) }, onClick = { onSelected(category.id); expanded = false })
+                DropdownMenuItem(
+                    text = { Text(category.name) },
+                    onClick = { onSelected(category.id); expanded = false })
+            }
+            if (onCreateOrEditParent != null) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = null,
+                        )
+                    },
+                    text = {
+                        Text(
+                            stringResource(
+                                if (newParentName == null) R.string.create_parent_category
+                                else R.string.edit_new_parent,
+                            ),
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onCreateOrEditParent()
+                    },
+                )
             }
         }
     }
+}
+
+@Composable
+private fun CategoryColorPicker(
+    selectedColorIndex: Int,
+    onSelected: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CategoryPalette.forEachIndexed { index, color ->
+            Box(
+                modifier = Modifier
+                    .size(if (selectedColorIndex == index) 30.dp else 24.dp)
+                    .background(color, CircleShape)
+                    .clickable { onSelected(index) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CategoryIconPickerDialog(
+    colorIndex: Int,
+    onSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val options = remember(query) { searchCategoryIcons(query) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.choose_icon)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(stringResource(R.string.search)) },
+                    singleLine = true,
+                )
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 76.dp),
+                    modifier = Modifier.heightIn(max = 400.dp),
+                ) {
+                    gridItems(options, key = CategoryIconOption::name) { option ->
+                        Column(
+                            modifier = Modifier
+                                .clickable { onSelected(option.name) }
+                                .padding(horizontal = 4.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CategoryIcon(option.name, colorIndex)
+                            Text(
+                                text = option.name.replace('_', ' '),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }

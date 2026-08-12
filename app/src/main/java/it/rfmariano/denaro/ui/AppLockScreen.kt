@@ -68,11 +68,13 @@ fun AppLockGate(
                     authenticatedLocally = true
                     processUnlockSession.unlock()
                 }
+
                 DeviceAuthenticationResult.Canceled -> message = R.string.authentication_canceled
                 DeviceAuthenticationResult.NotConfigured -> {
                     message = R.string.device_security_not_configured
                     needsSecuritySetup = true
                 }
+
                 DeviceAuthenticationResult.Error -> message = R.string.authentication_unavailable
             }
             authenticating = false

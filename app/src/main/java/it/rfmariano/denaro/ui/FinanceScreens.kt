@@ -175,7 +175,7 @@ fun HomeRouteContent(
                             item {
                                 CategoryBreakdown(
                                     dashboard = dashboard,
-                                amountsVisible = amountsVisible,
+                                    amountsVisible = amountsVisible,
                                     onCategoryClick = { kind, categoryId ->
                                         val month =
                                             java.time.YearMonth.parse(dashboard.filter.selectedMonth)
@@ -514,9 +514,11 @@ fun ActivityRouteContent(
             }
         },
     ) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -535,109 +537,109 @@ fun ActivityRouteContent(
             if (showDebts) {
                 DebtsPanel(debts, amountsVisible, onAddDebt, onDebtClick)
             } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = selectedKind == null,
-                    onClick = {
-                        viewModel.selectedKind.value = null
-                        viewModel.selectedCategoryId.value = null
-                    },
-                    label = { Text(stringResource(R.string.all)) },
-                )
-                ActivityKind.entries.filterNot { it == ActivityKind.DEBT }.forEach { kind ->
-                    FilterChip(
-                        selected = selectedKind == kind,
-                        onClick = {
-                            val next = if (selectedKind == kind) null else kind
-                            viewModel.selectedKind.value = next
-                            if (next == null || next == ActivityKind.TRANSFER) {
-                                viewModel.selectedCategoryId.value = null
-                            } else if (categories.find { it.id == selectedCategoryId }?.type?.name != next.name) {
-                                viewModel.selectedCategoryId.value = null
-                            }
-                        },
-                        label = {
-                            Text(
-                                stringResource(
-                                    when (kind) {
-                                        ActivityKind.INCOME -> R.string.income
-                                        ActivityKind.EXPENSE -> R.string.expense
-                                        ActivityKind.TRANSFER -> R.string.transfer
-                                        ActivityKind.DEBT -> R.string.debt
-                                    },
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-            if (selectedKind == ActivityKind.INCOME || selectedKind == ActivityKind.EXPENSE) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        CategorySelector(
-                            categories = categories.filter { it.type.name == selectedKind?.name },
-                            selectedId = selectedCategoryId,
-                            onSelected = { viewModel.selectedCategoryId.value = it },
+                    FilterChip(
+                        selected = selectedKind == null,
+                        onClick = {
+                            viewModel.selectedKind.value = null
+                            viewModel.selectedCategoryId.value = null
+                        },
+                        label = { Text(stringResource(R.string.all)) },
+                    )
+                    ActivityKind.entries.filterNot { it == ActivityKind.DEBT }.forEach { kind ->
+                        FilterChip(
+                            selected = selectedKind == kind,
+                            onClick = {
+                                val next = if (selectedKind == kind) null else kind
+                                viewModel.selectedKind.value = next
+                                if (next == null || next == ActivityKind.TRANSFER) {
+                                    viewModel.selectedCategoryId.value = null
+                                } else if (categories.find { it.id == selectedCategoryId }?.type?.name != next.name) {
+                                    viewModel.selectedCategoryId.value = null
+                                }
+                            },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        when (kind) {
+                                            ActivityKind.INCOME -> R.string.income
+                                            ActivityKind.EXPENSE -> R.string.expense
+                                            ActivityKind.TRANSFER -> R.string.transfer
+                                            ActivityKind.DEBT -> R.string.debt
+                                        },
+                                    ),
+                                )
+                            },
                         )
                     }
                 }
-            }
-            if (selectedCurrency != null || fromDate != null || toDate != null || selectedCategoryId != null) {
+                if (selectedKind == ActivityKind.INCOME || selectedKind == ActivityKind.EXPENSE) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            CategorySelector(
+                                categories = categories.filter { it.type.name == selectedKind?.name },
+                                selectedId = selectedCategoryId,
+                                onSelected = { viewModel.selectedCategoryId.value = it },
+                            )
+                        }
+                    }
+                }
+                if (selectedCurrency != null || fromDate != null || toDate != null || selectedCategoryId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            listOfNotNull(
+                                selectedCurrency,
+                                fromDate?.let { "$it – ${toDate.orEmpty()}" }).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = viewModel::clearExtendedFilters) {
+                            Text(stringResource(R.string.clear_filter))
+                        }
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Text(
-                        listOfNotNull(
-                            selectedCurrency,
-                            fromDate?.let { "$it – ${toDate.orEmpty()}" }).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = viewModel::clearExtendedFilters) {
-                        Text(stringResource(R.string.clear_filter))
+                    Column(modifier = Modifier.weight(1f)) {
+                        AccountSelector(
+                            label = stringResource(R.string.filter_account),
+                            accounts = accounts,
+                            selectedId = selectedAccountId.orEmpty(),
+                            onSelected = { viewModel.selectedAccountId.value = it },
+                        )
+                    }
+                    if (selectedAccountId != null) {
+                        TextButton(onClick = { viewModel.selectedAccountId.value = null }) {
+                            Text(stringResource(R.string.clear_filter))
+                        }
                     }
                 }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    AccountSelector(
-                        label = stringResource(R.string.filter_account),
-                        accounts = accounts,
-                        selectedId = selectedAccountId.orEmpty(),
-                        onSelected = { viewModel.selectedAccountId.value = it },
-                    )
-                }
-                if (selectedAccountId != null) {
-                    TextButton(onClick = { viewModel.selectedAccountId.value = null }) {
-                        Text(stringResource(R.string.clear_filter))
-                    }
-                }
-            }
-            ActivityList(
-                activity = activity,
-                amountsVisible = amountsVisible,
-                perspectiveAccountId = selectedAccountId,
-                onActivityClick = onActivityClick,
-            )
+                ActivityList(
+                    activity = activity,
+                    amountsVisible = amountsVisible,
+                    perspectiveAccountId = selectedAccountId,
+                    onActivityClick = onActivityClick,
+                )
             }
         }
     }

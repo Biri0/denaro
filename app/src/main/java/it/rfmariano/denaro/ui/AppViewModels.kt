@@ -73,19 +73,19 @@ class HomeViewModel(
         repository.observeActiveAccounts(),
         dashboard,
     ) { accounts, dashboardState ->
-            HomeUiState(
-                isLoading = false,
-                isDashboardLoading = dashboardState.isLoading,
-                accounts = accounts,
-                totalsByCurrency = accounts
-                    .groupBy(AccountSummary::currency)
-                    .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
-                    .toSortedMap(),
-                dashboard = dashboardState.snapshot,
-                selectedCurrency = dashboardState.filter.currency,
-                selectedAccountId = dashboardState.filter.accountId,
-                selectedMonth = dashboardState.filter.selectedMonth,
-            )
+        HomeUiState(
+            isLoading = false,
+            isDashboardLoading = dashboardState.isLoading,
+            accounts = accounts,
+            totalsByCurrency = accounts
+                .groupBy(AccountSummary::currency)
+                .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
+                .toSortedMap(),
+            dashboard = dashboardState.snapshot,
+            selectedCurrency = dashboardState.filter.currency,
+            selectedAccountId = dashboardState.filter.accountId,
+            selectedMonth = dashboardState.filter.selectedMonth,
+        )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -193,7 +193,7 @@ class ActivityViewModel(private val repository: FinanceRepository) : ViewModel()
         .combine(refreshRequests) { filter, _ -> filter }
         .flatMapLatest { filter ->
             repository.activityPager(filter)
-    }.cachedIn(viewModelScope)
+        }.cachedIn(viewModelScope)
 
     fun applyFilter(filter: ActivityFilter) {
         selectedKind.value = filter.kind

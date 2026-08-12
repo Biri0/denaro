@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -362,5 +363,180 @@ class EditorSubmissionTest {
         composeRule.waitUntil { completions.get() == 1 }
 
         assertEquals(createdCategoryId, repository.getTransaction(transactionId)?.categoryId)
+    }
+
+    @Test
+    fun newCategoryCanCreateAndReturnANewParentAndChild() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var completedCategoryId: String? = null
+        composeRule.setContent {
+            DenaroTheme {
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = null,
+                    type = TransactionType.EXPENSE,
+                    initialParentId = null,
+                    onBack = {},
+                    onFinished = { completedCategoryId = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.name))
+            .performTextInput("Groceries")
+        openNewParentDialog()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextInput("Food")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completedCategoryId != null }
+        val child = runBlocking { repository.getCategory(requireNotNull(completedCategoryId)) }
+        val parent = runBlocking { repository.getCategory(requireNotNull(child?.parentId)) }
+        assertEquals("Groceries", child?.name)
+        assertEquals("Food", parent?.name)
+        assertEquals(parent?.colorIndex, child?.colorIndex)
+    }
+
+    @Test
+    fun backingOutAfterStagingParentPersistsNothing() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val backs = AtomicInteger()
+        composeRule.setContent {
+            DenaroTheme {
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = null,
+                    type = TransactionType.EXPENSE,
+                    initialParentId = null,
+                    onBack = { backs.incrementAndGet() },
+                    onFinished = {},
+                )
+            }
+        }
+
+        openNewParentDialog()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextInput("Food")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
+
+        composeRule.waitUntil { backs.get() == 1 }
+        assertEquals(0, runBlocking { database.categoryDao().count() })
+    }
+
+    @Test
+    fun stagedParentCanBeReopenedAndEdited() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var completedCategoryId: String? = null
+        composeRule.setContent {
+            DenaroTheme {
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = null,
+                    type = TransactionType.INCOME,
+                    initialParentId = null,
+                    onBack = {},
+                    onFinished = { completedCategoryId = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.name)).performTextInput("Salary")
+        openNewParentDialog()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextInput("Work")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.edit_new_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextReplacement("Employment")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completedCategoryId != null }
+        val child = runBlocking { repository.getCategory(requireNotNull(completedCategoryId)) }
+        val parent = runBlocking { repository.getCategory(requireNotNull(child?.parentId)) }
+        assertEquals("Employment", parent?.name)
+    }
+
+    @Test
+    fun existingParentAndNoneBothReplaceAStagedParent() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val existingParentId = repository.createCategory(
+            CategoryInput(TransactionType.EXPENSE, null, "Existing", "shapes", 2),
+        )
+        var completedCategoryId: String? = null
+        composeRule.setContent {
+            DenaroTheme {
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = null,
+                    type = TransactionType.EXPENSE,
+                    initialParentId = null,
+                    onBack = {},
+                    onFinished = { completedCategoryId = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.name)).performTextInput("Child")
+        openNewParentDialog()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextInput("Discarded one")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText("Existing").performClick()
+
+        composeRule.onNodeWithText("Existing").assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.create_parent_category))
+            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category_name))
+            .performTextInput("Discarded two")
+        composeRule.onNodeWithText(context.getString(R.string.use_parent)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.none)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completedCategoryId != null }
+        val child = repository.getCategory(requireNotNull(completedCategoryId))
+        assertNull(child?.parentId)
+        assertEquals(2, database.categoryDao().count())
+        assertEquals("Existing", repository.getCategory(existingParentId)?.name)
+    }
+
+    @Test
+    fun existingCategoryCannotCreateAParent() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val categoryId = repository.createCategory(
+            CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+        )
+        composeRule.setContent {
+            DenaroTheme {
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = categoryId,
+                    type = TransactionType.EXPENSE,
+                    initialParentId = null,
+                    onBack = {},
+                    onFinished = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Food").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.create_parent_category))
+            .assertDoesNotExist()
+    }
+
+    private fun openNewParentDialog() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithText(context.getString(R.string.parent_category)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.create_parent_category))
+            .performClick()
     }
 }

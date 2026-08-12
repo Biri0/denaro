@@ -165,6 +165,10 @@
     <string name="add_category">Aggiungi categoria</string>
     <string name="edit_category">Modifica categoria</string>
     <string name="add_subcategory">Aggiungi sottocategoria</string>
+    <string name="create_parent_category">Crea categoria principale</string>
+    <string name="edit_new_parent">Modifica nuova categoria principale</string>
+    <string name="parent_category_name">Nome categoria principale</string>
+    <string name="use_parent">Usa categoria principale</string>
     <string name="show_archived">Mostra archiviate</string>
     <string name="archived">Archiviata</string>
     <string name="no_categories">Nessuna categoria</string>

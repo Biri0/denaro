@@ -43,7 +43,10 @@ class DemoDataSeederTest {
 
             assertEquals(originalDemoCount, demo.transactionDao().count())
             assertEquals(listOf("real-sentinel"), real.accountDao().getAll().map { it.id })
-            assertEquals("Conto quotidiano", demo.accountDao().getById("demo-account-checking")?.name)
+            assertEquals(
+                "Conto quotidiano",
+                demo.accountDao().getById("demo-account-checking")?.name
+            )
         } finally {
             demo.close()
             real.close()

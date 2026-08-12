@@ -446,6 +446,7 @@ fun ActivityEditorScreen(
                             when {
                                 route.recurringRuleId != null ->
                                     R.string.edit_scheduled_transaction
+
                                 isScheduled -> R.string.add_scheduled_transaction
                                 route.id == null -> R.string.add_transaction
                                 route.kind == ActivityKind.TRANSFER -> R.string.edit_transfer

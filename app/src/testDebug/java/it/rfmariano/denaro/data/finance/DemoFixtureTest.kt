@@ -42,11 +42,16 @@ class DemoFixtureTest {
         }
         val deficits = completed.groupBy { YearMonth.from(LocalDate.parse(it.localDate)) }
             .count { (_, transactions) ->
-                transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountMinor } >
-                    transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountMinor }
+                transactions.filter { it.type == TransactionType.EXPENSE }
+                    .sumOf { it.amountMinor } >
+                        transactions.filter { it.type == TransactionType.INCOME }
+                            .sumOf { it.amountMinor }
             }
 
-        assertEquals(expectedMonths, completed.map { YearMonth.from(LocalDate.parse(it.localDate)) }.toSet())
+        assertEquals(
+            expectedMonths,
+            completed.map { YearMonth.from(LocalDate.parse(it.localDate)) }.toSet()
+        )
         assertEquals(2, deficits)
     }
 

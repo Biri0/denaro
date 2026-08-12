@@ -14,19 +14,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,13 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -52,10 +51,9 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.CategoryShare
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
-import it.rfmariano.denaro.data.finance.MonthlyCashFlow
 import it.rfmariano.denaro.data.finance.Money
+import it.rfmariano.denaro.data.finance.MonthlyCashFlow
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import com.composables.icons.lucide.R as LucideR
 
@@ -73,20 +71,29 @@ fun DashboardControls(
     val month = YearMonth.parse(state.selectedMonth)
     val locale = LocalConfiguration.current.locales[0]
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPreviousMonth) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_chevron_left), contentDescription = stringResource(R.string.previous_month))
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_chevron_left),
+                    contentDescription = stringResource(R.string.previous_month)
+                )
             }
             Text(
-                month.month.getDisplayName(TextStyle.FULL, locale).replaceFirstChar { it.titlecase(locale) } + " ${month.year}",
+                month.month.getDisplayName(TextStyle.FULL, locale)
+                    .replaceFirstChar { it.titlecase(locale) } + " ${month.year}",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onNextMonth, enabled = month < YearMonth.now()) {
-                Icon(painterResource(LucideR.drawable.lucide_ic_chevron_right), contentDescription = stringResource(R.string.next_month))
+                Icon(
+                    painterResource(LucideR.drawable.lucide_ic_chevron_right),
+                    contentDescription = stringResource(R.string.next_month)
+                )
             }
         }
         if (currencies.size > 1) {
@@ -112,12 +119,18 @@ fun DashboardControls(
                 label = { Text(stringResource(R.string.filter_account)) },
                 placeholder = { Text(stringResource(R.string.all_accounts)) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.all_accounts)) }, onClick = { onAccount(null); expanded = false })
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.all_accounts)) },
+                    onClick = { onAccount(null); expanded = false })
                 accounts.forEach { account ->
-                    DropdownMenuItem(text = { Text(account.name) }, onClick = { onAccount(account.id); expanded = false })
+                    DropdownMenuItem(
+                        text = { Text(account.name) },
+                        onClick = { onAccount(account.id); expanded = false })
                 }
             }
         }
@@ -126,21 +139,47 @@ fun DashboardControls(
 
 @Composable
 fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp)) {
+    Column(Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SummaryCard(R.string.income, snapshot.selected.incomeMinor, snapshot.filter.currency, amountsVisible, Modifier.weight(1f))
-            SummaryCard(R.string.expense, snapshot.selected.expenseMinor, snapshot.filter.currency, amountsVisible, Modifier.weight(1f))
-            SummaryCard(R.string.net, snapshot.selected.netMinor, snapshot.filter.currency, amountsVisible, Modifier.weight(1f))
+            SummaryCard(
+                R.string.income,
+                snapshot.selected.incomeMinor,
+                snapshot.filter.currency,
+                amountsVisible,
+                Modifier.weight(1f)
+            )
+            SummaryCard(
+                R.string.expense,
+                snapshot.selected.expenseMinor,
+                snapshot.filter.currency,
+                amountsVisible,
+                Modifier.weight(1f)
+            )
+            SummaryCard(
+                R.string.net,
+                snapshot.selected.netMinor,
+                snapshot.filter.currency,
+                amountsVisible,
+                Modifier.weight(1f)
+            )
         }
         val expenseDelta = snapshot.selected.expenseMinor - snapshot.previousComparable.expenseMinor
         Text(
             text = if (amountsVisible) {
                 stringResource(
                     R.string.expense_change_previous,
-                    (if (expenseDelta >= 0) "+" else "") + Money.format(expenseDelta, snapshot.filter.currency),
+                    (if (expenseDelta >= 0) "+" else "") + Money.format(
+                        expenseDelta,
+                        snapshot.filter.currency
+                    ),
                 )
             } else {
-                stringResource(R.string.expense_change_previous, stringResource(R.string.amount_hidden))
+                stringResource(
+                    R.string.expense_change_previous,
+                    stringResource(R.string.amount_hidden)
+                )
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -150,12 +189,25 @@ fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
 }
 
 @Composable
-private fun SummaryCard(label: Int, amount: Long, currency: String, visible: Boolean, modifier: Modifier) {
+private fun SummaryCard(
+    label: Int,
+    amount: Long,
+    currency: String,
+    visible: Boolean,
+    modifier: Modifier
+) {
     Card(modifier) {
         Column(Modifier.padding(12.dp)) {
-            Text(stringResource(label), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                if (visible) Money.format(amount, currency) else stringResource(R.string.amount_hidden),
+                stringResource(label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                if (visible) Money.format(
+                    amount,
+                    currency
+                ) else stringResource(R.string.amount_hidden),
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -172,16 +224,29 @@ fun MonthlyCashFlowChart(months: List<MonthlyCashFlow>, currency: String, amount
     val expenseColor = MaterialTheme.colorScheme.error
     val locale = LocalConfiguration.current.locales[0]
     val description = if (amountsVisible) months.joinToString { month ->
-        "${month.month}: ${Money.format(month.incomeMinor, currency)}, ${Money.format(month.expenseMinor, currency)}"
+        "${month.month}: ${
+            Money.format(
+                month.incomeMinor,
+                currency
+            )
+        }, ${Money.format(month.expenseMinor, currency)}"
     } else stringResource(R.string.amounts_hidden_chart_note)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(stringResource(R.string.six_month_trend), style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            Modifier.padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             ChartLegend(incomeColor, stringResource(R.string.income))
             ChartLegend(expenseColor, stringResource(R.string.expense))
         }
         Canvas(
-            Modifier.fillMaxWidth().height(170.dp).semantics { contentDescription = description },
+            Modifier
+                .fillMaxWidth()
+                .height(170.dp)
+                .semantics { contentDescription = description },
         ) {
             val groupWidth = size.width / months.size
             val barWidth = groupWidth * 0.27f
@@ -214,15 +279,23 @@ fun MonthlyCashFlowChart(months: List<MonthlyCashFlow>, currency: String, amount
                 )
             }
         }
-        if (!amountsVisible) Text(stringResource(R.string.amounts_hidden_chart_note), style = MaterialTheme.typography.bodySmall)
+        if (!amountsVisible) Text(
+            stringResource(R.string.amounts_hidden_chart_note),
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
 @Composable
 private fun ChartLegend(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(12.dp).height(12.dp).padding(1.dp))
-        Canvas(Modifier.width(12.dp).height(12.dp)) { drawCircle(color) }
+        Box(Modifier
+            .width(12.dp)
+            .height(12.dp)
+            .padding(1.dp))
+        Canvas(Modifier
+            .width(12.dp)
+            .height(12.dp)) { drawCircle(color) }
         Spacer(Modifier.width(6.dp))
         Text(label, style = MaterialTheme.typography.labelMedium)
     }
@@ -235,11 +308,16 @@ fun CategoryBreakdown(
     onCategoryClick: (ActivityKind, String?) -> Unit,
 ) {
     var kind by rememberSaveable { mutableStateOf(ActivityKind.EXPENSE) }
-    val shares = if (kind == ActivityKind.EXPENSE) dashboard.expenseCategories else dashboard.incomeCategories
+    val shares =
+        if (kind == ActivityKind.EXPENSE) dashboard.expenseCategories else dashboard.incomeCategories
     val total = shares.sumOf(CategoryShare::amountMinor).coerceAtLeast(1)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+    Column(Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text(stringResource(R.string.by_category), style = MaterialTheme.typography.titleMedium)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        SingleChoiceSegmentedButtonRow(Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)) {
             listOf(ActivityKind.EXPENSE, ActivityKind.INCOME).forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = kind == option,
@@ -249,26 +327,48 @@ fun CategoryBreakdown(
             }
         }
         if (shares.isEmpty()) {
-            Text(stringResource(R.string.no_data_for_period), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(R.string.no_data_for_period),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         } else {
             shares.forEach { share ->
                 val fraction = share.amountMinor.toFloat() / total
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onCategoryClick(kind, share.categoryId) }.padding(vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onCategoryClick(kind, share.categoryId) }
+                        .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CategoryIcon(share.iconName ?: "circle_help", share.colorIndex)
-                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Column(Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)) {
                         Row {
-                            Text(share.name ?: stringResource(R.string.no_category), modifier = Modifier.weight(1f))
-                            Text(if (amountsVisible) Money.format(share.amountMinor, dashboard.filter.currency) else stringResource(R.string.amount_hidden))
+                            Text(
+                                share.name ?: stringResource(R.string.no_category),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                if (amountsVisible) Money.format(
+                                    share.amountMinor,
+                                    dashboard.filter.currency
+                                ) else stringResource(R.string.amount_hidden)
+                            )
                         }
                         LinearProgressIndicator(
                             progress = { fraction },
-                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                            color = CategoryPalette[(share.colorIndex ?: 0).mod(CategoryPalette.size)],
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 5.dp),
+                            color = CategoryPalette[(share.colorIndex
+                                ?: 0).mod(CategoryPalette.size)],
                         )
-                        Text("${(fraction * 100).toInt()}% · ${share.transactionCount}", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            "${(fraction * 100).toInt()}% · ${share.transactionCount}",
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                 }
             }

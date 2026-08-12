@@ -287,43 +287,43 @@ fun DenaroApp(
                     },
                 )
             }
-                entry<SettingsRoute> {
-                    SettingsScreen(
-                        financeSessionProvider = financeSessionProvider,
-                        preferencesRepository = preferencesRepository,
-                        securityPreferencesRepository = securityPreferencesRepository,
-                        processUnlockSession = processUnlockSession,
-                        authenticator = authenticator,
-                        onBack = { homeBackStack.removeLastOrNull() },
-                        onCategories = { homeBackStack.add(CategoriesRoute) },
-                        onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
-                    )
-                }
-                entry<CounterpartiesRoute> {
-                    CounterpartiesScreen(repository) { homeBackStack.removeLastOrNull() }
-                }
-                entry<CategoriesRoute> {
-                    CategoryManagementScreen(
-                        repository = repository,
-                        onBack = { homeBackStack.removeLastOrNull() },
-                        onEdit = { id, type, parentId ->
-                            homeBackStack.add(CategoryEditorRoute(id, type.name, parentId))
-                        },
-                    )
-                }
-                entry<CategoryEditorRoute> { route ->
-                    CategoryEditorScreen(
-                        repository = repository,
-                        categoryId = route.categoryId,
-                        type = TransactionType.valueOf(route.type),
-                        initialParentId = route.parentId,
-                        onBack = { backStack.removeLastOrNull() },
-                        onFinished = { categoryId ->
-                            if (route.selectForActivityEditor) {
-                                pendingActivityCategoryId = categoryId
-                            }
-                            backStack.removeLastOrNull()
-                        },
+            entry<SettingsRoute> {
+                SettingsScreen(
+                    financeSessionProvider = financeSessionProvider,
+                    preferencesRepository = preferencesRepository,
+                    securityPreferencesRepository = securityPreferencesRepository,
+                    processUnlockSession = processUnlockSession,
+                    authenticator = authenticator,
+                    onBack = { homeBackStack.removeLastOrNull() },
+                    onCategories = { homeBackStack.add(CategoriesRoute) },
+                    onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
+                )
+            }
+            entry<CounterpartiesRoute> {
+                CounterpartiesScreen(repository) { homeBackStack.removeLastOrNull() }
+            }
+            entry<CategoriesRoute> {
+                CategoryManagementScreen(
+                    repository = repository,
+                    onBack = { homeBackStack.removeLastOrNull() },
+                    onEdit = { id, type, parentId ->
+                        homeBackStack.add(CategoryEditorRoute(id, type.name, parentId))
+                    },
+                )
+            }
+            entry<CategoryEditorRoute> { route ->
+                CategoryEditorScreen(
+                    repository = repository,
+                    categoryId = route.categoryId,
+                    type = TransactionType.valueOf(route.type),
+                    initialParentId = route.parentId,
+                    onBack = { backStack.removeLastOrNull() },
+                    onFinished = { categoryId ->
+                        if (route.selectForActivityEditor) {
+                            pendingActivityCategoryId = categoryId
+                        }
+                        backStack.removeLastOrNull()
+                    },
                 )
             }
             entry<AccountsRoute> {
@@ -361,52 +361,52 @@ fun DenaroApp(
                     onDebtClick = { activityBackStack.add(DebtDetailRoute(it)) },
                 )
             }
-                entry<DebtDetailRoute> { route ->
-                    val detail: DebtDetailViewModel = viewModel(
-                        key = "debt-${session.id}-${route.debtId}",
-                        factory = viewModelFactory {
-                            DebtDetailViewModel(
-                                repository,
-                                route.debtId
-                            )
-                        },
-                    )
-                    val state by detail.uiState.collectAsStateWithLifecycle()
-                    val accounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
-                        emptyList()
-                    )
-                    DebtDetailScreen(
-                        state = state,
-                        accounts = accounts,
-                        amountsVisible = preferences.amountsVisible,
-                        onBack = { backStack.removeLastOrNull() },
-                        onEdit = { backStack.add(DebtEditorRoute(it)) },
-                        onAddRepayment = { backStack.add(DebtRepaymentEditorRoute(it)) },
-                        onEditRepayment = { debtId, repaymentId ->
-                            backStack.add(
-                                DebtRepaymentEditorRoute(debtId, repaymentId)
-                            )
-                        },
-                    )
-                }
-                entry<DebtEditorRoute> { route ->
-                    DebtEditorScreen(
-                        repository, route.debtId,
-                        onBack = { backStack.removeLastOrNull() },
-                        onFinished = { backStack.removeLastOrNull() },
-                        onDeleted = {
-                            backStack.removeLastOrNull()
-                            backStack.removeLastOrNull()
-                        },
-                        onMessage = ::showMessage,
-                    )
-                }
-                entry<DebtRepaymentEditorRoute> { route ->
-                    DebtRepaymentEditorScreen(
-                        repository, route.debtId, route.repaymentId,
-                        onBack = { backStack.removeLastOrNull() },
-                        onFinished = { backStack.removeLastOrNull() },
-                        onMessage = ::showMessage,
+            entry<DebtDetailRoute> { route ->
+                val detail: DebtDetailViewModel = viewModel(
+                    key = "debt-${session.id}-${route.debtId}",
+                    factory = viewModelFactory {
+                        DebtDetailViewModel(
+                            repository,
+                            route.debtId
+                        )
+                    },
+                )
+                val state by detail.uiState.collectAsStateWithLifecycle()
+                val accounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
+                    emptyList()
+                )
+                DebtDetailScreen(
+                    state = state,
+                    accounts = accounts,
+                    amountsVisible = preferences.amountsVisible,
+                    onBack = { backStack.removeLastOrNull() },
+                    onEdit = { backStack.add(DebtEditorRoute(it)) },
+                    onAddRepayment = { backStack.add(DebtRepaymentEditorRoute(it)) },
+                    onEditRepayment = { debtId, repaymentId ->
+                        backStack.add(
+                            DebtRepaymentEditorRoute(debtId, repaymentId)
+                        )
+                    },
+                )
+            }
+            entry<DebtEditorRoute> { route ->
+                DebtEditorScreen(
+                    repository, route.debtId,
+                    onBack = { backStack.removeLastOrNull() },
+                    onFinished = { backStack.removeLastOrNull() },
+                    onDeleted = {
+                        backStack.removeLastOrNull()
+                        backStack.removeLastOrNull()
+                    },
+                    onMessage = ::showMessage,
+                )
+            }
+            entry<DebtRepaymentEditorRoute> { route ->
+                DebtRepaymentEditorScreen(
+                    repository, route.debtId, route.repaymentId,
+                    onBack = { backStack.removeLastOrNull() },
+                    onFinished = { backStack.removeLastOrNull() },
+                    onMessage = ::showMessage,
                 )
             }
             entry<AccountDetailRoute> { route ->
