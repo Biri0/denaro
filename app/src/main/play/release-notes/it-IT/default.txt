@@ -1,1 +1,1 @@
-Migliorata l'affidabilità dei rilasci e preparata Denaro per la distribuzione tramite F-Droid.
+Migliorato il pacchetto di rilascio per la compatibilità con F-Droid.
