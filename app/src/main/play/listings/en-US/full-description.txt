@@ -1,0 +1,21 @@
+Take control of your money without giving up your privacy.
+
+Denaro is a private, offline personal finance app for tracking accounts, income, expenses, transfers, debts and recurring transactions in one place. No account is required, and your financial data stays encrypted on your device.
+
+See the month at a glance
+• Follow income, spending and cash flow from a clear dashboard
+• Explore monthly trends and category breakdowns
+• Filter your activity to find the transactions that matter
+
+Organize finances your way
+• Manage multiple accounts and currencies
+• Create custom categories for income and expenses
+• Record transfers between accounts
+• Track money you owe or are owed, due dates and partial repayments
+• Add recurring transactions and keep regular activity organized
+• Hide balances whenever you want more privacy on screen
+
+Made for everyday clarity
+Denaro keeps your finances easy to review with a focused interface, light and dark themes, and no network permission.
+
+Your money. Your device. Your data.

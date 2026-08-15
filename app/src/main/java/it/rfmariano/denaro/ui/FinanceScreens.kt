@@ -492,8 +492,9 @@ fun ActivityRouteContent(
     debts: List<DebtSummary> = emptyList(),
     onAddDebt: () -> Unit = {},
     onDebtClick: (String) -> Unit = {},
+    initiallyShowDebts: Boolean = false,
 ) {
-    var showDebts by rememberSaveable { mutableStateOf(false) }
+    var showDebts by rememberSaveable { mutableStateOf(initiallyShowDebts) }
     val selectedKind by viewModel.selectedKind.collectAsStateWithLifecycle()
     val selectedAccountId by viewModel.selectedAccountId.collectAsStateWithLifecycle()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsStateWithLifecycle()

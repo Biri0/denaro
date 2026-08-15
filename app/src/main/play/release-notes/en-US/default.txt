@@ -1,0 +1,1 @@
+Improved release reliability and prepared Denaro for distribution through F-Droid.

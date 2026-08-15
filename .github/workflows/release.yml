@@ -24,24 +24,65 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate tag and main ancestry
+      - name: Validate tag and resolve release version
         id: version
         shell: bash
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
             echo "::error::Tag '$tag' is not a supported semantic version."
             exit 1
           fi
-          git fetch --no-tags origin main
+          git fetch --force --tags origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::The tagged commit is not contained in main."
             exit 1
           fi
-          now="$(date -u +%s)"
-          epoch="$(date -u -d '2026-01-01T00:00:00Z' +%s)"
-          version_code="$((100000 + now - epoch))"
+
+          companion_prefix="fdroid-${tag}+"
+          mapfile -t companion_tags < <(git tag --list "${companion_prefix}*")
+          if (( ${#companion_tags[@]} > 1 )); then
+            echo "::error::Multiple F-Droid companion tags exist for '$tag'."
+            exit 1
+          fi
+
+          if (( ${#companion_tags[@]} == 1 )); then
+            companion_tag="${companion_tags[0]}"
+            version_code="${companion_tag#"$companion_prefix"}"
+            if [[ ! "$version_code" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Companion tag '$companion_tag' has an invalid version code."
+              exit 1
+            fi
+            companion_commit="$(git rev-list -n 1 "$companion_tag")"
+            if [[ "$companion_commit" != "$GITHUB_SHA" ]]; then
+              echo "::error::Companion tag '$companion_tag' points to another commit."
+              exit 1
+            fi
+          else
+            now="$(date -u +%s)"
+            epoch="$(date -u -d '2026-01-01T00:00:00Z' +%s)"
+            version_code="$((100000 + now - epoch))"
+            latest_version_code=0
+            while IFS= read -r existing_tag; do
+              existing_code="${existing_tag##*+}"
+              if [[ "$existing_code" =~ ^[1-9][0-9]*$ ]] &&
+                (( existing_code > latest_version_code )); then
+                latest_version_code="$existing_code"
+              fi
+            done < <(git tag --list 'fdroid-v*+*')
+            if (( version_code <= latest_version_code )); then
+              version_code="$((latest_version_code + 1))"
+            fi
+            if (( version_code > 2100000000 )); then
+              echo "::error::Derived version code exceeds Google Play's limit."
+              exit 1
+            fi
+            companion_tag="${companion_prefix}${version_code}"
+            git tag "$companion_tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$companion_tag"
+          fi
+
           if (( version_code > 2100000000 )); then
             echo "::error::Derived version code exceeds Google Play's limit."
             exit 1
@@ -52,6 +93,7 @@ jobs:
           {
             echo "name=$version_name"
             echo "code=$version_code"
+            echo "companion-tag=$companion_tag"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
 

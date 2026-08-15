@@ -12,11 +12,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.rfmariano.denaro.DenaroApplication
@@ -30,6 +32,7 @@ import it.rfmariano.denaro.ui.AccountsViewModel
 import it.rfmariano.denaro.ui.ActivityRouteContent
 import it.rfmariano.denaro.ui.ActivityViewModel
 import it.rfmariano.denaro.ui.CategoryManagementScreen
+import it.rfmariano.denaro.ui.DebtsViewModel
 import it.rfmariano.denaro.ui.HomeRouteContent
 import it.rfmariano.denaro.ui.HomeViewModel
 import it.rfmariano.denaro.ui.theme.DenaroTheme
@@ -93,6 +96,7 @@ private enum class CaptureScenario {
     ACCOUNTS,
     ACCOUNT_DETAIL,
     ACTIVITY,
+    DEBTS,
     CATEGORIES;
 
     companion object {
@@ -159,16 +163,25 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
             )
         }
 
-        CaptureScenario.ACTIVITY -> CaptureScaffold(CaptureDestination.ACTIVITY) {
+        CaptureScenario.ACTIVITY,
+        CaptureScenario.DEBTS,
+        -> CaptureScaffold(CaptureDestination.ACTIVITY) {
             val activity: ActivityViewModel = viewModel(
                 key = "capture-activity-${session.id}",
                 factory = viewModelFactory { ActivityViewModel(repository) },
             )
+            val debts: DebtsViewModel = viewModel(
+                key = "capture-debts-${session.id}",
+                factory = viewModelFactory { DebtsViewModel(repository) },
+            )
+            val debtsState by debts.uiState.collectAsStateWithLifecycle()
             ActivityRouteContent(
                 viewModel = activity,
                 amountsVisible = true,
                 onAddActivity = {},
                 onActivityClick = {},
+                debts = debtsState.debts,
+                initiallyShowDebts = scenario == CaptureScenario.DEBTS,
             )
         }
 
