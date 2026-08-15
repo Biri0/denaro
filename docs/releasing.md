@@ -4,23 +4,52 @@ Pull requests targeting `main` run the single required check **PR checks**, whic
 executes `testDebugUnitTest` and `lintDebug`. Ordinary pushes to `main` do not run
 CI or publish releases.
 
-Pushing a semantic-version tag such as `v2.0.0-pre-alpha.2` starts the release
-workflow. The tagged commit must be contained in `main`. The workflow reruns the
-checks, builds a signed APK and AAB, uploads both to a draft GitHub Release,
-publishes only the AAB to the completed Play internal-testing track, and then
-finalizes the GitHub Release. A publishing failure leaves the GitHub Release as a
-draft. Tags with a suffix after the patch number become GitHub prereleases.
+Pushing a semantic-version tag such as `v2.3.2` or `v2.4.0-beta.1` starts the
+release workflow. The tagged commit must be contained in `main`. Release tags
+must not include SemVer build metadata after a `+`; that part of the tag is
+reserved for the workflow's F-Droid companion tag.
 
-The tag without its leading `v` is the app's `versionName`. CI computes
-`versionCode` as:
+The workflow reruns the checks, builds a signed APK and AAB, uploads both to a
+draft GitHub Release, publishes only the AAB to the completed Play
+internal-testing track, and then finalizes the GitHub Release. A publishing
+failure leaves the GitHub Release as a draft. Tags with a prerelease component
+after the patch number become GitHub prereleases.
+
+The release tag without its leading `v` is the app's `versionName`. On the first
+run for a release, CI computes `versionCode` as:
 
 ```text
 100000 + UTC seconds since 2026-01-01T00:00:00Z
 ```
 
+CI freezes that value in a second tag on the same commit. For example, pushing
+`v2.3.2` creates a companion tag such as
+`fdroid-v2.3.2+19626400`. F-Droid can read the version name and code from that
+tag without reproducing CI's time calculation. A rerun reuses the existing
+companion tag and fails if the tag points to another commit or if multiple
+companion tags exist for the release. Do not create, move, or delete companion
+tags manually.
+
 For local builds the checked-in defaults remain unchanged. Either value can be
 tested locally with `-PreleaseVersionCode=...` and
 `-PreleaseVersionName=...`.
+
+## Store listing assets
+
+F-Droid and Gradle Play Publisher read the localized listing from
+`app/src/main/play`. Before tagging a release, update the English and Italian
+`default.txt` release notes there. When the interface has changed, connect
+exactly one physical Android device and regenerate the screenshots with:
+
+```bash
+tools/generate-marketing-assets.sh --date YYYY-MM-DD
+```
+
+The generator captures English and Italian in light and dark themes, updates
+the README composites, and writes the ordered phone screenshots and icon to the
+Triple-T listing. It refuses to capture from an emulator. The release workflow
+publishes the AAB only; it does not run Gradle Play Publisher's separate
+`publishListing` task.
 
 ## GitHub configuration
 
@@ -77,7 +106,3 @@ release with the same version code.
 The GitHub APK is signed with the upload key. If Play App Signing uses a
 different app-signing key, that APK cannot update an installation obtained from
 Play; it is still suitable for a fresh sideload installation.
-
-This checkout currently has no GitHub remote configured, so the environment,
-branch protection, and Google trust relationship must be activated after the
-repository is connected to GitHub.

@@ -1,0 +1,1 @@
+Migliorata l'affidabilità dei rilasci e preparata Denaro per la distribuzione tramite F-Droid.
