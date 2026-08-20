@@ -87,6 +87,11 @@ data class DebtInput(
     val note: String?,
 )
 
+data class DebtEntryDefaults(
+    val accountId: String? = null,
+    val counterpartyId: String? = null,
+)
+
 data class DebtRepaymentSummary(
     val id: String,
     val debtId: String,

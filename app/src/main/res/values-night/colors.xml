@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_background">#101412</color>
+    <color name="widget_background">#171C19</color>
+    <color name="widget_action_background">#24342C</color>
+    <color name="widget_text">#E1E3E0</color>
+    <color name="widget_income">#68D391</color>
+    <color name="widget_expense">#FFB4AB</color>
+    <color name="widget_transfer">#E7C353</color>
+    <color name="widget_borrow">#63DBAC</color>
+    <color name="widget_lend">#B8CCC0</color>
 </resources>

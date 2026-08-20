@@ -1,5 +1,14 @@
 <resources>
     <string name="app_name">Denaro</string>
+    <string name="widget_quick_entry_name">Quick entry</string>
+    <string name="widget_quick_entry_description">Create a transaction or debt from your Home screen</string>
+    <string name="widget_quick_transaction_name">Quick transaction</string>
+    <string name="widget_quick_transaction_description">Create income, expenses, or transfers from your Home screen</string>
+    <string name="widget_quick_debt_name">Quick debt</string>
+    <string name="widget_quick_debt_description">Record money borrowed or lent from your Home screen</string>
+    <string name="widget_header">Add to Denaro</string>
+    <string name="borrow">Borrow</string>
+    <string name="lend">Lend</string>
     <string name="migration_progress">Preparing your data…</string>
     <string name="migration_failed">Couldn’t migrate your existing data.</string>
     <string name="retry">Retry</string>

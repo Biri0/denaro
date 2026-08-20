@@ -1,5 +1,6 @@
 package it.rfmariano.denaro
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
@@ -20,7 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -31,6 +34,8 @@ import it.rfmariano.denaro.data.migration.MigrationResult
 import it.rfmariano.denaro.data.migration.MigrationViewModel
 import it.rfmariano.denaro.data.preferences.ThemeMode
 import it.rfmariano.denaro.data.security.AndroidDeviceAuthenticator
+import it.rfmariano.denaro.quickentry.QuickEntryIntent
+import it.rfmariano.denaro.quickentry.QuickEntryRequest
 import it.rfmariano.denaro.ui.AppLockGate
 import it.rfmariano.denaro.ui.DenaroApp
 import it.rfmariano.denaro.ui.DenaroAppPreloader
@@ -41,6 +46,8 @@ import it.rfmariano.denaro.ui.theme.DenaroTheme
 
 class MainActivity : AppCompatActivity() {
     private val migrationViewModel by viewModels<MigrationViewModel>()
+    private var quickEntryRequest by mutableStateOf<QuickEntryRequest?>(null)
+    private var quickEntrySequence = 0L
 
     override fun onStart() {
         val denaroApplication = application as DenaroApplication
@@ -64,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        acceptQuickEntryIntent(intent)
         val denaroApplication = application as DenaroApplication
         val financeSessionProvider = denaroApplication.financeSessionProvider
         val securityPreferencesRepository = denaroApplication.securityPreferencesRepository
@@ -145,6 +153,8 @@ class MainActivity : AppCompatActivity() {
                                         securityPreferencesRepository = securityPreferencesRepository,
                                         processUnlockSession = processUnlockSession,
                                         authenticator = authenticator,
+                                        quickEntryRequest = quickEntryRequest,
+                                        onQuickEntryConsumed = ::consumeQuickEntryRequest,
                                     )
                                 }
                             }
@@ -153,6 +163,27 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        acceptQuickEntryIntent(intent)
+    }
+
+    private fun acceptQuickEntryIntent(intent: Intent?) {
+        val action = QuickEntryIntent.parse(intent) ?: return
+        quickEntrySequence += 1
+        quickEntryRequest = QuickEntryRequest(
+            id = SystemClock.elapsedRealtimeNanos() + quickEntrySequence,
+            action = action,
+        )
+    }
+
+    private fun consumeQuickEntryRequest(requestId: Long) {
+        if (quickEntryRequest?.id != requestId) return
+        quickEntryRequest = null
+        setIntent(QuickEntryIntent.clear(intent))
     }
 
     private fun applyScreenSecurity(enabled: Boolean) {

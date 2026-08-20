@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.CounterpartyInput
 import it.rfmariano.denaro.data.finance.CounterpartySummary
+import it.rfmariano.denaro.data.finance.DebtEntryDefaults
 import it.rfmariano.denaro.data.finance.DebtInput
 import it.rfmariano.denaro.data.finance.DebtRepaymentInput
 import it.rfmariano.denaro.data.finance.DebtSummary
@@ -360,6 +361,7 @@ fun DebtDetailScreen(
 fun DebtEditorScreen(
     repository: FinanceRepository,
     debtId: String?,
+    initialDirection: DebtDirection = DebtDirection.BORROWED,
     onBack: () -> Unit,
     onFinished: (String) -> Unit,
     onDeleted: () -> Unit,
@@ -371,7 +373,7 @@ fun DebtEditorScreen(
     val counterparties by remember(repository) { repository.observeCounterparties(includeArchived = true) }.collectAsStateWithLifecycle(
         emptyList()
     )
-    var direction by rememberSaveable { mutableStateOf(DebtDirection.BORROWED) }
+    var direction by rememberSaveable { mutableStateOf(initialDirection) }
     var counterpartyId by rememberSaveable { mutableStateOf("") }
     var accountId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
@@ -387,16 +389,59 @@ fun DebtEditorScreen(
     var showOpenedPicker by remember { mutableStateOf(false) }
     var showDuePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var defaultsAppliedDirection by remember(debtId) {
+        mutableStateOf<DebtDirection?>(null)
+    }
+    var accountDefaultsAppliedDirection by rememberSaveable(debtId) {
+        mutableStateOf<DebtDirection?>(null)
+    }
+    var counterpartyDefaultsAppliedDirection by rememberSaveable(debtId) {
+        mutableStateOf<DebtDirection?>(null)
+    }
+    var accountCustomized by rememberSaveable(debtId) { mutableStateOf(false) }
+    var counterpartyCustomized by rememberSaveable(debtId) { mutableStateOf(false) }
+    var debtDefaults by remember { mutableStateOf<DebtEntryDefaults?>(null) }
     val scope = rememberCoroutineScope()
     val saved = stringResource(R.string.debt_saved)
     val deleted = stringResource(R.string.debt_deleted)
+    val selectorsReady = loaded
 
-    LaunchedEffect(accounts, counterparties) {
-        if (debtId == null) {
-            if (accountId.isBlank()) accountId =
-                accounts.firstOrNull { it.archivedAt == null }?.id.orEmpty()
-            if (counterpartyId.isBlank()) counterpartyId =
-                counterparties.firstOrNull { it.archivedAt == null }?.id.orEmpty()
+    LaunchedEffect(direction, debtId) {
+        if (debtId == null && defaultsAppliedDirection != direction) {
+            debtDefaults = repository.getDebtEntryDefaults(direction)
+            defaultsAppliedDirection = direction
+        }
+    }
+    LaunchedEffect(accounts, direction, defaultsAppliedDirection, debtId) {
+        val defaults = debtDefaults
+        if (
+            debtId == null &&
+            defaultsAppliedDirection == direction &&
+            accountDefaultsAppliedDirection != direction &&
+            accounts.isNotEmpty()
+        ) {
+            if (!accountCustomized) {
+                accountId = defaults?.accountId?.takeIf { preferredId ->
+                    accounts.any { it.id == preferredId && it.archivedAt == null }
+                } ?: accounts.firstOrNull { it.archivedAt == null }?.id.orEmpty()
+            }
+            accountDefaultsAppliedDirection = direction
+        }
+    }
+    LaunchedEffect(counterparties, direction, defaultsAppliedDirection, debtId) {
+        val defaults = debtDefaults
+        if (
+            debtId == null &&
+            defaultsAppliedDirection == direction &&
+            counterpartyDefaultsAppliedDirection != direction &&
+            counterparties.isNotEmpty()
+        ) {
+            if (!counterpartyCustomized) {
+                counterpartyId = defaults?.counterpartyId?.takeIf { preferredId ->
+                    counterparties.any { it.id == preferredId && it.archivedAt == null }
+                } ?: counterparties.firstOrNull { it.archivedAt == null }?.id.orEmpty()
+            }
+            counterpartyDefaultsAppliedDirection = direction
         }
     }
     LaunchedEffect(debtId) {
@@ -457,23 +502,37 @@ fun DebtEditorScreen(
                     SegmentedButton(
                         selected = direction == option,
                         enabled = !hasRepayments,
-                        onClick = { direction = option },
+                        onClick = {
+                            counterpartyMenu = false
+                            direction = option
+                            defaultsAppliedDirection = null
+                            accountDefaultsAppliedDirection = null
+                            counterpartyDefaultsAppliedDirection = null
+                            accountCustomized = false
+                            counterpartyCustomized = false
+                        },
                         shape = SegmentedButtonDefaults.itemShape(index, 2),
                     ) { Text(stringResource(if (option == DebtDirection.BORROWED) R.string.borrowed else R.string.lent)) }
                 }
             }
             ExposedDropdownMenuBox(
                 expanded = counterpartyMenu,
-                onExpandedChange = { counterpartyMenu = !counterpartyMenu }) {
+                onExpandedChange = {
+                    if (selectorsReady) counterpartyMenu = !counterpartyMenu
+                }) {
                 OutlinedTextField(
                     value = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
                     onValueChange = {},
                     readOnly = true,
+                    enabled = selectorsReady,
                     label = { Text(stringResource(R.string.counterparty)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(counterpartyMenu) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                        .menuAnchor(
+                            ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                            selectorsReady,
+                        ),
                 )
                 ExposedDropdownMenu(
                     expanded = counterpartyMenu,
@@ -489,7 +548,11 @@ fun DebtEditorScreen(
                                         ).joinToString(" · ")
                                     )
                                 },
-                                onClick = { counterpartyId = party.id; counterpartyMenu = false },
+                                onClick = {
+                                    counterpartyId = party.id
+                                    counterpartyCustomized = true
+                                    counterpartyMenu = false
+                                },
                             )
                         }
                     DropdownMenuItem(
@@ -501,7 +564,11 @@ fun DebtEditorScreen(
                 label = stringResource(if (direction == DebtDirection.BORROWED) R.string.received_into else R.string.paid_from),
                 accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
                 selectedId = accountId,
-                onSelected = { accountId = it },
+                onSelected = {
+                    accountId = it
+                    accountCustomized = true
+                },
+                enabled = selectorsReady,
             )
             OutlinedTextField(
                 value = amount,
@@ -539,7 +606,9 @@ fun DebtEditorScreen(
         onDismiss = { showNewCounterparty = false }) { input ->
         scope.launch {
             runCatching { repository.createCounterparty(input) }.onSuccess {
-                counterpartyId = it; showNewCounterparty = false
+                counterpartyId = it
+                counterpartyCustomized = true
+                showNewCounterparty = false
             }.onFailure { error = it.message }
         }
     }

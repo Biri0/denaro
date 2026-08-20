@@ -260,6 +260,14 @@ class FinanceRepository(
 
     suspend fun getDebt(id: String): DebtEntity? = database.debtDao().getById(id)
 
+    suspend fun getDebtEntryDefaults(direction: DebtDirection): DebtEntryDefaults =
+        database.debtDao().getPreferredEntryDefaults(direction)?.let {
+            DebtEntryDefaults(
+                accountId = it.accountId,
+                counterpartyId = it.counterpartyId,
+            )
+        } ?: DebtEntryDefaults()
+
     suspend fun createDebt(input: DebtInput): String {
         val account = validateDebt(input)
         val now = clock()
@@ -530,6 +538,9 @@ class FinanceRepository(
 
     suspend fun getTransaction(id: String): TransactionEntity? =
         database.transactionDao().getById(id)
+
+    suspend fun getPreferredTransactionAccountId(type: TransactionType): String? =
+        database.transactionDao().getPreferredAccountId(type)
 
     suspend fun createTransaction(input: TransactionInput): String {
         validateTransaction(input)

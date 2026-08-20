@@ -566,6 +566,156 @@ class FinanceRepositoryTest {
         }
     }
 
+    @Test
+    fun transactionSuggestionsRankAccountsPerTypeByFrequencyThenRecency() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val alphaId = repository.createAccount(accountInput("Alpha"))
+            val betaId = repository.createAccount(accountInput("Beta"))
+            repeat(2) { index ->
+                repository.createTransaction(
+                    transactionInput(
+                        accountId = alphaId,
+                        categoryId = null,
+                        description = "Alpha expense $index",
+                    ).copy(occurredAt = index.toLong() + 1),
+                )
+            }
+            repeat(2) { index ->
+                repository.createTransaction(
+                    transactionInput(
+                        accountId = betaId,
+                        categoryId = null,
+                        description = "Beta expense $index",
+                    ).copy(occurredAt = index.toLong() + 10),
+                )
+            }
+            repository.createTransaction(
+                transactionInput(betaId, null, "Income").copy(
+                    type = TransactionType.INCOME,
+                    occurredAt = 20,
+                ),
+            )
+
+            assertEquals(
+                betaId,
+                repository.getPreferredTransactionAccountId(TransactionType.EXPENSE),
+            )
+            assertEquals(
+                betaId,
+                repository.getPreferredTransactionAccountId(TransactionType.INCOME),
+            )
+
+            repository.archiveAccount(betaId)
+
+            assertEquals(
+                alphaId,
+                repository.getPreferredTransactionAccountId(TransactionType.EXPENSE),
+            )
+            assertNull(repository.getPreferredTransactionAccountId(TransactionType.INCOME))
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun recurrenceGeneratedTransactionsDoNotInfluenceAccountSuggestions() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        var now = 10L
+
+        try {
+            val repository = FinanceRepository(database, clock = { now })
+            val manualId = repository.createAccount(accountInput("Manual"))
+            val recurringId = repository.createAccount(accountInput("Recurring"))
+            repository.createTransaction(transactionInput(manualId, null, "Manual"))
+            repository.createRecurringRule(
+                recurringRuleInput(recurringId, nextOccurrenceAt = 1),
+            )
+            now = 100
+            repository.processDueRecurrences()
+
+            assertEquals(
+                manualId,
+                repository.getPreferredTransactionAccountId(TransactionType.EXPENSE),
+            )
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun debtSuggestionsRankActiveAccountAndPersonPairsPerDirection() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val alphaId = repository.createAccount(accountInput("Alpha"))
+            val betaId = repository.createAccount(accountInput("Beta"))
+            val alexId = repository.createCounterparty(CounterpartyInput("Alex", null))
+            val samId = repository.createCounterparty(CounterpartyInput("Sam", null))
+            repeat(2) { index ->
+                repository.createDebt(
+                    DebtInput(
+                        alexId,
+                        alphaId,
+                        DebtDirection.BORROWED,
+                        100,
+                        index.toLong() + 1,
+                        null,
+                        null,
+                    ),
+                )
+            }
+            repeat(2) { index ->
+                repository.createDebt(
+                    DebtInput(
+                        samId,
+                        betaId,
+                        DebtDirection.BORROWED,
+                        100,
+                        index.toLong() + 10,
+                        null,
+                        null,
+                    ),
+                )
+            }
+            repository.createDebt(
+                DebtInput(
+                    alexId,
+                    alphaId,
+                    DebtDirection.LENT,
+                    100,
+                    20,
+                    null,
+                    null,
+                ),
+            )
+
+            assertEquals(
+                DebtEntryDefaults(betaId, samId),
+                repository.getDebtEntryDefaults(DebtDirection.BORROWED),
+            )
+            assertEquals(
+                DebtEntryDefaults(alphaId, alexId),
+                repository.getDebtEntryDefaults(DebtDirection.LENT),
+            )
+
+            repository.archiveAccount(betaId)
+
+            assertEquals(
+                DebtEntryDefaults(alphaId, alexId),
+                repository.getDebtEntryDefaults(DebtDirection.BORROWED),
+            )
+        } finally {
+            database.close()
+        }
+    }
+
     private fun accountInput(
         name: String,
         currency: String = "EUR",

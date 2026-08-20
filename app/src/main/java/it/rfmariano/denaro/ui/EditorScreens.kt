@@ -314,6 +314,12 @@ fun ActivityEditorScreen(
     var transferSuggestions by remember { mutableStateOf(TransferAccountSuggestions()) }
     var transferSuggestionsLoaded by remember { mutableStateOf(false) }
     var transferDefaultsApplied by rememberSaveable(route.id) { mutableStateOf(false) }
+    var initializedTransactionKind by rememberSaveable(route.id, route.recurringRuleId) {
+        mutableStateOf<ActivityKind?>(null)
+    }
+    var transactionAccountCustomized by rememberSaveable(route.id, route.recurringRuleId) {
+        mutableStateOf(false)
+    }
     var transferSourceCustomized by rememberSaveable(route.id) { mutableStateOf(false) }
     var transferDestinationCustomized by rememberSaveable(route.id) {
         mutableStateOf(false)
@@ -335,15 +341,28 @@ fun ActivityEditorScreen(
         }
     }
 
-    LaunchedEffect(accounts, route.id, kind) {
+    LaunchedEffect(accounts, route.id, route.recurringRuleId, kind) {
         if (
             route.id == null &&
             route.recurringRuleId == null &&
             kind != ActivityKind.TRANSFER &&
-            accountId.isEmpty() &&
+            initializedTransactionKind != kind &&
             accounts.isNotEmpty()
         ) {
-            accountId = accounts.first().id
+            val routeAccountId = route.accountId?.takeIf { requestedId ->
+                accounts.any { it.id == requestedId }
+            }
+            if (routeAccountId != null) {
+                if (!transactionAccountCustomized) accountId = routeAccountId
+            } else {
+                val preferredAccountId = repository.getPreferredTransactionAccountId(
+                    TransactionType.valueOf(kind.name),
+                )?.takeIf { preferredId -> accounts.any { it.id == preferredId } }
+                if (!transactionAccountCustomized) {
+                    accountId = preferredAccountId ?: accounts.first().id
+                }
+            }
+            initializedTransactionKind = kind
         }
     }
     LaunchedEffect(accounts, route.id) {
@@ -560,12 +579,15 @@ fun ActivityEditorScreen(
                         selected = kind == option,
                         enabled = route.id == null && route.recurringRuleId == null,
                         onClick = {
+                            showFrequencyMenu = false
                             if (option == ActivityKind.TRANSFER && kind != option) {
                                 transferDefaultsApplied = false
                                 transferSourceCustomized = false
                                 transferDestinationCustomized = false
                             }
                             kind = option
+                            initializedTransactionKind = null
+                            transactionAccountCustomized = false
                             if (option == ActivityKind.TRANSFER ||
                                 categories.find { it.id == categoryId }?.type?.name != option.name
                             ) {
@@ -624,6 +646,7 @@ fun ActivityEditorScreen(
                 },
                 accounts = accounts,
                 selectedId = accountId,
+                enabled = loaded,
                 onSelected = {
                     accountId = it
                     if (kind == ActivityKind.TRANSFER) {
@@ -634,8 +657,9 @@ fun ActivityEditorScreen(
                             accounts = accounts,
                             suggestions = transferSuggestions,
                         )
-                    } else if (destinationId == it) {
-                        destinationId = ""
+                    } else {
+                        transactionAccountCustomized = true
+                        if (destinationId == it) destinationId = ""
                     }
                 },
             )
@@ -649,6 +673,7 @@ fun ActivityEditorScreen(
                         }?.currency
                     },
                     selectedId = destinationId,
+                    enabled = loaded,
                     onSelected = {
                         transferDestinationCustomized = true
                         destinationId = it
@@ -919,17 +944,22 @@ fun AccountSelector(
     accounts: List<AccountSummary>,
     selectedId: String,
     onSelected: (String) -> Unit,
+    enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(enabled) {
+        if (!enabled) expanded = false
+    }
     val selected = accounts.find { it.id == selectedId }
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
+        onExpandedChange = { if (enabled) expanded = !expanded },
     ) {
         OutlinedTextField(
             value = selected?.name.orEmpty(),
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             label = { Text(label) },
             placeholder = { Text(stringResource(R.string.select_account)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -937,7 +967,7 @@ fun AccountSelector(
                 .fillMaxWidth()
                 .menuAnchor(
                     ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = true,
+                    enabled = enabled,
                 ),
         )
         ExposedDropdownMenu(

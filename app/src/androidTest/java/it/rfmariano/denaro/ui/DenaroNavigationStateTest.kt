@@ -2,6 +2,9 @@ package it.rfmariano.denaro.ui
 
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.isDisplayed
@@ -25,6 +28,8 @@ import it.rfmariano.denaro.data.security.DeviceAuthenticationResult
 import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
+import it.rfmariano.denaro.quickentry.QuickEntryAction
+import it.rfmariano.denaro.quickentry.QuickEntryRequest
 import it.rfmariano.denaro.ui.theme.DenaroTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -126,6 +131,64 @@ class DenaroNavigationStateTest {
         composeRule.onNodeWithText(context.getString(R.string.description))
             .assertTextContains("Refund")
         assertEquals(0, runBlocking { database.categoryDao().count() })
+    }
+
+    @Test
+    fun secondQuickEntryStacksOverAndPreservesExistingDraft() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val session = FinanceSession(
+            id = 1,
+            repository = repository,
+            isDemo = false,
+            initialDashboardMonth = YearMonth.now().toString(),
+        )
+        val financeSessionProvider = TestFinanceSessionProvider(session)
+        val preferencesRepository = AppPreferencesRepository(context)
+        val securityPreferencesRepository = SecurityPreferencesRepository(context)
+        val processUnlockSession = ProcessUnlockSession(appLockEnabledAtProcessStart = false)
+        var request by mutableStateOf<QuickEntryRequest?>(
+            QuickEntryRequest(id = 1, action = QuickEntryAction.INCOME),
+        )
+
+        composeRule.setContent {
+            DenaroTheme {
+                DenaroApp(
+                    state = rememberDenaroAppState(session, defaultCurrency = "EUR"),
+                    financeSessionProvider = financeSessionProvider,
+                    preferencesRepository = preferencesRepository,
+                    securityPreferencesRepository = securityPreferencesRepository,
+                    processUnlockSession = processUnlockSession,
+                    authenticator = TestDeviceAuthenticator,
+                    quickEntryRequest = request,
+                    onQuickEntryConsumed = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            runCatching {
+                composeRule.onNodeWithText(context.getString(R.string.income))
+                    .fetchSemanticsNode()
+            }.isSuccess
+        }
+        composeRule.onNodeWithText(context.getString(R.string.income)).assertIsSelected()
+        composeRule.onNodeWithText(context.getString(R.string.amount))
+            .performTextInput("12.34")
+
+        composeRule.runOnUiThread {
+            request = QuickEntryRequest(id = 2, action = QuickEntryAction.EXPENSE)
+        }
+        composeRule.waitUntil {
+            runCatching {
+                composeRule.onNodeWithText(context.getString(R.string.expense)).isDisplayed()
+            }.getOrDefault(false)
+        }
+        composeRule.onNodeWithText(context.getString(R.string.expense)).assertIsSelected()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
+
+        composeRule.onNodeWithText(context.getString(R.string.income)).assertIsSelected()
+        composeRule.onNodeWithText(context.getString(R.string.amount))
+            .assertTextContains("12.34")
     }
 
     private fun setDenaroContent() {

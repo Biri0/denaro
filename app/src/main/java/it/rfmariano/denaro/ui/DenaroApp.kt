@@ -39,11 +39,14 @@ import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.FinanceSession
 import it.rfmariano.denaro.data.finance.FinanceSessionProvider
+import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
+import it.rfmariano.denaro.quickentry.QuickEntryAction
+import it.rfmariano.denaro.quickentry.QuickEntryRequest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.composables.icons.lucide.R as LucideR
@@ -90,17 +93,39 @@ data class ActivityEditorRoute(
     val recurringRuleId: String? = null,
     val scheduled: Boolean = false,
     val accountId: String? = null,
+    val entryId: Long? = null,
 ) : NavKey
 
 @Serializable
 private data class DebtDetailRoute(val debtId: String) : NavKey
 
 @Serializable
-private data class DebtEditorRoute(val debtId: String? = null) : NavKey
+private data class DebtEditorRoute(
+    val debtId: String? = null,
+    val initialDirection: DebtDirection = DebtDirection.BORROWED,
+    val entryId: Long? = null,
+) : NavKey
 
 @Serializable
 private data class DebtRepaymentEditorRoute(val debtId: String, val repaymentId: String? = null) :
     NavKey
+
+private fun QuickEntryRequest.toEditorRoute(): NavKey = when (action) {
+    QuickEntryAction.INCOME ->
+        ActivityEditorRoute(kind = ActivityKind.INCOME, entryId = id)
+
+    QuickEntryAction.EXPENSE ->
+        ActivityEditorRoute(kind = ActivityKind.EXPENSE, entryId = id)
+
+    QuickEntryAction.TRANSFER ->
+        ActivityEditorRoute(kind = ActivityKind.TRANSFER, entryId = id)
+
+    QuickEntryAction.BORROW ->
+        DebtEditorRoute(initialDirection = DebtDirection.BORROWED, entryId = id)
+
+    QuickEntryAction.LEND ->
+        DebtEditorRoute(initialDirection = DebtDirection.LENT, entryId = id)
+}
 
 private enum class TopLevelDestination(
     val label: Int,
@@ -192,20 +217,51 @@ fun DenaroApp(
     securityPreferencesRepository: SecurityPreferencesRepository,
     processUnlockSession: ProcessUnlockSession,
     authenticator: DeviceAuthenticator,
+    quickEntryRequest: QuickEntryRequest? = null,
+    onQuickEntryConsumed: (Long) -> Unit = {},
 ) {
     val session = state.session
     val repository = session.repository
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
+    val initialQuickEntry = remember { quickEntryRequest }
+    val initialQuickEntryRoute = remember(initialQuickEntry) {
+        initialQuickEntry?.toEditorRoute()
+    }
     val homeBackStack = rememberNavBackStack(HomeRoute)
     val accountsBackStack = rememberNavBackStack(AccountsRoute)
-    val activityBackStack = rememberNavBackStack(ActivityRoute)
-    var currentDestination by rememberSaveable {
-        mutableStateOf(TopLevelDestination.HOME)
+    val activityBackStack = if (initialQuickEntryRoute == null) {
+        rememberNavBackStack(ActivityRoute)
+    } else {
+        rememberNavBackStack(ActivityRoute, initialQuickEntryRoute)
+    }
+    var currentDestination by rememberSaveable(initialQuickEntry?.id) {
+        mutableStateOf(
+            if (initialQuickEntry != null) {
+                TopLevelDestination.ACTIVITY
+            } else {
+                TopLevelDestination.HOME
+            },
+        )
+    }
+    var handledQuickEntryId by remember {
+        mutableStateOf(initialQuickEntry?.id)
     }
     var pendingActivityCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val recurrenceFailure = stringResource(R.string.recurrence_update_failed)
+
+    LaunchedEffect(quickEntryRequest?.id) {
+        val request = quickEntryRequest ?: return@LaunchedEffect
+        if (handledQuickEntryId == request.id) {
+            onQuickEntryConsumed(request.id)
+            return@LaunchedEffect
+        }
+        currentDestination = TopLevelDestination.ACTIVITY
+        activityBackStack.add(request.toEditorRoute())
+        handledQuickEntryId = request.id
+        onQuickEntryConsumed(request.id)
+    }
 
     val homeViewModel = state.homeViewModel
     val accountsViewModel = state.accountsViewModel
@@ -391,7 +447,9 @@ fun DenaroApp(
             }
             entry<DebtEditorRoute> { route ->
                 DebtEditorScreen(
-                    repository, route.debtId,
+                    repository,
+                    route.debtId,
+                    initialDirection = route.initialDirection,
                     onBack = { backStack.removeLastOrNull() },
                     onFinished = { backStack.removeLastOrNull() },
                     onDeleted = {
@@ -498,6 +556,10 @@ fun DenaroApp(
     val fullScreenSettings = when (backStack.lastOrNull()) {
         is SettingsRoute, is CategoriesRoute, is CategoryEditorRoute, is CounterpartiesRoute -> true
         else -> false
+    }
+    if (quickEntryRequest != null && handledQuickEntryId != quickEntryRequest.id) {
+        Box(Modifier.fillMaxSize())
+        return
     }
     if (fullScreenSettings) {
         appContent()

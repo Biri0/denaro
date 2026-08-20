@@ -18,6 +18,7 @@
             android:name=".MainActivity"
             android:configChanges="locale|layoutDirection|screenLayout"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Denaro.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -26,6 +27,42 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".widget.QuickEntryWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quick_entry_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_entry_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuickTransactionWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quick_transaction_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_transaction_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuickDebtWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_quick_debt_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_debt_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -147,6 +147,24 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getById(id: String): TransactionEntity?
 
+    @Query(
+        """
+        SELECT transactions.account_id
+        FROM transactions
+        JOIN accounts ON accounts.id = transactions.account_id
+        WHERE transactions.type = :type
+          AND transactions.recurring_rule_id IS NULL
+          AND accounts.archived_at IS NULL
+        GROUP BY transactions.account_id
+        ORDER BY COUNT(*) DESC,
+                 MAX(transactions.occurred_at) DESC,
+                 accounts.name COLLATE NOCASE,
+                 transactions.account_id
+        LIMIT 1
+        """,
+    )
+    suspend fun getPreferredAccountId(type: TransactionType): String?
+
     @Update
     suspend fun update(transaction: TransactionEntity)
 
@@ -289,6 +307,11 @@ data class DebtRecord(
     val updatedAt: Long,
 )
 
+data class DebtEntryDefaultsRecord(
+    val accountId: String,
+    val counterpartyId: String,
+)
+
 @Dao
 interface DebtDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -296,6 +319,28 @@ interface DebtDao {
 
     @Query("SELECT * FROM debts WHERE id = :id")
     suspend fun getById(id: String): DebtEntity?
+
+    @Query(
+        """
+        SELECT debts.account_id AS accountId,
+               debts.counterparty_id AS counterpartyId
+        FROM debts
+        JOIN accounts ON accounts.id = debts.account_id
+        JOIN counterparties ON counterparties.id = debts.counterparty_id
+        WHERE debts.direction = :direction
+          AND accounts.archived_at IS NULL
+          AND counterparties.archived_at IS NULL
+        GROUP BY debts.account_id, debts.counterparty_id
+        ORDER BY COUNT(*) DESC,
+                 MAX(debts.opened_at) DESC,
+                 accounts.name COLLATE NOCASE,
+                 counterparties.name COLLATE NOCASE,
+                 debts.account_id,
+                 debts.counterparty_id
+        LIMIT 1
+        """,
+    )
+    suspend fun getPreferredEntryDefaults(direction: DebtDirection): DebtEntryDefaultsRecord?
 
     @Update
     suspend fun update(debt: DebtEntity)

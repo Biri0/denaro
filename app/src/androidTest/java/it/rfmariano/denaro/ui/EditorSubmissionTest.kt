@@ -3,6 +3,7 @@ package it.rfmariano.denaro.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -60,6 +61,44 @@ class EditorSubmissionTest {
         }
         composeRule.waitForIdle()
         database.close()
+    }
+
+    @Test
+    fun newTransactionAccountSelectorRemainsEnabledWithoutAccounts() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.setContent {
+            DenaroTheme {
+                ActivityEditorScreen(
+                    repository = repository,
+                    route = ActivityEditorRoute(kind = ActivityKind.EXPENSE),
+                    onFinished = {},
+                    onBack = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.account)).assertIsEnabled()
+    }
+
+    @Test
+    fun newDebtSelectorsRemainEnabledWithoutAccounts() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.setContent {
+            DenaroTheme {
+                DebtEditorScreen(
+                    repository = repository,
+                    debtId = null,
+                    onBack = {},
+                    onFinished = {},
+                    onDeleted = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.counterparty)).assertIsEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.received_into)).assertIsEnabled()
     }
 
     @Test
@@ -196,6 +235,85 @@ class EditorSubmissionTest {
         val usage = database.transferDao().getPairUsage().single()
         assertEquals(sourceId, usage.fromAccountId)
         assertEquals(destinationId, usage.toAccountId)
+    }
+
+    @Test
+    fun newExpenseUsesSmartAccountSuggestion() = runBlocking {
+        repository.createAccount(AccountInput("Alpha", null, 0, "EUR"))
+        val betaId = repository.createAccount(AccountInput("Beta", null, 0, "EUR"))
+        repeat(2) { index ->
+            repository.createTransaction(
+                TransactionInput(
+                    accountId = betaId,
+                    amountMinor = 100,
+                    type = TransactionType.EXPENSE,
+                    occurredAt = index.toLong() + 1,
+                    description = null,
+                    categoryId = null,
+                ),
+            )
+        }
+
+        composeRule.setContent {
+            DenaroTheme {
+                ActivityEditorScreen(
+                    repository = repository,
+                    route = ActivityEditorRoute(kind = ActivityKind.EXPENSE),
+                    onFinished = {},
+                    onBack = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Beta").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Beta").assertExists()
+        Unit
+    }
+
+    @Test
+    fun newLentDebtUsesDirectionSpecificAccountAndPersonSuggestion() = runBlocking {
+        repository.createAccount(AccountInput("Alpha", null, 0, "EUR"))
+        val betaId = repository.createAccount(AccountInput("Beta", null, 0, "EUR"))
+        repository.createCounterparty(CounterpartyInput("Alex", null))
+        val samId = repository.createCounterparty(CounterpartyInput("Sam", null))
+        repository.createDebt(
+            DebtInput(
+                counterpartyId = samId,
+                accountId = betaId,
+                direction = DebtDirection.LENT,
+                principalMinor = 100,
+                openedAt = 1,
+                dueDate = null,
+                note = null,
+            ),
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        composeRule.setContent {
+            DenaroTheme {
+                DebtEditorScreen(
+                    repository = repository,
+                    debtId = null,
+                    initialDirection = DebtDirection.LENT,
+                    onBack = {},
+                    onFinished = {},
+                    onDeleted = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Beta").fetchSemanticsNodes().isNotEmpty() &&
+                    composeRule.onAllNodesWithText("Sam").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.lent)).assertIsSelected()
+        composeRule.onNodeWithText("Beta").assertExists()
+        composeRule.onNodeWithText("Sam").assertExists()
+        Unit
     }
 
     @Test
