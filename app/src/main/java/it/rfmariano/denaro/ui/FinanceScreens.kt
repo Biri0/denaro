@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -25,6 +27,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -36,11 +40,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
@@ -50,11 +58,13 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.BalanceAdjustmentSummary
 import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.UNCATEGORIZED_CATEGORY_FILTER
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.TransactionType
+import kotlinx.coroutines.launch
 import com.composables.icons.lucide.R as LucideR
 
 @Composable
@@ -306,9 +316,15 @@ fun AccountDetailRouteContent(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onEditSchedule: (String) -> Unit,
+    onMessage: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val account = state.account
+    var showSetBalance by rememberSaveable { mutableStateOf(false) }
+    var isSavingBalance by remember { mutableStateOf(false) }
+    var balanceError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val adjustedMessage = stringResource(R.string.balance_adjusted)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -369,6 +385,20 @@ fun AccountDetailRouteContent(
                                     },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (account.archivedAt == null) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { showSetBalance = true },
+                                modifier = Modifier.testTag("set_balance_action"),
+                            ) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_scale),
+                                    contentDescription = null,
+                                )
+                                Spacer(Modifier.padding(horizontal = 4.dp))
+                                Text(stringResource(R.string.set_balance))
+                            }
+                        }
                     }
                 }
                 if (state.recurringRules.isNotEmpty()) {
@@ -431,6 +461,256 @@ fun AccountDetailRouteContent(
                     }
                 }
             }
+        }
+    }
+
+    if (showSetBalance && account != null) {
+        SetBalanceDialog(
+            account = account,
+            amountsVisible = amountsVisible,
+            isSaving = isSavingBalance,
+            submissionError = balanceError,
+            onDismiss = {
+                if (!isSavingBalance) {
+                    showSetBalance = false
+                    balanceError = null
+                }
+            },
+            onConfirm = { targetBalance ->
+                if (isSavingBalance) return@SetBalanceDialog
+                isSavingBalance = true
+                balanceError = null
+                scope.launch {
+                    viewModel.setBalance(targetBalance)
+                        .onSuccess {
+                            showSetBalance = false
+                            onMessage(adjustedMessage)
+                        }
+                        .onFailure { balanceError = it.message }
+                    isSavingBalance = false
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SetBalanceDialog(
+    account: AccountSummary,
+    amountsVisible: Boolean,
+    isSaving: Boolean,
+    submissionError: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit,
+) {
+    var value by rememberSaveable(account.id) { mutableStateOf("") }
+    val parsed = remember(value) {
+        runCatching { Money.parseMinorUnits(value, allowNegative = true) }.getOrNull()
+    }
+    val difference = remember(parsed, account.balanceMinor) {
+        parsed?.let { runCatching { Math.subtractExact(it, account.balanceMinor) }.getOrNull() }
+    }
+    val unchanged = difference == 0L
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.set_balance)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.set_balance_description))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(stringResource(R.string.new_balance)) },
+                    suffix = { Text(account.currency) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned),
+                    singleLine = true,
+                    isError = submissionError != null || (value.isNotBlank() && parsed == null),
+                    supportingText = {
+                        when {
+                            submissionError != null -> Text(submissionError)
+                            unchanged -> Text(stringResource(R.string.balance_already_matches))
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("set_balance_input"),
+                )
+                Text(
+                    "${stringResource(R.string.current_balance)}: " + if (amountsVisible) {
+                        Money.format(account.balanceMinor, account.currency)
+                    } else stringResource(R.string.amount_hidden),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (difference != null) {
+                    Text(
+                        "${stringResource(R.string.difference)}: " + if (amountsVisible) {
+                            Money.format(difference, account.currency)
+                        } else stringResource(R.string.amount_hidden),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = parsed != null && !unchanged && difference != null && !isSaving,
+                onClick = { parsed?.let(onConfirm) },
+                modifier = Modifier.testTag("set_balance_confirm"),
+            ) { Text(stringResource(R.string.set_balance)) }
+        },
+        dismissButton = {
+            TextButton(enabled = !isSaving, onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+fun BalanceAdjustmentDetailRouteContent(
+    viewModel: BalanceAdjustmentDetailViewModel,
+    amountsVisible: Boolean,
+    onBack: () -> Unit,
+    onDeleted: () -> Unit,
+    onMessage: (String) -> Unit,
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var isDeleting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.balance_adjustment_deleted)
+
+    BalanceAdjustmentDetailScreen(
+        state = state,
+        amountsVisible = amountsVisible,
+        isDeleting = isDeleting,
+        onBack = onBack,
+        onDelete = { adjustmentId ->
+            if (isDeleting) return@BalanceAdjustmentDetailScreen
+            isDeleting = true
+            scope.launch {
+                viewModel.delete(adjustmentId)
+                    .onSuccess {
+                        onDeleted()
+                        onMessage(deletedMessage)
+                    }
+                    .onFailure {
+                        isDeleting = false
+                        onMessage(it.message.orEmpty())
+                    }
+            }
+        },
+    )
+}
+
+@Composable
+fun BalanceAdjustmentDetailScreen(
+    state: BalanceAdjustmentDetailUiState,
+    amountsVisible: Boolean,
+    isDeleting: Boolean,
+    onBack: () -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    val adjustment = state.adjustment
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.balance_adjustment)) },
+                navigationIcon = { BackButton(onBack) },
+            )
+        },
+    ) { padding ->
+        if (state.isLoading) {
+            ActivityLoadingSkeleton(Modifier.padding(padding))
+        } else if (adjustment != null) {
+            BalanceAdjustmentDetails(
+                adjustment = adjustment,
+                amountsVisible = amountsVisible,
+                onDelete = { confirmDelete = true },
+                modifier = Modifier.padding(padding),
+            )
+        }
+    }
+    if (confirmDelete && adjustment != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeleting) confirmDelete = false
+            },
+            title = { Text(stringResource(R.string.delete_balance_adjustment)) },
+            text = { Text(stringResource(R.string.delete_balance_adjustment_message)) },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = { if (!isDeleting) onDelete(adjustment.id) },
+                    modifier = Modifier.testTag("delete_adjustment_confirm"),
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = { confirmDelete = false },
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun BalanceAdjustmentDetails(
+    adjustment: BalanceAdjustmentSummary,
+    amountsVisible: Boolean,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    fun amount(value: Long): String = if (amountsVisible) {
+        Money.format(value, adjustment.currency)
+    } else {
+        ""
+    }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(adjustment.accountName, style = MaterialTheme.typography.titleLarge)
+        Text(
+            adjustment.occurredAt.formattedDate(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "${stringResource(R.string.previous_balance)}: ${
+                amount(adjustment.balanceBeforeMinor).ifEmpty {
+                    stringResource(
+                        R.string.amount_hidden
+                    )
+                }
+            }"
+        )
+        Text(
+            "${stringResource(R.string.new_balance)}: ${
+                amount(adjustment.balanceAfterMinor).ifEmpty {
+                    stringResource(
+                        R.string.amount_hidden
+                    )
+                }
+            }"
+        )
+        Text(
+            "${stringResource(R.string.difference)}: ${
+                amount(adjustment.deltaMinor).ifEmpty {
+                    stringResource(
+                        R.string.amount_hidden
+                    )
+                }
+            }"
+        )
+        OutlinedButton(onClick = onDelete) {
+            Text(stringResource(R.string.delete))
         }
     }
 }
@@ -572,6 +852,7 @@ fun ActivityRouteContent(
                                             ActivityKind.INCOME -> R.string.income
                                             ActivityKind.EXPENSE -> R.string.expense
                                             ActivityKind.TRANSFER -> R.string.transfer
+                                            ActivityKind.ADJUSTMENT -> R.string.balance_adjustments
                                             ActivityKind.DEBT -> R.string.debt
                                         },
                                     ),

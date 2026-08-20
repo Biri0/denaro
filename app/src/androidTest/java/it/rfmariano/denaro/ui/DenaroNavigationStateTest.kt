@@ -3,6 +3,7 @@ package it.rfmariano.denaro.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsSelected
@@ -189,6 +190,95 @@ class DenaroNavigationStateTest {
         composeRule.onNodeWithText(context.getString(R.string.income)).assertIsSelected()
         composeRule.onNodeWithText(context.getString(R.string.amount))
             .assertTextContains("12.34")
+    }
+
+    @Test
+    fun replacingFinanceSessionFromSettingsUsesFreshNavigationRoots() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val demoDatabase = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val demoRepository = FinanceRepository(demoDatabase, clock = { 20 })
+            demoRepository.createAccount(AccountInput("Demo cash", null, 0, "EUR"))
+            val productionSession = FinanceSession(
+                id = 1,
+                repository = repository,
+                isDemo = false,
+                initialDashboardMonth = YearMonth.now().toString(),
+            )
+            val demoSession = FinanceSession(
+                id = 2,
+                repository = demoRepository,
+                isDemo = true,
+                initialDashboardMonth = YearMonth.now().toString(),
+            )
+            val financeSessionProvider = TestFinanceSessionProvider(productionSession)
+            val preferencesRepository = AppPreferencesRepository(context)
+            val securityPreferencesRepository = SecurityPreferencesRepository(context)
+            val processUnlockSession = ProcessUnlockSession(appLockEnabledAtProcessStart = false)
+            var activeSession by mutableStateOf(productionSession)
+
+            composeRule.setContent {
+                DenaroTheme {
+                    val appState = rememberDenaroAppState(activeSession, defaultCurrency = "EUR")
+                    key(activeSession.id) {
+                        DenaroApp(
+                            state = appState,
+                            financeSessionProvider = financeSessionProvider,
+                            preferencesRepository = preferencesRepository,
+                            securityPreferencesRepository = securityPreferencesRepository,
+                            processUnlockSession = processUnlockSession,
+                            authenticator = TestDeviceAuthenticator,
+                        )
+                    }
+                }
+            }
+
+            composeRule.waitUntil(5_000) {
+                runCatching {
+                    composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                        .isDisplayed()
+                }.getOrDefault(false)
+            }
+            composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                .performClick()
+            composeRule.waitUntil {
+                runCatching {
+                    composeRule.onNodeWithText(context.getString(R.string.settings)).isDisplayed()
+                }.getOrDefault(false)
+            }
+
+            composeRule.runOnUiThread { activeSession = demoSession }
+            composeRule.waitUntil(5_000) {
+                runCatching {
+                    composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                        .isDisplayed()
+                }
+                    .getOrDefault(false)
+            }
+            composeRule.onNodeWithText(context.getString(R.string.accounts)).performClick()
+            composeRule.waitUntil(5_000) {
+                runCatching { composeRule.onNodeWithText("Demo cash").isDisplayed() }
+                    .getOrDefault(false)
+            }
+
+            composeRule.runOnUiThread { activeSession = productionSession }
+            composeRule.waitUntil(5_000) {
+                runCatching {
+                    composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                        .isDisplayed()
+                }
+                    .getOrDefault(false)
+            }
+            composeRule.onNodeWithText(context.getString(R.string.accounts)).performClick()
+            composeRule.waitUntil(5_000) {
+                runCatching { composeRule.onNodeWithText("Cash").isDisplayed() }
+                    .getOrDefault(false)
+            }
+        } finally {
+            composeRule.activityRule.scenario.onActivity { activity -> activity.setContent {} }
+            composeRule.waitForIdle()
+            demoDatabase.close()
+        }
     }
 
     private fun setDenaroContent() {

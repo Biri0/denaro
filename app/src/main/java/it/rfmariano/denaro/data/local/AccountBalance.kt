@@ -8,6 +8,9 @@ SELECT account_id,
        CASE type WHEN 'INCOME' THEN amount_minor ELSE -amount_minor END
 FROM transactions
 UNION ALL
+SELECT account_id, delta_minor
+FROM balance_adjustments
+UNION ALL
 SELECT from_account_id, -amount_minor
 FROM transfers
 UNION ALL
@@ -44,6 +47,7 @@ data class AccountBalance(
 internal const val ACCOUNT_WITH_BALANCE_QUERY = """SELECT accounts.*,
        accounts.opening_balance_minor
        + COALESCE((SELECT SUM(CASE type WHEN 'INCOME' THEN amount_minor ELSE -amount_minor END) FROM transactions WHERE account_id = accounts.id), 0)
+       + COALESCE((SELECT SUM(delta_minor) FROM balance_adjustments WHERE account_id = accounts.id), 0)
        + COALESCE((SELECT SUM(-amount_minor) FROM transfers WHERE from_account_id = accounts.id), 0)
        + COALESCE((SELECT SUM(amount_minor) FROM transfers WHERE to_account_id = accounts.id), 0)
        + COALESCE((SELECT SUM(CASE direction WHEN 'BORROWED' THEN principal_minor ELSE -principal_minor END) FROM debts WHERE account_id = accounts.id), 0)

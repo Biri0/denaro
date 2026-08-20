@@ -139,6 +139,7 @@ fun ActivityRow(
                     ActivityKind.INCOME -> stringResource(R.string.income)
                     ActivityKind.EXPENSE -> stringResource(R.string.expense)
                     ActivityKind.TRANSFER -> stringResource(R.string.transfer)
+                    ActivityKind.ADJUSTMENT -> stringResource(R.string.balance_adjustment)
                     ActivityKind.DEBT -> when (item.debtMovement) {
                         it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> stringResource(
                             if (item.debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED) R.string.borrowed_from else R.string.lent_to,
@@ -164,6 +165,8 @@ fun ActivityRow(
                         item.externalCounterpartyName
                     ).joinToString(" · ")
 
+                    ActivityKind.ADJUSTMENT -> item.accountName
+
                     else -> listOfNotNull(item.accountName, item.categoryName).joinToString(" · ")
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -186,6 +189,9 @@ fun ActivityRow(
 
                     ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
                     ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onSurface
+                    ActivityKind.ADJUSTMENT -> if (signedAmount >= 0) {
+                        if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
+                    } else MaterialTheme.colorScheme.error
                     ActivityKind.DEBT -> if (signedAmount >= 0) {
                         if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
                     } else MaterialTheme.colorScheme.error
@@ -207,6 +213,7 @@ internal fun ActivityItem.signedAmount(
     when (kind) {
         ActivityKind.INCOME -> amountMinor
         ActivityKind.EXPENSE -> -amountMinor
+        ActivityKind.ADJUSTMENT -> amountMinor
         ActivityKind.TRANSFER -> {
             if (!showTransferSign || counterpartyAccountId == perspectiveAccountId) {
                 amountMinor
@@ -232,6 +239,7 @@ private fun ActivityIcon(kind: ActivityKind) {
         ActivityKind.INCOME -> LucideR.drawable.lucide_ic_arrow_down
         ActivityKind.EXPENSE -> LucideR.drawable.lucide_ic_arrow_up
         ActivityKind.TRANSFER -> LucideR.drawable.lucide_ic_arrow_down_up
+        ActivityKind.ADJUSTMENT -> LucideR.drawable.lucide_ic_scale
         ActivityKind.DEBT -> LucideR.drawable.lucide_ic_hand_coins
     }
     val tint = when (kind) {
@@ -243,6 +251,7 @@ private fun ActivityIcon(kind: ActivityKind) {
 
         ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
         ActivityKind.TRANSFER -> MaterialTheme.colorScheme.tertiary
+        ActivityKind.ADJUSTMENT -> MaterialTheme.colorScheme.secondary
         ActivityKind.DEBT -> MaterialTheme.colorScheme.secondary
     }
     Box(

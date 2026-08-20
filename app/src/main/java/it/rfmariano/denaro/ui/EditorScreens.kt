@@ -187,7 +187,7 @@ fun AccountEditorScreen(
                 onValueChange = { openingBalance = it },
                 label = { Text(stringResource(R.string.opening_balance)) },
                 placeholder = { Text("0.00") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned),
                 singleLine = true,
                 suffix = { Text(currency) },
                 supportingText = {
@@ -609,6 +609,7 @@ fun ActivityEditorScreen(
                                     ActivityKind.INCOME -> R.string.income
                                     ActivityKind.EXPENSE -> R.string.expense
                                     ActivityKind.TRANSFER -> R.string.transfer
+                                    ActivityKind.ADJUSTMENT -> R.string.balance_adjustment
                                     ActivityKind.DEBT -> R.string.debt
                                 },
                             ),

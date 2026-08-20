@@ -9,11 +9,13 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.paging.PagingSource
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,6 +31,7 @@ import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.ui.theme.DenaroTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -129,7 +132,85 @@ class EditorSubmissionTest {
     }
 
     @Test
-    fun openingBalancePlaceholderAllowsImmediateAmountEntry() {
+    fun signedSetBalanceCreatesOnlyOneNegativeAdjustmentOnRapidSubmit() = runBlocking {
+        val accountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val viewModel = AccountDetailViewModel(repository, accountId)
+        composeRule.setContent {
+            DenaroTheme {
+                AccountDetailRouteContent(
+                    viewModel = viewModel,
+                    amountsVisible = true,
+                    onBack = {},
+                    onEdit = {},
+                    onEditSchedule = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Cash").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("set_balance_action").performClick()
+        composeRule.onNodeWithTag("set_balance_input").performTextInput("-12.34")
+        composeRule.onNodeWithTag("set_balance_confirm")
+            .performTouchInput { doubleClick() }
+
+        composeRule.waitUntil {
+            runBlocking { repository.observeAccount(accountId).first()?.balanceMinor } == -1_234L
+        }
+        val page = database.activityDao().pagingSource(
+            kind = ActivityKind.ADJUSTMENT.name,
+            accountId = accountId,
+            currency = null,
+            categoryId = null,
+            fromDate = null,
+            toDate = null,
+        ).load(PagingSource.LoadParams.Refresh(null, 40, false)) as PagingSource.LoadResult.Page
+        assertEquals(1, page.data.size)
+    }
+
+    @Test
+    fun deletingBalanceAdjustmentCompletesOnlyOnceOnRapidSubmit() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val accountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val adjustmentId = repository.createBalanceAdjustment(accountId, 1_234)
+        val viewModel = BalanceAdjustmentDetailViewModel(repository, adjustmentId)
+        val completions = AtomicInteger()
+        composeRule.setContent {
+            DenaroTheme {
+                BalanceAdjustmentDetailRouteContent(
+                    viewModel = viewModel,
+                    amountsVisible = true,
+                    onBack = {},
+                    onDeleted = { completions.incrementAndGet() },
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Cash").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.delete)).performClick()
+        composeRule.onNodeWithTag("delete_adjustment_confirm")
+            .performTouchInput { doubleClick() }
+
+        composeRule.waitUntil { completions.get() == 1 }
+        composeRule.waitUntil {
+            runBlocking { database.balanceAdjustmentDao().getById(adjustmentId) } == null
+        }
+        composeRule.waitForIdle()
+        assertEquals(1, completions.get())
+        assertNull(database.balanceAdjustmentDao().getById(adjustmentId))
+    }
+
+    @Test
+    fun openingBalanceAllowsDirectNegativeAmountEntry() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val completions = AtomicInteger()
         composeRule.setContent {
@@ -147,12 +228,12 @@ class EditorSubmissionTest {
         composeRule.onNodeWithText(context.getString(R.string.name))
             .performTextInput("Savings")
         composeRule.onNodeWithText(context.getString(R.string.opening_balance))
-            .performTextInput("12.34")
+            .performTextInput("-12.34")
         composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
 
         composeRule.waitUntil { completions.get() == 1 }
         val account = runBlocking { database.accountDao().getAll().single() }
-        assertEquals(1_234L, account.openingBalanceMinor)
+        assertEquals(-1_234L, account.openingBalanceMinor)
     }
 
     @Test

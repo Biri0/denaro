@@ -11,6 +11,7 @@ import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.BalanceAdjustmentSummary
 import it.rfmariano.denaro.data.finance.DashboardFilter
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
 import it.rfmariano.denaro.data.finance.DebtRepaymentSummary
@@ -144,8 +145,8 @@ data class AccountDetailUiState(
 )
 
 class AccountDetailViewModel(
-    repository: FinanceRepository,
-    accountId: String,
+    private val repository: FinanceRepository,
+    private val accountId: String,
 ) : ViewModel() {
     val uiState = combine(
         repository.observeAccount(accountId),
@@ -161,6 +162,32 @@ class AccountDetailViewModel(
         SharingStarted.WhileSubscribed(5_000),
         AccountDetailUiState(),
     )
+
+    suspend fun setBalance(targetBalanceMinor: Long): Result<Unit> = runCatching {
+        repository.createBalanceAdjustment(accountId, targetBalanceMinor)
+    }
+}
+
+data class BalanceAdjustmentDetailUiState(
+    val isLoading: Boolean = true,
+    val adjustment: BalanceAdjustmentSummary? = null,
+)
+
+class BalanceAdjustmentDetailViewModel(
+    private val repository: FinanceRepository,
+    adjustmentId: String,
+) : ViewModel() {
+    val uiState = repository.observeBalanceAdjustment(adjustmentId)
+        .map { BalanceAdjustmentDetailUiState(isLoading = false, adjustment = it) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            BalanceAdjustmentDetailUiState(),
+        )
+
+    suspend fun delete(adjustmentId: String): Result<Unit> = runCatching {
+        repository.deleteBalanceAdjustment(adjustmentId)
+    }
 }
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)

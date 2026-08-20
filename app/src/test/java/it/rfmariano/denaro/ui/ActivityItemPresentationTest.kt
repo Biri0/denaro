@@ -52,6 +52,15 @@ class ActivityItemPresentationTest {
     }
 
     @Test
+    fun adjustmentKeepsItsSignedDelta() {
+        assertEquals(
+            -1_000L,
+            activityItem(ActivityKind.ADJUSTMENT).copy(amountMinor = -1_000)
+                .signedAmount("account"),
+        )
+    }
+
+    @Test
     fun debtMovementSignsFollowDirectionAndMovement() {
         assertEquals(
             1_000L,

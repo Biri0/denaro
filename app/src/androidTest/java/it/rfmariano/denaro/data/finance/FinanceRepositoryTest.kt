@@ -19,6 +19,60 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class FinanceRepositoryTest {
     @Test
+    fun balanceAdjustmentsReconcileBalanceAppearInActivityAndStayOutOfCashFlow() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val occurredAt = java.time.LocalDate.of(2026, 7, 15)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val repository = FinanceRepository(database, clock = { occurredAt })
+            val accountId = repository.createAccount(accountInput("Cash"))
+
+            val upwardId = repository.createBalanceAdjustment(accountId, 1_500)
+            assertEquals(1_500L, repository.observeAccount(accountId).first()?.balanceMinor)
+            val upward = repository.observeBalanceAdjustment(upwardId).first()
+            assertEquals(0L, upward?.balanceBeforeMinor)
+            assertEquals(1_500L, upward?.balanceAfterMinor)
+            assertEquals(1_500L, upward?.deltaMinor)
+
+            val downwardId = repository.createBalanceAdjustment(accountId, -250)
+            assertEquals(-250L, repository.observeAccount(accountId).first()?.balanceMinor)
+            assertEquals(
+                -1_750L,
+                repository.observeBalanceAdjustment(downwardId).first()?.deltaMinor
+            )
+
+            val page = database.activityDao().pagingSource(
+                kind = ActivityKind.ADJUSTMENT.name,
+                accountId = accountId,
+                currency = "EUR",
+                categoryId = null,
+                fromDate = null,
+                toDate = null,
+            ).load(
+                PagingSource.LoadParams.Refresh(null, 40, false),
+            ) as PagingSource.LoadResult.Page
+            assertEquals(2, page.data.size)
+            assertTrue(page.data.all { it.kind == ActivityKind.ADJUSTMENT.name })
+
+            val dashboard = repository.observeDashboard(
+                DashboardFilter("EUR", accountId, "2026-07"),
+            ).first()
+            assertEquals(0L, dashboard.selected.incomeMinor)
+            assertEquals(0L, dashboard.selected.expenseMinor)
+
+            repository.deleteBalanceAdjustment(downwardId)
+            assertEquals(1_500L, repository.observeAccount(accountId).first()?.balanceMinor)
+            val unchangedFailure = runCatching {
+                repository.createBalanceAdjustment(accountId, 1_500)
+            }.exceptionOrNull()
+            assertEquals("The account already has this balance", unchangedFailure?.message)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun movementsExcludeDebtOpeningsAndRepayments() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()

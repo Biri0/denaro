@@ -138,6 +138,7 @@ internal class DemoDataSeeder(
         val fixture = demoFixture(referenceDate, zoneId, italian)
         database.withTransaction {
             val sqlite = database.openHelper.writableDatabase
+            sqlite.execSQL("DELETE FROM balance_adjustments")
             sqlite.execSQL("DELETE FROM transactions")
             sqlite.execSQL("DELETE FROM transfers")
             sqlite.execSQL("DELETE FROM debt_repayments")

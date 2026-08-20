@@ -160,6 +160,7 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
                 onBack = {},
                 onEdit = {},
                 onEditSchedule = {},
+                onMessage = {},
             )
         }
 

@@ -128,6 +128,41 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration4To5PreservesBalancesAndAddsAdjustments() {
+        helper.createDatabase(TEST_DATABASE, 4).apply {
+            execSQL(
+                """
+                INSERT INTO accounts
+                    (id, name, description, opening_balance_minor, currency, archived_at, created_at, updated_at)
+                VALUES ('account-1', 'Cash', NULL, 1000, 'EUR', NULL, 10, 10)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 5, true, MIGRATION_4_5).use { db ->
+            db.query("SELECT balance_minor FROM account_balances WHERE account_id = 'account-1'")
+                .use {
+                    it.moveToFirst()
+                    assertEquals(1000L, it.getLong(0))
+                }
+            db.execSQL(
+                """
+                INSERT INTO balance_adjustments
+                    (id, account_id, delta_minor, balance_before_minor, balance_after_minor,
+                     occurred_at, local_date, created_at)
+                VALUES ('adjustment-1', 'account-1', -250, 1000, 750, 20, '2026-08-20', 20)
+                """.trimIndent(),
+            )
+            db.query("SELECT balance_minor FROM account_balances WHERE account_id = 'account-1'")
+                .use {
+                    it.moveToFirst()
+                    assertEquals(750L, it.getLong(0))
+                }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "migration-test"
     }

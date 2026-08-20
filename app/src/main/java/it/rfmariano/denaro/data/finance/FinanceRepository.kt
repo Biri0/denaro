@@ -8,6 +8,7 @@ import androidx.room.withTransaction
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.AccountWithBalance
 import it.rfmariano.denaro.data.local.ActivityRecord
+import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -24,6 +25,7 @@ import it.rfmariano.denaro.data.local.TransferPairUsage
 import it.rfmariano.denaro.data.local.UuidV7
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -375,6 +377,60 @@ class FinanceRepository(
 
     fun observeAccount(accountId: String): Flow<AccountSummary?> =
         database.accountDao().observeByIdWithBalance(accountId).map { it?.toSummary() }
+
+    fun observeBalanceAdjustment(id: String): Flow<BalanceAdjustmentSummary?> =
+        combine(
+            database.balanceAdjustmentDao().observeById(id),
+            database.accountDao().observeAll(),
+        ) { adjustment, accounts ->
+            adjustment?.let { entity ->
+                val account = accounts.firstOrNull { it.id == entity.accountId }
+                    ?: return@combine null
+                BalanceAdjustmentSummary(
+                    id = entity.id,
+                    accountId = entity.accountId,
+                    accountName = account.name,
+                    currency = account.currency,
+                    deltaMinor = entity.deltaMinor,
+                    balanceBeforeMinor = entity.balanceBeforeMinor,
+                    balanceAfterMinor = entity.balanceAfterMinor,
+                    occurredAt = entity.occurredAt,
+                    localDate = entity.localDate,
+                )
+            }
+        }
+
+    suspend fun createBalanceAdjustment(accountId: String, targetBalanceMinor: Long): String =
+        database.withTransaction {
+            requireActiveAccount(accountId)
+            val currentBalance = requireNotNull(
+                database.accountBalanceDao().getByAccount(accountId),
+            ) { "Account balance not found" }.balanceMinor
+            val delta = Math.subtractExact(targetBalanceMinor, currentBalance)
+            require(delta != 0L) { "The account already has this balance" }
+            val timestamp = clock()
+            UuidV7.generate().also { id ->
+                database.balanceAdjustmentDao().insert(
+                    BalanceAdjustmentEntity(
+                        id = id,
+                        accountId = accountId,
+                        deltaMinor = delta,
+                        balanceBeforeMinor = currentBalance,
+                        balanceAfterMinor = targetBalanceMinor,
+                        occurredAt = timestamp,
+                        localDate = timestamp.localDate(),
+                        createdAt = timestamp,
+                    ),
+                )
+            }
+        }
+
+    suspend fun deleteBalanceAdjustment(id: String) {
+        val adjustment = requireNotNull(database.balanceAdjustmentDao().getById(id)) {
+            "Balance adjustment not found"
+        }
+        database.balanceAdjustmentDao().delete(adjustment)
+    }
 
     fun observeRecurringRules(accountId: String): Flow<List<RecurringRuleSummary>> =
         database.recurringRuleDao().observeForAccount(accountId).map { rules ->
@@ -935,6 +991,8 @@ class FinanceRepository(
             debtDirection = debtDirection?.let(DebtDirection::valueOf),
             debtMovement = debtMovement?.let(DebtMovementKind::valueOf),
             externalCounterpartyName = externalCounterpartyName,
+            balanceBeforeMinor = balanceBeforeMinor,
+            balanceAfterMinor = balanceAfterMinor,
         )
 
     private fun DebtRecord.toSummary() = DebtSummary(

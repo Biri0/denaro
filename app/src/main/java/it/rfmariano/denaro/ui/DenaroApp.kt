@@ -52,13 +52,13 @@ import kotlinx.serialization.Serializable
 import com.composables.icons.lucide.R as LucideR
 
 @Serializable
-private data object HomeRoute : NavKey
+private data class HomeRoute(val sessionId: Long) : NavKey
 
 @Serializable
-private data object AccountsRoute : NavKey
+private data class AccountsRoute(val sessionId: Long) : NavKey
 
 @Serializable
-private data object ActivityRoute : NavKey
+private data class ActivityRoute(val sessionId: Long) : NavKey
 
 @Serializable
 private data object SettingsRoute : NavKey
@@ -79,6 +79,9 @@ private data class CategoryEditorRoute(
 
 @Serializable
 private data class AccountDetailRoute(val accountId: String) : NavKey
+
+@Serializable
+private data class BalanceAdjustmentDetailRoute(val adjustmentId: String) : NavKey
 
 @Serializable
 private data object ArchivedAccountsRoute : NavKey
@@ -227,12 +230,12 @@ fun DenaroApp(
     val initialQuickEntryRoute = remember(initialQuickEntry) {
         initialQuickEntry?.toEditorRoute()
     }
-    val homeBackStack = rememberNavBackStack(HomeRoute)
-    val accountsBackStack = rememberNavBackStack(AccountsRoute)
+    val homeBackStack = rememberNavBackStack(HomeRoute(session.id))
+    val accountsBackStack = rememberNavBackStack(AccountsRoute(session.id))
     val activityBackStack = if (initialQuickEntryRoute == null) {
-        rememberNavBackStack(ActivityRoute)
+        rememberNavBackStack(ActivityRoute(session.id))
     } else {
-        rememberNavBackStack(ActivityRoute, initialQuickEntryRoute)
+        rememberNavBackStack(ActivityRoute(session.id), initialQuickEntryRoute)
     }
     var currentDestination by rememberSaveable(initialQuickEntry?.id) {
         mutableStateOf(
@@ -408,6 +411,8 @@ fun DenaroApp(
                     onActivityClick = { item ->
                         if (item.kind == ActivityKind.DEBT && item.debtId != null) {
                             activityBackStack.add(DebtDetailRoute(item.debtId))
+                        } else if (item.kind == ActivityKind.ADJUSTMENT) {
+                            activityBackStack.add(BalanceAdjustmentDetailRoute(item.id))
                         } else {
                             activityBackStack.add(item.editorRoute())
                         }
@@ -482,6 +487,22 @@ fun DenaroApp(
                     onEditSchedule = {
                         backStack.add(ActivityEditorRoute(recurringRuleId = it))
                     },
+                    onMessage = ::showMessage,
+                )
+            }
+            entry<BalanceAdjustmentDetailRoute> { route ->
+                val detailViewModel: BalanceAdjustmentDetailViewModel = viewModel(
+                    key = "adjustment-${session.id}-${route.adjustmentId}",
+                    factory = viewModelFactory {
+                        BalanceAdjustmentDetailViewModel(repository, route.adjustmentId)
+                    },
+                )
+                BalanceAdjustmentDetailRouteContent(
+                    viewModel = detailViewModel,
+                    amountsVisible = preferences.amountsVisible,
+                    onBack = { backStack.removeLastOrNull() },
+                    onDeleted = { backStack.removeLastOrNull() },
+                    onMessage = ::showMessage,
                 )
             }
             entry<ArchivedAccountsRoute> {

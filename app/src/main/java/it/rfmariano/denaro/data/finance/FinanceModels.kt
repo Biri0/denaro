@@ -8,6 +8,7 @@ enum class ActivityKind {
     INCOME,
     EXPENSE,
     TRANSFER,
+    ADJUSTMENT,
     DEBT,
 }
 
@@ -47,6 +48,20 @@ data class ActivityItem(
     val debtDirection: DebtDirection? = null,
     val debtMovement: DebtMovementKind? = null,
     val externalCounterpartyName: String? = null,
+    val balanceBeforeMinor: Long? = null,
+    val balanceAfterMinor: Long? = null,
+)
+
+data class BalanceAdjustmentSummary(
+    val id: String,
+    val accountId: String,
+    val accountName: String,
+    val currency: String,
+    val deltaMinor: Long,
+    val balanceBeforeMinor: Long,
+    val balanceAfterMinor: Long,
+    val occurredAt: Long,
+    val localDate: String,
 )
 
 data class CounterpartySummary(

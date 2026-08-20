@@ -177,6 +177,21 @@ interface TransactionDao {
 }
 
 @Dao
+interface BalanceAdjustmentDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(adjustment: BalanceAdjustmentEntity)
+
+    @Query("SELECT * FROM balance_adjustments WHERE id = :id")
+    fun observeById(id: String): Flow<BalanceAdjustmentEntity?>
+
+    @Query("SELECT * FROM balance_adjustments WHERE id = :id")
+    suspend fun getById(id: String): BalanceAdjustmentEntity?
+
+    @Delete
+    suspend fun delete(adjustment: BalanceAdjustmentEntity)
+}
+
+@Dao
 interface RecurringRuleDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(rule: RecurringRuleEntity)
@@ -441,6 +456,9 @@ interface AccountBalanceDao {
 
     @Query("SELECT * FROM account_balances ORDER BY account_id")
     suspend fun getAll(): List<AccountBalance>
+
+    @Query("SELECT * FROM account_balances WHERE account_id = :accountId")
+    suspend fun getByAccount(accountId: String): AccountBalance?
 }
 
 data class ActivityRecord(
@@ -466,6 +484,8 @@ data class ActivityRecord(
     val debtDirection: String?,
     val debtMovement: String?,
     val externalCounterpartyName: String?,
+    val balanceBeforeMinor: Long?,
+    val balanceAfterMinor: Long?,
 )
 
 data class DashboardAggregateRecord(
@@ -506,7 +526,9 @@ interface ActivityDao {
                    NULL AS debtId,
                    NULL AS debtDirection,
                    NULL AS debtMovement,
-                   NULL AS externalCounterpartyName
+                   NULL AS externalCounterpartyName,
+                   NULL AS balanceBeforeMinor,
+                   NULL AS balanceAfterMinor
             FROM transactions
             JOIN accounts ON accounts.id = transactions.account_id
             LEFT JOIN categories ON categories.id = transactions.category_id
@@ -532,10 +554,39 @@ interface ActivityDao {
                    NULL AS debtId,
                    NULL AS debtDirection,
                    NULL AS debtMovement,
-                   NULL AS externalCounterpartyName
+                   NULL AS externalCounterpartyName,
+                   NULL AS balanceBeforeMinor,
+                   NULL AS balanceAfterMinor
             FROM transfers
             JOIN accounts AS source ON source.id = transfers.from_account_id
             JOIN accounts AS target ON target.id = transfers.to_account_id
+            UNION ALL
+            SELECT balance_adjustments.id AS id,
+                   'ADJUSTMENT' AS kind,
+                   balance_adjustments.account_id AS accountId,
+                   NULL AS counterpartyAccountId,
+                   accounts.name AS accountName,
+                   NULL AS counterpartyAccountName,
+                   accounts.currency AS currency,
+                   balance_adjustments.delta_minor AS amountMinor,
+                   NULL AS transactionType,
+                   balance_adjustments.occurred_at AS occurredAt,
+                   balance_adjustments.local_date AS localDate,
+                   NULL AS description,
+                   NULL AS recurringRuleId,
+                   NULL AS categoryId,
+                   NULL AS categoryParentId,
+                   NULL AS categoryName,
+                   NULL AS categoryIconName,
+                   NULL AS categoryColorIndex,
+                   NULL AS debtId,
+                   NULL AS debtDirection,
+                   NULL AS debtMovement,
+                   NULL AS externalCounterpartyName,
+                   balance_adjustments.balance_before_minor AS balanceBeforeMinor,
+                   balance_adjustments.balance_after_minor AS balanceAfterMinor
+            FROM balance_adjustments
+            JOIN accounts ON accounts.id = balance_adjustments.account_id
         )
         WHERE (:kind IS NULL OR kind = :kind)
           AND (

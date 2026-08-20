@@ -159,6 +159,29 @@ data class TransactionEntity(
 )
 
 @Entity(
+    tableName = "balance_adjustments",
+    foreignKeys = [
+        ForeignKey(
+            entity = AccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["account_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [Index(value = ["account_id", "occurred_at"])],
+)
+data class BalanceAdjustmentEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "account_id") val accountId: String,
+    @ColumnInfo(name = "delta_minor") val deltaMinor: Long,
+    @ColumnInfo(name = "balance_before_minor") val balanceBeforeMinor: Long,
+    @ColumnInfo(name = "balance_after_minor") val balanceAfterMinor: Long,
+    @ColumnInfo(name = "occurred_at") val occurredAt: Long,
+    @ColumnInfo(name = "local_date") val localDate: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+)
+
+@Entity(
     tableName = "transfers",
     foreignKeys = [
         ForeignKey(
