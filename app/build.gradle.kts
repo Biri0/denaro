@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.androidx.room.paging)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.sqlite)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.icons.lucide.android)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.sqlcipher.android)
