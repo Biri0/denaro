@@ -1,1 +1,1 @@
-Migliorato il pacchetto di rilascio per la compatibilità con F-Droid.
+Aggiunti backup e ripristino portatili con protezione tramite password opzionale, oltre alla possibilità di cancellare tutti i dati finanziari. Risolto un arresto anomalo durante lo scorrimento indietro dalle Impostazioni.

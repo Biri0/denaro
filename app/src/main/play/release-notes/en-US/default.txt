@@ -1,1 +1,1 @@
-Improved release packaging for compatibility with F-Droid.
+Added portable backup and restore with optional password protection, plus the ability to erase all financial data. Fixed a crash when swiping back from Settings.
