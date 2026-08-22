@@ -20,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -145,18 +144,16 @@ class MainActivity : AppCompatActivity() {
                             if (currentAppState == null) {
                                 StartupLoading()
                             } else {
-                                key(currentAppState.session.id) {
-                                    DenaroApp(
-                                        state = currentAppState,
-                                        financeSessionProvider = financeSessionProvider,
-                                        preferencesRepository = denaroApplication.preferencesRepository,
-                                        securityPreferencesRepository = securityPreferencesRepository,
-                                        processUnlockSession = processUnlockSession,
-                                        authenticator = authenticator,
-                                        quickEntryRequest = quickEntryRequest,
-                                        onQuickEntryConsumed = ::consumeQuickEntryRequest,
-                                    )
-                                }
+                                DenaroApp(
+                                    state = currentAppState,
+                                    financeSessionProvider = financeSessionProvider,
+                                    preferencesRepository = denaroApplication.preferencesRepository,
+                                    securityPreferencesRepository = securityPreferencesRepository,
+                                    processUnlockSession = processUnlockSession,
+                                    authenticator = authenticator,
+                                    quickEntryRequest = quickEntryRequest,
+                                    onQuickEntryConsumed = ::consumeQuickEntryRequest,
+                                )
                             }
                         }
                     }

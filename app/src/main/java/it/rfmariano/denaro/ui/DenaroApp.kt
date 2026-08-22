@@ -1,17 +1,22 @@
 package it.rfmariano.denaro.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
+import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -223,6 +228,40 @@ fun DenaroApp(
     quickEntryRequest: QuickEntryRequest? = null,
     onQuickEntryConsumed: (Long) -> Unit = {},
 ) {
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    val settingsScrollState = rememberScrollState()
+
+    key(state.session.id) {
+        SessionDenaroApp(
+            state = state,
+            financeSessionProvider = financeSessionProvider,
+            preferencesRepository = preferencesRepository,
+            securityPreferencesRepository = securityPreferencesRepository,
+            processUnlockSession = processUnlockSession,
+            authenticator = authenticator,
+            quickEntryRequest = quickEntryRequest,
+            onQuickEntryConsumed = onQuickEntryConsumed,
+            initialSettingsOpen = settingsOpen,
+            onSettingsOpenChanged = { settingsOpen = it },
+            settingsScrollState = settingsScrollState,
+        )
+    }
+}
+
+@Composable
+private fun SessionDenaroApp(
+    state: DenaroAppState,
+    financeSessionProvider: FinanceSessionProvider,
+    preferencesRepository: AppPreferencesRepository,
+    securityPreferencesRepository: SecurityPreferencesRepository,
+    processUnlockSession: ProcessUnlockSession,
+    authenticator: DeviceAuthenticator,
+    quickEntryRequest: QuickEntryRequest?,
+    onQuickEntryConsumed: (Long) -> Unit,
+    initialSettingsOpen: Boolean,
+    onSettingsOpenChanged: (Boolean) -> Unit,
+    settingsScrollState: ScrollState,
+) {
     val session = state.session
     val repository = session.repository
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
@@ -230,7 +269,14 @@ fun DenaroApp(
     val initialQuickEntryRoute = remember(initialQuickEntry) {
         initialQuickEntry?.toEditorRoute()
     }
-    val homeBackStack = rememberNavBackStack(HomeRoute(session.id))
+    val initialHomeRoutes = remember {
+        if (initialSettingsOpen) {
+            arrayOf(HomeRoute(session.id), SettingsRoute)
+        } else {
+            arrayOf(HomeRoute(session.id))
+        }
+    }
+    val homeBackStack = rememberNavBackStack(*initialHomeRoutes)
     val accountsBackStack = rememberNavBackStack(AccountsRoute(session.id))
     val activityBackStack = if (initialQuickEntryRoute == null) {
         rememberNavBackStack(ActivityRoute(session.id))
@@ -312,6 +358,9 @@ fun DenaroApp(
     }
     val onBack: () -> Unit = {
         if (backStack.size > 1) {
+            if (backStack.lastOrNull() is SettingsRoute) {
+                onSettingsOpenChanged(false)
+            }
             backStack.removeLastOrNull()
         } else if (currentDestination != TopLevelDestination.HOME) {
             currentDestination = TopLevelDestination.HOME
@@ -330,7 +379,10 @@ fun DenaroApp(
                         preferencesRepository.setAmountsVisible(!preferences.amountsVisible)
                     },
                     onAddAccount = { homeBackStack.add(AccountEditorRoute()) },
-                    onSettings = { homeBackStack.add(SettingsRoute) },
+                    onSettings = {
+                        onSettingsOpenChanged(true)
+                        homeBackStack.add(SettingsRoute)
+                    },
                     onCategoryClick = { kind, categoryId, fromDate, toDate, currency, accountId ->
                         activityViewModel.applyFilter(
                             ActivityFilter(
@@ -353,7 +405,8 @@ fun DenaroApp(
                     securityPreferencesRepository = securityPreferencesRepository,
                     processUnlockSession = processUnlockSession,
                     authenticator = authenticator,
-                    onBack = { homeBackStack.removeLastOrNull() },
+                    scrollState = settingsScrollState,
+                    onBack = onBack,
                     onCategories = { homeBackStack.add(CategoriesRoute) },
                     onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
                 )
@@ -582,28 +635,39 @@ fun DenaroApp(
         Box(Modifier.fillMaxSize())
         return
     }
-    if (fullScreenSettings) {
-        appContent()
-    } else {
-        NavigationSuiteScaffold(
-            navigationSuiteItems = {
-                TopLevelDestination.entries.forEach { destination ->
-                    item(
-                        selected = currentDestination == destination,
-                        onClick = { currentDestination = destination },
-                        icon = {
-                            Icon(
-                                painter = painterResource(destination.icon),
-                                contentDescription = stringResource(destination.label),
-                            )
-                        },
-                        label = { Text(stringResource(destination.label)) },
-                    )
-                }
-            },
-        ) {
-            appContent()
+    val navigationSuiteState = rememberNavigationSuiteScaffoldState(
+        initialValue = if (fullScreenSettings) {
+            NavigationSuiteScaffoldValue.Hidden
+        } else {
+            NavigationSuiteScaffoldValue.Visible
+        },
+    )
+    LaunchedEffect(fullScreenSettings) {
+        if (fullScreenSettings) {
+            navigationSuiteState.hide()
+        } else {
+            navigationSuiteState.show()
         }
+    }
+    NavigationSuiteScaffold(
+        state = navigationSuiteState,
+        navigationSuiteItems = {
+            TopLevelDestination.entries.forEach { destination ->
+                item(
+                    selected = currentDestination == destination,
+                    onClick = { currentDestination = destination },
+                    icon = {
+                        Icon(
+                            painter = painterResource(destination.icon),
+                            contentDescription = stringResource(destination.label),
+                        )
+                    },
+                    label = { Text(stringResource(destination.label)) },
+                )
+            }
+        },
+    ) {
+        appContent()
     }
 }
 

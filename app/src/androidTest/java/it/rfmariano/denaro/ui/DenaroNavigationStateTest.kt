@@ -3,9 +3,9 @@ package it.rfmariano.denaro.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.isDisplayed
@@ -13,8 +13,11 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.room.Room
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import it.rfmariano.denaro.R
@@ -193,7 +196,22 @@ class DenaroNavigationStateTest {
     }
 
     @Test
-    fun replacingFinanceSessionFromSettingsUsesFreshNavigationRoots() = runBlocking {
+    fun systemBackFromSettingsReturnsHome() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        setDenaroContent()
+
+        composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+            .performClick()
+        composeRule.onNodeWithText(context.getString(R.string.settings)).assertIsDisplayed()
+
+        pressBack()
+
+        composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun changingDemoModeKeepsSettingsAndUsesFreshNavigationRoots() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val demoDatabase = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
         try {
@@ -211,25 +229,30 @@ class DenaroNavigationStateTest {
                 isDemo = true,
                 initialDashboardMonth = YearMonth.now().toString(),
             )
-            val financeSessionProvider = TestFinanceSessionProvider(productionSession)
+            val financeSessionProvider = TestFinanceSessionProvider(
+                financeSession = productionSession,
+                demoSession = demoSession,
+            )
             val preferencesRepository = AppPreferencesRepository(context)
             val securityPreferencesRepository = SecurityPreferencesRepository(context)
             val processUnlockSession = ProcessUnlockSession(appLockEnabledAtProcessStart = false)
-            var activeSession by mutableStateOf(productionSession)
 
             composeRule.setContent {
                 DenaroTheme {
-                    val appState = rememberDenaroAppState(activeSession, defaultCurrency = "EUR")
-                    key(activeSession.id) {
-                        DenaroApp(
-                            state = appState,
-                            financeSessionProvider = financeSessionProvider,
-                            preferencesRepository = preferencesRepository,
-                            securityPreferencesRepository = securityPreferencesRepository,
-                            processUnlockSession = processUnlockSession,
-                            authenticator = TestDeviceAuthenticator,
-                        )
-                    }
+                    val activeSession by financeSessionProvider.session
+                        .collectAsStateWithLifecycle()
+                    val appState = rememberDenaroAppState(
+                        requireNotNull(activeSession),
+                        defaultCurrency = "EUR",
+                    )
+                    DenaroApp(
+                        state = appState,
+                        financeSessionProvider = financeSessionProvider,
+                        preferencesRepository = preferencesRepository,
+                        securityPreferencesRepository = securityPreferencesRepository,
+                        processUnlockSession = processUnlockSession,
+                        authenticator = TestDeviceAuthenticator,
+                    )
                 }
             }
 
@@ -247,28 +270,39 @@ class DenaroNavigationStateTest {
                 }.getOrDefault(false)
             }
 
-            composeRule.runOnUiThread { activeSession = demoSession }
+            composeRule.onNodeWithText(context.getString(R.string.demo_mode))
+                .performScrollTo()
+                .performClick()
             composeRule.waitUntil(5_000) {
                 runCatching {
-                    composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                    composeRule.onNodeWithText(context.getString(R.string.settings))
                         .isDisplayed()
                 }
                     .getOrDefault(false)
             }
+            pressBack()
             composeRule.onNodeWithText(context.getString(R.string.accounts)).performClick()
             composeRule.waitUntil(5_000) {
                 runCatching { composeRule.onNodeWithText("Demo cash").isDisplayed() }
                     .getOrDefault(false)
             }
 
-            composeRule.runOnUiThread { activeSession = productionSession }
+            composeRule.onNodeWithContentDescription(
+                context.getString(R.string.home),
+                useUnmergedTree = true,
+            ).performClick()
+            composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                .performClick()
+            composeRule.onNodeWithText(context.getString(R.string.settings)).assertIsDisplayed()
+            composeRule.onNodeWithText(context.getString(R.string.demo_mode)).performClick()
             composeRule.waitUntil(5_000) {
                 runCatching {
-                    composeRule.onNodeWithContentDescription(context.getString(R.string.settings))
+                    composeRule.onNodeWithText(context.getString(R.string.settings))
                         .isDisplayed()
                 }
                     .getOrDefault(false)
             }
+            pressBack()
             composeRule.onNodeWithText(context.getString(R.string.accounts)).performClick()
             composeRule.waitUntil(5_000) {
                 runCatching { composeRule.onNodeWithText("Cash").isDisplayed() }
@@ -333,7 +367,8 @@ class DenaroNavigationStateTest {
     }
 
     private class TestFinanceSessionProvider(
-        financeSession: FinanceSession,
+        private val financeSession: FinanceSession,
+        private val demoSession: FinanceSession? = null,
     ) : FinanceSessionProvider {
         private val mutableSession = MutableStateFlow<FinanceSession?>(financeSession)
 
@@ -341,7 +376,9 @@ class DenaroNavigationStateTest {
 
         override suspend fun initialize(localeTag: String) = Unit
 
-        override suspend fun setDemoMode(enabled: Boolean, localeTag: String) = Unit
+        override suspend fun setDemoMode(enabled: Boolean, localeTag: String) {
+            mutableSession.value = if (enabled) requireNotNull(demoSession) else financeSession
+        }
 
         override fun clearRecurrenceStartupFailure(sessionId: Long) = Unit
     }
