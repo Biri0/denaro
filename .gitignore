@@ -19,3 +19,4 @@ local.properties
 *.jks
 *.keystore
 /kls_database.db
+hs_err_pid*.log

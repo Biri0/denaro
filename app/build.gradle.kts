@@ -123,6 +123,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.icons.lucide.android)
     implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.sqlcipher.android)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)

@@ -166,6 +166,11 @@ fun SettingsScreen(
                 value = stringResource(R.string.manage_counterparties),
                 onClick = onCounterparties,
             )
+            SectionLabel(R.string.data)
+            BackupSettings(
+                financeSessionProvider = financeSessionProvider,
+                snackbarHostState = snackbarHostState,
+            )
             DeveloperSettingsSection(financeSessionProvider)
         }
     }

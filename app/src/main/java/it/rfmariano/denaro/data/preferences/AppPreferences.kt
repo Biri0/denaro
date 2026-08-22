@@ -73,6 +73,21 @@ class AppPreferencesRepository(context: Context) {
         applyTheme(_state.value.themeMode)
     }
 
+    fun restoreGeneralPreferences(value: AppPreferences) {
+        require(value.defaultCurrency in SupportedCurrencies) { "Unsupported currency" }
+        check(
+            preferences.edit()
+                .putString(KEY_THEME, value.themeMode.name)
+                .putString(KEY_LANGUAGE, value.language.name)
+                .putString(KEY_CURRENCY, value.defaultCurrency)
+                .putBoolean(KEY_AMOUNTS_VISIBLE, value.amountsVisible)
+                .commit(),
+        ) { "Could not restore preferences" }
+        _state.value = value
+        applyTheme(value.themeMode)
+        applyLanguage(value.language)
+    }
+
     private fun update(block: AppPreferences.() -> AppPreferences) {
         _state.value = _state.value.block()
     }

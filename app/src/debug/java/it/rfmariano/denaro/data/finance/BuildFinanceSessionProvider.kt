@@ -2,6 +2,7 @@ package it.rfmariano.denaro.data.finance
 
 import android.content.Context
 import androidx.room.withTransaction
+import it.rfmariano.denaro.data.backup.DenaroBackupService
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
@@ -98,6 +99,11 @@ internal class DebugFinanceSessionProvider(
             isDemo = false,
             initialDashboardMonth = YearMonth.from(clock()).toString(),
             recurrenceStartupFailed = recurrenceStartupFailed,
+            backupService = DenaroBackupService(
+                database,
+                installedAppVersion(context),
+                context.cacheDir,
+            ),
         )
     }
 
@@ -122,6 +128,11 @@ internal class DebugFinanceSessionProvider(
             isDemo = true,
             initialDashboardMonth = YearMonth.from(referenceDate).minusMonths(1).toString(),
             recurrenceStartupFailed = recurrenceStartupFailed,
+            backupService = DenaroBackupService(
+                database,
+                installedAppVersion(context),
+                context.cacheDir,
+            ),
         )
     }
 

@@ -1,6 +1,7 @@
 package it.rfmariano.denaro.data.finance
 
 import android.content.Context
+import it.rfmariano.denaro.data.backup.DenaroBackupService
 import it.rfmariano.denaro.data.local.EncryptedDatabaseFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -32,12 +33,18 @@ private class ReleaseFinanceSessionProvider(
         mutex.withLock {
             if (_session.value != null) return
             val next = withContext(Dispatchers.IO) {
-                val repository = FinanceRepository(EncryptedDatabaseFactory(context).open())
+                val database = EncryptedDatabaseFactory(context).open()
+                val repository = FinanceRepository(database)
                 FinanceSession(
                     id = 1L,
                     repository = repository,
                     isDemo = false,
                     initialDashboardMonth = YearMonth.now().toString(),
+                    backupService = DenaroBackupService(
+                        database,
+                        installedAppVersion(context),
+                        context.cacheDir,
+                    ),
                 )
             }
             _session.value = next

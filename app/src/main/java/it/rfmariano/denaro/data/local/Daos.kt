@@ -695,3 +695,72 @@ interface LegacyImportDao {
     @Query("SELECT * FROM legacy_imports WHERE source = :source")
     suspend fun get(source: String): LegacyImportEntity?
 }
+
+@Dao
+interface BackupDao {
+    @Query("SELECT * FROM accounts ORDER BY created_at, id")
+    suspend fun accounts(): List<AccountEntity>
+
+    @Query("SELECT * FROM categories ORDER BY parent_id IS NOT NULL, created_at, id")
+    suspend fun categories(): List<CategoryEntity>
+
+    @Query("SELECT * FROM recurring_rules ORDER BY created_at, id")
+    suspend fun recurringRules(): List<RecurringRuleEntity>
+
+    @Query("SELECT * FROM transactions ORDER BY created_at, id")
+    suspend fun transactions(): List<TransactionEntity>
+
+    @Query("SELECT * FROM balance_adjustments ORDER BY created_at, id")
+    suspend fun balanceAdjustments(): List<BalanceAdjustmentEntity>
+
+    @Query("SELECT * FROM transfers ORDER BY created_at, id")
+    suspend fun transfers(): List<TransferEntity>
+
+    @Query("SELECT * FROM counterparties ORDER BY created_at, id")
+    suspend fun counterparties(): List<CounterpartyEntity>
+
+    @Query("SELECT * FROM debts ORDER BY created_at, id")
+    suspend fun debts(): List<DebtEntity>
+
+    @Query("SELECT * FROM debt_repayments ORDER BY created_at, id")
+    suspend fun debtRepayments(): List<DebtRepaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertBalanceAdjustments(values: List<BalanceAdjustmentEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCounterparties(values: List<CounterpartyEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertDebts(values: List<DebtEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertDebtRepayments(values: List<DebtRepaymentEntity>)
+
+    @Query("DELETE FROM debt_repayments")
+    suspend fun deleteDebtRepayments()
+
+    @Query("DELETE FROM debts")
+    suspend fun deleteDebts()
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteTransactions()
+
+    @Query("DELETE FROM transfers")
+    suspend fun deleteTransfers()
+
+    @Query("DELETE FROM balance_adjustments")
+    suspend fun deleteBalanceAdjustments()
+
+    @Query("DELETE FROM recurring_rules")
+    suspend fun deleteRecurringRules()
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteCategories()
+
+    @Query("DELETE FROM counterparties")
+    suspend fun deleteCounterparties()
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAccounts()
+}
