@@ -41,6 +41,15 @@ class AppPreferencesRepositoryTest {
         assertFalse(AppPreferencesRepository(context).state.value.amountsVisible)
     }
 
+    @Test
+    fun restoredShowAllCurrenciesPreferenceSurvivesRepositoryRecreation() {
+        val repository = AppPreferencesRepository(context)
+
+        repository.restoreGeneralPreferences(AppPreferences(showAllCurrencies = true))
+
+        assertTrue(AppPreferencesRepository(context).state.value.showAllCurrencies)
+    }
+
     private fun preferences() =
         context.getSharedPreferences("denaro_preferences", Context.MODE_PRIVATE)
 }

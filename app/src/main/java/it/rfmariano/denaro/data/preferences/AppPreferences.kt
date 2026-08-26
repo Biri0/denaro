@@ -3,7 +3,6 @@ package it.rfmariano.denaro.data.preferences
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
-import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,13 +22,9 @@ enum class LanguageOption(val languageTag: String?) {
 data class AppPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val language: LanguageOption = LanguageOption.SYSTEM,
-    val defaultCurrency: String = DEFAULT_CURRENCY,
     val amountsVisible: Boolean = true,
-) {
-    companion object {
-        const val DEFAULT_CURRENCY = "EUR"
-    }
-}
+    val showAllCurrencies: Boolean = false,
+)
 
 class AppPreferencesRepository(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -50,18 +45,17 @@ class AppPreferencesRepository(context: Context) {
         applyLanguage(value)
     }
 
-    fun setDefaultCurrency(value: String) {
-        require(value in SupportedCurrencies) { "Unsupported currency" }
-        update {
-            preferences.edit().putString(KEY_CURRENCY, value).apply()
-            copy(defaultCurrency = value)
-        }
-    }
-
     fun setAmountsVisible(value: Boolean) {
         update {
             preferences.edit().putBoolean(KEY_AMOUNTS_VISIBLE, value).apply()
             copy(amountsVisible = value)
+        }
+    }
+
+    fun setShowAllCurrencies(value: Boolean) {
+        update {
+            preferences.edit().putBoolean(KEY_SHOW_ALL_CURRENCIES, value).apply()
+            copy(showAllCurrencies = value)
         }
     }
 
@@ -74,13 +68,12 @@ class AppPreferencesRepository(context: Context) {
     }
 
     fun restoreGeneralPreferences(value: AppPreferences) {
-        require(value.defaultCurrency in SupportedCurrencies) { "Unsupported currency" }
         check(
             preferences.edit()
                 .putString(KEY_THEME, value.themeMode.name)
                 .putString(KEY_LANGUAGE, value.language.name)
-                .putString(KEY_CURRENCY, value.defaultCurrency)
                 .putBoolean(KEY_AMOUNTS_VISIBLE, value.amountsVisible)
+                .putBoolean(KEY_SHOW_ALL_CURRENCIES, value.showAllCurrencies)
                 .commit(),
         ) { "Could not restore preferences" }
         _state.value = value
@@ -93,17 +86,16 @@ class AppPreferencesRepository(context: Context) {
     }
 
     private fun readPreferences(): AppPreferences {
+        preferences.edit().remove(KEY_LEGACY_CURRENCY).apply()
         val theme = preferences.getString(KEY_THEME, null)
             ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: ThemeMode.SYSTEM
         val language = preferences.getString(KEY_LANGUAGE, null)
             ?.let { runCatching { LanguageOption.valueOf(it) }.getOrNull() }
             ?: LanguageOption.SYSTEM
-        val currency = preferences.getString(KEY_CURRENCY, null)
-            ?.takeIf { it in SupportedCurrencies }
-            ?: AppPreferences.DEFAULT_CURRENCY
         val amountsVisible = preferences.getBoolean(KEY_AMOUNTS_VISIBLE, true)
-        return AppPreferences(theme, language, currency, amountsVisible)
+        val showAllCurrencies = preferences.getBoolean(KEY_SHOW_ALL_CURRENCIES, false)
+        return AppPreferences(theme, language, amountsVisible, showAllCurrencies)
     }
 
     private fun applyLanguage(value: LanguageOption) {
@@ -130,7 +122,8 @@ class AppPreferencesRepository(context: Context) {
         const val PREFERENCES_NAME = "denaro_preferences"
         const val KEY_THEME = "theme"
         const val KEY_LANGUAGE = "language"
-        const val KEY_CURRENCY = "default_currency"
         const val KEY_AMOUNTS_VISIBLE = "amounts_visible"
+        const val KEY_SHOW_ALL_CURRENCIES = "show_all_currencies"
+        const val KEY_LEGACY_CURRENCY = "default_currency"
     }
 }

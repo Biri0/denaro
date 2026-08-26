@@ -173,7 +173,10 @@
     <string name="open_settings">Open settings</string>
     <string name="theme">Theme</string>
     <string name="language">Language</string>
-    <string name="default_currency">Default currency</string>
+    <string name="show_all_currencies">Show all currencies</string>
+    <string name="show_all_currencies_description">Also show currencies that are no longer in use or reserved for special purposes.</string>
+    <string name="unsupported_currency">Unsupported currency</string>
+    <string name="more_currencies_available">%1$d more - keep typing to narrow down</string>
     <string name="system_default">System default</string>
     <string name="light">Light</string>
     <string name="dark">Dark</string>

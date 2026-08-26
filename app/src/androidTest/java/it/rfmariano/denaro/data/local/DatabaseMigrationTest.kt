@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -160,6 +161,136 @@ class DatabaseMigrationTest {
                     it.moveToFirst()
                     assertEquals(750L, it.getLong(0))
                 }
+        }
+    }
+
+    @Test
+    fun migration5To6ConvertsAmountsToNaturalFractionDigits() {
+        helper.createDatabase(TEST_DATABASE, 5).apply {
+            execSQL(
+                """
+                INSERT INTO accounts
+                    (id, name, description, opening_balance_minor, currency, archived_at, created_at, updated_at)
+                VALUES ('jpy-active', 'Yen cash', NULL, -12345, 'JPY', NULL, 10, 10),
+                       ('jpy-archived', 'Old yen', NULL, 10050, 'JPY', 12, 11, 12),
+                       ('kwd-active', 'Dinars', NULL, 123, 'KWD', NULL, 12, 12),
+                       ('eur-untouched', 'Euro', NULL, 6789, 'EUR', NULL, 13, 13)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO transactions
+                    (id, account_id, recurring_rule_id, occurrence_key, amount_minor, type,
+                     occurred_at, local_date, description, created_at, updated_at)
+                VALUES ('jpy-tx', 'jpy-active', NULL, NULL, 150, 'EXPENSE', 14, '2026-08-10', 'train', 14, 14),
+                       ('eur-tx', 'eur-untouched', NULL, NULL, 250, 'EXPENSE', 14, '2026-08-10', 'taxi', 14, 14)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO transfers
+                    (id, from_account_id, to_account_id, amount_minor, occurred_at, local_date,
+                     description, created_at, updated_at)
+                VALUES ('jpy-xfer', 'jpy-active', 'jpy-archived', 1000, 15, '2026-08-11', 'move', 15, 15)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO balance_adjustments
+                    (id, account_id, delta_minor, balance_before_minor, balance_after_minor,
+                     occurred_at, local_date, created_at)
+                VALUES ('jpy-adj', 'jpy-active', -250, 9000, 8750, 16, '2026-08-12', 16)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO counterparties
+                    (id, name, note, archived_at, created_at, updated_at)
+                VALUES ('cp-1', 'Alex', NULL, NULL, 17, 17)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO debts
+                    (id, counterparty_id, account_id, direction, principal_minor, currency,
+                     opened_at, local_date, due_date, note, created_at, updated_at)
+                VALUES ('jpy-debt', 'cp-1', 'jpy-active', 'BORROWED', 5000, 'JPY',
+                        18, '2026-08-13', NULL, NULL, 18, 18)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO debt_repayments
+                    (id, debt_id, account_id, amount_minor, occurred_at, local_date,
+                     note, created_at, updated_at)
+                VALUES ('jpy-rep', 'jpy-debt', 'jpy-active', 200, 19, '2026-08-14',
+                        NULL, 19, 19)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 6, true, MIGRATION_5_6).use { db ->
+            db.query(
+                "SELECT id, opening_balance_minor, fraction_digits FROM accounts ORDER BY id",
+            ).use { cursor ->
+                listOf(
+                    Triple("eur-untouched", 6789L, 2),
+                    Triple("jpy-active", -123L, 0),
+                    Triple("jpy-archived", 100L, 0),
+                    Triple("kwd-active", 1230L, 3),
+                ).forEachIndexed { index, (id, balance, scale) ->
+                    assertTrue(cursor.moveToPosition(index))
+                    assertEquals(id, cursor.getString(0))
+                    assertEquals(balance, cursor.getLong(1))
+                    assertEquals(scale, cursor.getInt(2))
+                }
+            }
+            db.query(
+                "SELECT id, amount_minor FROM transactions ORDER BY id",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("eur-tx", cursor.getString(0))
+                assertEquals(250L, cursor.getLong(1))
+                assertTrue(cursor.moveToNext())
+                assertEquals("jpy-tx", cursor.getString(0))
+                assertEquals(1L, cursor.getLong(1))
+            }
+            db.query(
+                "SELECT amount_minor FROM transfers WHERE id = 'jpy-xfer'",
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(10L, it.getLong(0))
+            }
+            db.query(
+                "SELECT delta_minor, balance_before_minor, balance_after_minor " +
+                        "FROM balance_adjustments WHERE id = 'jpy-adj'",
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(-2L, it.getLong(0))
+                assertEquals(90L, it.getLong(1))
+                assertEquals(87L, it.getLong(2))
+            }
+            db.query(
+                "SELECT principal_minor FROM debts WHERE id = 'jpy-debt'",
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(50L, it.getLong(0))
+            }
+            db.query(
+                "SELECT amount_minor FROM debt_repayments WHERE id = 'jpy-rep'",
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(2L, it.getLong(0))
+            }
+            db.query(
+                "SELECT balance_minor, fraction_digits " +
+                        "FROM account_balances WHERE account_id = 'jpy-active'",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(-88L, cursor.getLong(0))
+                assertEquals(0, cursor.getInt(1))
+            }
         }
     }
 

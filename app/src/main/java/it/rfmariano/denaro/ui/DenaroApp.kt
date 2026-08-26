@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.CurrencyCatalog
 import it.rfmariano.denaro.data.finance.FinanceSession
 import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -155,16 +157,16 @@ data class DenaroAppState(
 @Composable
 fun rememberDenaroAppState(
     session: FinanceSession,
-    defaultCurrency: String,
 ): DenaroAppState {
     val repository = session.repository
+    val appLocale = LocalConfiguration.current.locales[0]
     val homeViewModel: HomeViewModel = viewModel(
         key = "home-${session.id}",
         factory = viewModelFactory {
             HomeViewModel(
                 repository,
-                defaultCurrency,
                 session.initialDashboardMonth,
+                appLocale,
             )
         },
     )
@@ -578,10 +580,24 @@ private fun SessionDenaroApp(
                 )
             }
             entry<AccountEditorRoute> { route ->
+                val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+                val accounts = homeUiState.accounts
+                val usedCurrencies = accounts.map { it.currency }
+                val appLocale = LocalConfiguration.current.locales[0]
+                val includeAll = preferences.showAllCurrencies
+                val defaultCurrency = remember(usedCurrencies, appLocale, includeAll) {
+                    CurrencyCatalog.automaticDefault(
+                        usedCurrencies,
+                        appLocale,
+                        includeAll = includeAll,
+                    )
+                }
                 AccountEditorScreen(
                     repository = repository,
-                    defaultCurrency = preferences.defaultCurrency,
+                    defaultCurrency = defaultCurrency,
                     accountId = route.accountId,
+                    usedCurrencies = usedCurrencies,
+                    includeAll = includeAll,
                     onFinished = { backStack.removeLastOrNull() },
                     onBack = { backStack.removeLastOrNull() },
                     onMessage = ::showMessage,

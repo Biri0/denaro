@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.FinanceSessionProvider
-import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
 import it.rfmariano.denaro.data.preferences.LanguageOption
 import it.rfmariano.denaro.data.preferences.ThemeMode
@@ -49,7 +48,6 @@ import com.composables.icons.lucide.R as LucideR
 private enum class SettingsDialog {
     THEME,
     LANGUAGE,
-    CURRENCY,
 }
 
 @Composable
@@ -152,10 +150,11 @@ fun SettingsScreen(
             )
 
             SectionLabel(R.string.general)
-            SettingsItem(
-                title = stringResource(R.string.default_currency),
-                value = preferences.defaultCurrency,
-                onClick = { dialog = SettingsDialog.CURRENCY },
+            SwitchSettingsItem(
+                title = stringResource(R.string.show_all_currencies),
+                value = stringResource(R.string.show_all_currencies_description),
+                checked = preferences.showAllCurrencies,
+                onCheckedChange = preferencesRepository::setShowAllCurrencies,
             )
             SettingsItem(
                 title = stringResource(R.string.categories),
@@ -196,18 +195,6 @@ fun SettingsScreen(
             label = { languageLabel(it) },
             onSelect = {
                 preferencesRepository.setLanguage(it)
-                dialog = null
-            },
-            onDismiss = { dialog = null },
-        )
-
-        SettingsDialog.CURRENCY -> ChoiceDialog(
-            title = stringResource(R.string.default_currency),
-            choices = SupportedCurrencies,
-            selected = preferences.defaultCurrency,
-            label = { it },
-            onSelect = {
-                preferencesRepository.setDefaultCurrency(it)
                 dialog = null
             },
             onDismiss = { dialog = null },

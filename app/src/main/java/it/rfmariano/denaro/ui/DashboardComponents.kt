@@ -147,6 +147,7 @@ fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
                 R.string.income,
                 snapshot.selected.incomeMinor,
                 snapshot.filter.currency,
+                snapshot.fractionDigits,
                 amountsVisible,
                 Modifier.weight(1f)
             )
@@ -154,6 +155,7 @@ fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
                 R.string.expense,
                 snapshot.selected.expenseMinor,
                 snapshot.filter.currency,
+                snapshot.fractionDigits,
                 amountsVisible,
                 Modifier.weight(1f)
             )
@@ -161,6 +163,7 @@ fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
                 R.string.net,
                 snapshot.selected.netMinor,
                 snapshot.filter.currency,
+                snapshot.fractionDigits,
                 amountsVisible,
                 Modifier.weight(1f)
             )
@@ -172,7 +175,8 @@ fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
                     R.string.expense_change_previous,
                     (if (expenseDelta >= 0) "+" else "") + Money.format(
                         expenseDelta,
-                        snapshot.filter.currency
+                        snapshot.filter.currency,
+                        snapshot.fractionDigits
                     ),
                 )
             } else {
@@ -193,6 +197,7 @@ private fun SummaryCard(
     label: Int,
     amount: Long,
     currency: String,
+    fractionDigits: Int,
     visible: Boolean,
     modifier: Modifier
 ) {
@@ -206,7 +211,8 @@ private fun SummaryCard(
             Text(
                 if (visible) Money.format(
                     amount,
-                    currency
+                    currency,
+                    fractionDigits
                 ) else stringResource(R.string.amount_hidden),
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
@@ -217,7 +223,12 @@ private fun SummaryCard(
 }
 
 @Composable
-fun MonthlyCashFlowChart(months: List<MonthlyCashFlow>, currency: String, amountsVisible: Boolean) {
+fun MonthlyCashFlowChart(
+    months: List<MonthlyCashFlow>,
+    currency: String,
+    fractionDigits: Int,
+    amountsVisible: Boolean,
+) {
     if (months.isEmpty()) return
     val maxAmount = months.maxOf { maxOf(it.incomeMinor, it.expenseMinor) }.coerceAtLeast(1)
     val incomeColor = Color(0xFF2E7D32)
@@ -227,9 +238,10 @@ fun MonthlyCashFlowChart(months: List<MonthlyCashFlow>, currency: String, amount
         "${month.month}: ${
             Money.format(
                 month.incomeMinor,
-                currency
+                currency,
+                fractionDigits
             )
-        }, ${Money.format(month.expenseMinor, currency)}"
+        }, ${Money.format(month.expenseMinor, currency, fractionDigits)}"
     } else stringResource(R.string.amounts_hidden_chart_note)
     Column(Modifier
         .fillMaxWidth()
@@ -353,7 +365,8 @@ fun CategoryBreakdown(
                             Text(
                                 if (amountsVisible) Money.format(
                                     share.amountMinor,
-                                    dashboard.filter.currency
+                                    dashboard.filter.currency,
+                                    dashboard.fractionDigits
                                 ) else stringResource(R.string.amount_hidden)
                             )
                         }

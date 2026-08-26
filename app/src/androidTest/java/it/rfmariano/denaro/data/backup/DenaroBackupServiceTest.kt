@@ -22,18 +22,24 @@ import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.local.TransferEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Currency
+import java.util.zip.GZIPOutputStream
 
 @RunWith(AndroidJUnit4::class)
 class DenaroBackupServiceTest {
@@ -523,23 +529,131 @@ class DenaroBackupServiceTest {
     }
 
     @Test
-    fun legacyCompatibleCurrencyBackupCanBeInspectedAndRestored() = runBlocking {
+    fun restoreRejectsCurrencyUnavailableOnThisRuntimeWithoutChanges() = runBlocking {
         withDatabase { database ->
             seed(database)
             val accountDao = database.accountDao()
-            accountDao.update(requireNotNull(accountDao.getById("a1")).copy(currency = "XYZ"))
-            accountDao.update(requireNotNull(accountDao.getById("a2")).copy(currency = "XYZ"))
+            val account1 = requireNotNull(accountDao.getById("a1"))
+            val account2 = requireNotNull(accountDao.getById("a2"))
             val debtDao = database.debtDao()
-            debtDao.update(requireNotNull(debtDao.getById("d1")).copy(currency = "XYZ"))
+            val debt = requireNotNull(debtDao.getById("d1"))
+            // Resolve a code this runtime cannot resolve; hardcoding one is fragile
+            // because ICU tables differ between Android versions and some runtimes
+            // resolve every well-formed code, making the rejection path unreachable.
+            val unknownCode = ('A'..'Z').asSequence()
+                .flatMap { first -> ('A'..'Z').map { second -> "${first}${second}Q" } }
+                .firstOrNull { code -> runCatching { Currency.getInstance(code) }.isFailure }
+            Assume.assumeNotNull(unknownCode)
+            accountDao.update(account1.copy(currency = requireNotNull(unknownCode)))
+            accountDao.update(account2.copy(currency = requireNotNull(unknownCode)))
+            debtDao.update(debt.copy(currency = requireNotNull(unknownCode)))
             val service = DenaroBackupService(database, "2.0-test")
-            val backup = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            val malformed = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            accountDao.update(account1)
+            accountDao.update(account2)
+            debtDao.update(debt)
+            val before = snapshot(database)
 
-            service.inspect(ByteArrayInputStream(backup), null)
+            val inspectionError = runCatching {
+                service.inspect(ByteArrayInputStream(malformed), null)
+            }.exceptionOrNull()
+            assertTrue(inspectionError is BackupException.InvalidBackup)
+            assertEquals(before, snapshot(database))
+            assertRestoreRejectedWithoutChanges(database, service, malformed)
+        }
+    }
+
+    @Test
+    fun backupV2PersistsFractionDigitsAndRejectsMixedOrOutOfBoundsScales() = runBlocking {
+        withDatabase { database ->
+            seed(database)
+            val accountDao = database.accountDao()
+            val first = requireNotNull(accountDao.getById("a1"))
+            val second = requireNotNull(accountDao.getById("a2"))
+            accountDao.update(first.copy(fractionDigits = 3))
+            accountDao.update(second.copy(fractionDigits = 3))
+            val service = DenaroBackupService(database, "2.0-test")
+            val valid = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+
             service.eraseFinanceData()
-            service.restore(ByteArrayInputStream(backup), null, backup.contentDigest()) {}
+            service.restore(ByteArrayInputStream(valid), null, valid.contentDigest()) {}
+            assertEquals(3, accountDao.getById("a1")?.fractionDigits)
+            assertEquals(3, accountDao.getById("a2")?.fractionDigits)
 
-            assertEquals("XYZ", requireNotNull(accountDao.getById("a1")).currency)
-            assertEquals("XYZ", requireNotNull(debtDao.getById("d1")).currency)
+            val restoredFirst = requireNotNull(accountDao.getById("a1"))
+            val restoredSecond = requireNotNull(accountDao.getById("a2"))
+            accountDao.update(restoredSecond.copy(fractionDigits = 2))
+            val mixed = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            accountDao.update(restoredSecond)
+            assertRestoreRejectedWithoutChanges(database, service, mixed)
+
+            accountDao.update(restoredFirst.copy(fractionDigits = 10))
+            accountDao.update(restoredSecond.copy(fractionDigits = 10))
+            val outOfBounds =
+                ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            accountDao.update(restoredFirst)
+            accountDao.update(restoredSecond)
+            assertRestoreRejectedWithoutChanges(database, service, outOfBounds)
+        }
+    }
+
+    @Test
+    fun schemaV1DefaultsFixedScaleTwoForEuroAccounts() = runBlocking {
+        withDatabase { database ->
+            seed(database)
+            val service = DenaroBackupService(database, "2.0-test")
+            val legacy = schemaV1Backup(
+                currency = "EUR",
+                openingBalanceMinor = 12_345,
+            )
+
+            service.inspect(ByteArrayInputStream(legacy), null)
+            service.restore(ByteArrayInputStream(legacy), null, legacy.contentDigest()) {}
+
+            val restored = database.accountDao().getAll().single()
+            assertEquals("EUR", restored.currency)
+            assertEquals(2, restored.fractionDigits)
+            assertEquals(12_345L, restored.openingBalanceMinor)
+        }
+    }
+
+    @Test
+    fun schemaV1ConvertsYenAmountsToNaturalScaleZero() = runBlocking {
+        withDatabase { database ->
+            seed(database)
+            val service = DenaroBackupService(database, "2.0-test")
+            val legacy = schemaV1Backup(
+                currency = "JPY",
+                openingBalanceMinor = 12_345,
+            )
+
+            service.inspect(ByteArrayInputStream(legacy), null)
+            service.restore(ByteArrayInputStream(legacy), null, legacy.contentDigest()) {}
+
+            val restored = database.accountDao().getAll().single()
+            assertEquals("JPY", restored.currency)
+            assertEquals(0, restored.fractionDigits)
+            assertEquals(123L, restored.openingBalanceMinor)
+        }
+    }
+
+    @Test
+    fun schemaV1MultipliesDinarAmountsToNaturalScaleThree() = runBlocking {
+        withDatabase { database ->
+            seed(database)
+            val service = DenaroBackupService(database, "2.0-test")
+            val legacy = schemaV1Backup(
+                currency = "KWD",
+                openingBalanceMinor = 12_345,
+            )
+
+            service.inspect(ByteArrayInputStream(legacy), null)
+            service.restore(ByteArrayInputStream(legacy), null, legacy.contentDigest()) {}
+
+            val restored = database.accountDao().getAll().single()
+            assertEquals("KWD", restored.currency)
+            assertEquals(3, restored.fractionDigits)
+            assertEquals(123_450L, restored.openingBalanceMinor)
         }
     }
 
@@ -642,6 +756,50 @@ class DenaroBackupServiceTest {
             debtDao.updateRepayment(original)
 
             assertRestoreRejectedWithoutChanges(database, service, malformed)
+        }
+    }
+
+    private fun schemaV1Backup(
+        currency: String,
+        openingBalanceMinor: Long = 12_345,
+    ): ByteArray {
+        val account = JSONObject()
+            .put("id", "legacy-account")
+            .put("name", "Legacy account")
+            .put("description", JSONObject.NULL)
+            .put("openingBalanceMinor", openingBalanceMinor)
+            .put("currency", currency)
+            .put("archivedAt", JSONObject.NULL)
+            .put("createdAt", 1)
+            .put("updatedAt", 1)
+        val payload = JSONObject()
+            .put("schemaVersion", 1)
+            .put("createdAt", 2)
+            .put("appVersion", "1.0-test")
+            .put("accounts", JSONArray().put(account))
+            .toString()
+            .toByteArray(StandardCharsets.UTF_8)
+        val compressed = ByteArrayOutputStream().use { output ->
+            GZIPOutputStream(output).use { it.write(payload) }
+            output.toByteArray()
+        }
+        val checksum = Base64.encodeToString(
+            MessageDigest.getInstance("SHA-256").digest(compressed),
+            Base64.NO_WRAP,
+        )
+        val header = JSONObject()
+            .put("protection", BackupProtection.NONE.name)
+            .put("checksum", checksum)
+            .toString()
+            .toByteArray(StandardCharsets.UTF_8)
+        return ByteArrayOutputStream().use { output ->
+            DataOutputStream(output).use { data ->
+                data.write("DENARO_BACKUP\n".toByteArray(StandardCharsets.US_ASCII))
+                data.writeInt(header.size)
+                data.write(header)
+                data.write(compressed)
+            }
+            output.toByteArray()
         }
     }
 

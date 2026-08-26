@@ -33,6 +33,7 @@ class LegacyTransformerTest {
         )
         assertEquals(listOf(2_500L, 750L), result.transactions.map { it.amountMinor })
         assertEquals(2_750L, result.expectedBalances.getValue("cash"))
+        assertEquals(2, result.accounts.single().fractionDigits)
     }
 
     @Test
@@ -86,6 +87,56 @@ class LegacyTransformerTest {
 
         assertTrue(result.transfers.isEmpty())
         assertEquals(3, result.transactions.size)
+    }
+
+    @Test
+    fun convertsYenBucketToNaturalScaleZero() {
+        val result = transformer.transform(
+            snapshot(
+                buckets = listOf(
+                    LegacyBucket(
+                        id = "yen",
+                        title = "Yen wallet",
+                        description = null,
+                        initialBalanceMinor = 12_345,
+                        currency = "JPY",
+                        createdAt = 0,
+                    ),
+                ),
+                transactions = listOf(
+                    transaction("lunch", "yen", amount = -150, date = 2_000),
+                ),
+            ),
+        )
+
+        assertEquals(0, result.accounts.single().fractionDigits)
+        assertEquals(123L, result.accounts.single().openingBalanceMinor)
+        assertEquals(1L, result.transactions.single().amountMinor)
+    }
+
+    @Test
+    fun convertsDinarBucketToNaturalScaleThree() {
+        val result = transformer.transform(
+            snapshot(
+                buckets = listOf(
+                    LegacyBucket(
+                        id = "dinar",
+                        title = "Dinar wallet",
+                        description = null,
+                        initialBalanceMinor = 100,
+                        currency = "KWD",
+                        createdAt = 0,
+                    ),
+                ),
+                transactions = listOf(
+                    transaction("groceries", "dinar", amount = -250, date = 2_000),
+                ),
+            ),
+        )
+
+        assertEquals(3, result.accounts.single().fractionDigits)
+        assertEquals(1_000L, result.accounts.single().openingBalanceMinor)
+        assertEquals(2_500L, result.transactions.single().amountMinor)
     }
 
     @Test

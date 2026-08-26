@@ -155,6 +155,7 @@ fun HomeRouteContent(
                     item {
                         BalanceBand(
                             state.totalsByCurrency.filterKeys { it == state.selectedCurrency },
+                            state.accounts,
                             amountsVisible,
                         )
                     }
@@ -179,6 +180,7 @@ fun HomeRouteContent(
                                 MonthlyCashFlowChart(
                                     dashboard.months,
                                     dashboard.filter.currency,
+                                    dashboard.fractionDigits,
                                     amountsVisible
                                 )
                             }
@@ -214,6 +216,7 @@ internal fun isHomeFullyDrawn(state: HomeUiState): Boolean =
 @Composable
 private fun BalanceBand(
     totals: Map<String, Long>,
+    accounts: List<AccountSummary>,
     amountsVisible: Boolean,
 ) {
     Column(
@@ -228,9 +231,11 @@ private fun BalanceBand(
         )
         Spacer(Modifier.height(8.dp))
         totals.forEach { (currency, amount) ->
+            val fractionDigits = accounts.firstOrNull { it.currency == currency }?.fractionDigits
+                ?: Money.fractionDigitsForCurrency(currency)
             Text(
                 text = if (amountsVisible) {
-                    Money.format(amount, currency)
+                    Money.format(amount, currency, fractionDigits)
                 } else {
                     stringResource(R.string.amount_hidden)
                 },
@@ -369,7 +374,11 @@ fun AccountDetailRouteContent(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = if (amountsVisible) {
-                                Money.format(account.balanceMinor, account.currency)
+                                Money.format(
+                                    account.balanceMinor,
+                                    account.currency,
+                                    account.fractionDigits,
+                                )
                             } else {
                                 stringResource(R.string.amount_hidden)
                             },
@@ -379,7 +388,11 @@ fun AccountDetailRouteContent(
                         Text(
                             "${stringResource(R.string.opening_balance)}: " +
                                     if (amountsVisible) {
-                                        Money.format(account.openingBalanceMinor, account.currency)
+                                        Money.format(
+                                            account.openingBalanceMinor,
+                                            account.currency,
+                                            account.fractionDigits,
+                                        )
                                     } else {
                                         stringResource(R.string.amount_hidden)
                                     },
@@ -444,7 +457,11 @@ fun AccountDetailRouteContent(
                             )
                             Text(
                                 text = if (amountsVisible) {
-                                    Money.format(rule.amountMinor, account.currency)
+                                    Money.format(
+                                        rule.amountMinor,
+                                        account.currency,
+                                        account.fractionDigits,
+                                    )
                                 } else {
                                     stringResource(R.string.amount_hidden)
                                 },
@@ -505,7 +522,13 @@ private fun SetBalanceDialog(
 ) {
     var value by rememberSaveable(account.id) { mutableStateOf("") }
     val parsed = remember(value) {
-        runCatching { Money.parseMinorUnits(value, allowNegative = true) }.getOrNull()
+        runCatching {
+            Money.parseMinorUnits(
+                value,
+                account.fractionDigits,
+                allowNegative = true,
+            )
+        }.getOrNull()
     }
     val difference = remember(parsed, account.balanceMinor) {
         parsed?.let { runCatching { Math.subtractExact(it, account.balanceMinor) }.getOrNull() }
@@ -537,14 +560,22 @@ private fun SetBalanceDialog(
                 )
                 Text(
                     "${stringResource(R.string.current_balance)}: " + if (amountsVisible) {
-                        Money.format(account.balanceMinor, account.currency)
+                        Money.format(
+                            account.balanceMinor,
+                            account.currency,
+                            account.fractionDigits,
+                        )
                     } else stringResource(R.string.amount_hidden),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (difference != null) {
                     Text(
                         "${stringResource(R.string.difference)}: " + if (amountsVisible) {
-                            Money.format(difference, account.currency)
+                            Money.format(
+                                difference,
+                                account.currency,
+                                account.fractionDigits,
+                            )
                         } else stringResource(R.string.amount_hidden),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -667,7 +698,7 @@ private fun BalanceAdjustmentDetails(
     modifier: Modifier = Modifier,
 ) {
     fun amount(value: Long): String = if (amountsVisible) {
-        Money.format(value, adjustment.currency)
+        Money.format(value, adjustment.currency, adjustment.fractionDigits)
     } else {
         ""
     }

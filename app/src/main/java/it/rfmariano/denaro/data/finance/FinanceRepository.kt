@@ -396,6 +396,7 @@ class FinanceRepository(
                     balanceAfterMinor = entity.balanceAfterMinor,
                     occurredAt = entity.occurredAt,
                     localDate = entity.localDate,
+                    fractionDigits = account.fractionDigits,
                 )
             }
         }
@@ -495,7 +496,7 @@ class FinanceRepository(
             previousToDate = previousMonth.atDay(comparableDay).plusDays(1).toString(),
             currency = filter.currency,
             accountId = filter.accountId,
-        ).map { records ->
+        ).combine(database.accountDao().observeAll()) { records, accounts ->
             fun summary(month: YearMonth, kind: String = "MONTH"): MonthlyCashFlow {
                 val rows = records.filter { it.rowKind == kind && it.month == month.toString() }
                 return MonthlyCashFlow(
@@ -525,6 +526,11 @@ class FinanceRepository(
                     )
                 }
                 .sortedByDescending(CategoryShare::amountMinor)
+            val fractionDigits = accounts.firstOrNull { account ->
+                account.id == filter.accountId
+            }?.fractionDigits ?: accounts.firstOrNull { account ->
+                account.currency == filter.currency
+            }?.fractionDigits ?: Money.fractionDigitsForCurrency(filter.currency)
             DashboardSnapshot(
                 filter = filter,
                 months = months,
@@ -532,27 +538,38 @@ class FinanceRepository(
                 previousComparable = summary(previousMonth, "PREVIOUS"),
                 incomeCategories = categoryShares(TransactionType.INCOME),
                 expenseCategories = categoryShares(TransactionType.EXPENSE),
+                fractionDigits = fractionDigits,
             )
         }.flowOn(Dispatchers.Default)
+    }
+
+    suspend fun getFractionDigitsForNewAccount(currency: String): Int {
+        require(CurrencyCatalog.isValid(currency)) { "Unsupported currency" }
+        return database.accountDao().getFractionDigitsForCurrency(currency)
+            ?: Money.fractionDigitsForCurrency(currency)
     }
 
     suspend fun createAccount(input: AccountInput): String {
         validateAccount(input)
         val timestamp = clock()
         val id = UuidV7.generate()
-        database.accountDao().insert(
-            AccountEntity(
-                id = id,
-                name = input.name.trim(),
-                description = input.description.normalized(),
-                openingBalanceMinor = input.openingBalanceMinor,
-                currency = input.currency,
-                archivedAt = null,
-                createdAt = timestamp,
-                updatedAt = timestamp,
-            ),
-        )
-        return id
+        return database.withTransaction {
+            val fractionDigits = getFractionDigitsForNewAccount(input.currency)
+            database.accountDao().insert(
+                AccountEntity(
+                    id = id,
+                    name = input.name.trim(),
+                    description = input.description.normalized(),
+                    openingBalanceMinor = input.openingBalanceMinor,
+                    currency = input.currency,
+                    archivedAt = null,
+                    createdAt = timestamp,
+                    updatedAt = timestamp,
+                    fractionDigits = fractionDigits,
+                ),
+            )
+            id
+        }
     }
 
     suspend fun updateAccount(accountId: String, input: AccountInput) {
@@ -794,6 +811,9 @@ class FinanceRepository(
         require(source.currency == target.currency) {
             "Transfers require accounts with the same currency"
         }
+        require(source.fractionDigits == target.fractionDigits) {
+            "Transfers require accounts with the same fraction digits"
+        }
     }
 
     private suspend fun validateDebt(
@@ -851,7 +871,7 @@ class FinanceRepository(
 
     private fun validateAccount(input: AccountInput) {
         require(input.name.isNotBlank()) { "Name is required" }
-        require(input.currency in SupportedCurrencies) { "Unsupported currency" }
+        require(CurrencyCatalog.isValid(input.currency)) { "Unsupported currency" }
     }
 
     private suspend fun validateTransaction(
@@ -962,10 +982,18 @@ class FinanceRepository(
             balanceMinor = balanceMinor ?: openingBalanceMinor,
             currency = currency,
             archivedAt = archivedAt,
+            fractionDigits = fractionDigits,
         )
 
     private fun AccountWithBalance.toSummary() = AccountSummary(
-        id, name, description, openingBalanceMinor, balanceMinor, currency, archivedAt,
+        id = id,
+        name = name,
+        description = description,
+        openingBalanceMinor = openingBalanceMinor,
+        balanceMinor = balanceMinor,
+        currency = currency,
+        archivedAt = archivedAt,
+        fractionDigits = fractionDigits,
     )
 
     private fun ActivityRecord.toItem(): ActivityItem =
@@ -993,6 +1021,7 @@ class FinanceRepository(
             externalCounterpartyName = externalCounterpartyName,
             balanceBeforeMinor = balanceBeforeMinor,
             balanceAfterMinor = balanceAfterMinor,
+            fractionDigits = fractionDigits,
         )
 
     private fun DebtRecord.toSummary() = DebtSummary(
@@ -1009,6 +1038,7 @@ class FinanceRepository(
         localDate = localDate,
         dueDate = dueDate,
         note = note,
+        fractionDigits = fractionDigits,
     )
 
     private fun CategoryEntity.toSummary() = CategorySummary(
@@ -1028,7 +1058,9 @@ internal fun buildTransferAccountSuggestions(
 ): TransferAccountSuggestions {
     val compatibleDestinations = accounts.associate { source ->
         source.id to accounts.filter { candidate ->
-            candidate.id != source.id && candidate.currency == source.currency
+            candidate.id != source.id &&
+                    candidate.currency == source.currency &&
+                    candidate.fractionDigits == source.fractionDigits
         }
     }
     val eligibleSources = accounts.filter { compatibleDestinations.getValue(it.id).isNotEmpty() }

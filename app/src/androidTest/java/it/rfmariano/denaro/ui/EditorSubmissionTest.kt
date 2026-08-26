@@ -3,6 +3,7 @@ package it.rfmariano.denaro.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -465,6 +466,59 @@ class EditorSubmissionTest {
 
         composeRule.waitUntil { completions.get() == 1 }
         assertNull(database.debtDao().getById(debtId)?.dueDate)
+    }
+
+    @Test
+    fun archivedAccountTransactionEditorLoadsAndPermitsAccountSwitchingBeforeSave() = runBlocking {
+        val originalAccountId = repository.createAccount(
+            AccountInput("Cash", null, 0, "EUR"),
+        )
+        val replacementAccountId = repository.createAccount(
+            AccountInput("Wallet", null, 0, "EUR"),
+        )
+        val transactionId = repository.createTransaction(
+            TransactionInput(
+                accountId = originalAccountId,
+                amountMinor = 1_234,
+                type = TransactionType.EXPENSE,
+                occurredAt = 1,
+                description = "Lunch",
+                categoryId = null,
+            ),
+        )
+        repository.archiveAccount(originalAccountId)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+
+        composeRule.setContent {
+            DenaroTheme {
+                ActivityEditorScreen(
+                    repository = repository,
+                    route = ActivityEditorRoute(
+                        kind = ActivityKind.EXPENSE,
+                        id = transactionId,
+                    ),
+                    onFinished = { completions.incrementAndGet() },
+                    onBack = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.amount)).assertIsEnabled()
+        composeRule.onNodeWithText("12.34").assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.save))
+            .assertIsNotEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.account))
+            .performClick()
+        composeRule.onNodeWithText("Wallet · EUR").performClick()
+        composeRule.onNodeWithText(context.getString(R.string.save))
+            .assertIsEnabled()
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+
+        composeRule.waitUntil { completions.get() == 1 }
+        val movedTransaction = runBlocking { repository.getTransaction(transactionId) }
+        assertEquals(replacementAccountId, movedTransaction?.accountId)
     }
 
     @Test
