@@ -126,7 +126,6 @@ class MainActivity : AppCompatActivity() {
                     if (session != null) {
                         appState = rememberDenaroAppState(
                             session = session,
-                            defaultCurrency = preferences.defaultCurrency,
                         )
                         DenaroAppPreloader(appState)
                     }

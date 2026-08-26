@@ -47,6 +47,16 @@ interface AccountDao {
     @Query("SELECT * FROM accounts ORDER BY created_at, id")
     suspend fun getAll(): List<AccountEntity>
 
+    @Query(
+        """
+        SELECT fraction_digits FROM accounts
+        WHERE currency = :currency
+        ORDER BY created_at, id
+        LIMIT 1
+        """,
+    )
+    suspend fun getFractionDigitsForCurrency(currency: String): Int?
+
     @Update
     suspend fun update(account: AccountEntity)
 
@@ -314,6 +324,7 @@ data class DebtRecord(
     val principalMinor: Long,
     val repaidMinor: Long,
     val currency: String,
+    val fractionDigits: Int,
     val openedAt: Long,
     val localDate: String,
     val dueDate: String?,
@@ -395,6 +406,7 @@ interface DebtDao {
                debts.principal_minor AS principalMinor,
                COALESCE(SUM(debt_repayments.amount_minor), 0) AS repaidMinor,
                debts.currency AS currency,
+               accounts.fraction_digits AS fractionDigits,
                debts.opened_at AS openedAt,
                debts.local_date AS localDate,
                debts.due_date AS dueDate,
@@ -422,6 +434,7 @@ interface DebtDao {
                debts.principal_minor AS principalMinor,
                COALESCE(SUM(debt_repayments.amount_minor), 0) AS repaidMinor,
                debts.currency AS currency,
+               accounts.fraction_digits AS fractionDigits,
                debts.opened_at AS openedAt,
                debts.local_date AS localDate,
                debts.due_date AS dueDate,
@@ -469,6 +482,7 @@ data class ActivityRecord(
     val accountName: String,
     val counterpartyAccountName: String?,
     val currency: String,
+    val fractionDigits: Int,
     val amountMinor: Long,
     val transactionType: String?,
     val occurredAt: Long,
@@ -512,6 +526,7 @@ interface ActivityDao {
                    accounts.name AS accountName,
                    NULL AS counterpartyAccountName,
                    accounts.currency AS currency,
+                   accounts.fraction_digits AS fractionDigits,
                    transactions.amount_minor AS amountMinor,
                    transactions.type AS transactionType,
                    transactions.occurred_at AS occurredAt,
@@ -540,6 +555,7 @@ interface ActivityDao {
                    source.name AS accountName,
                    target.name AS counterpartyAccountName,
                    source.currency AS currency,
+                   source.fraction_digits AS fractionDigits,
                    transfers.amount_minor AS amountMinor,
                    NULL AS transactionType,
                    transfers.occurred_at AS occurredAt,
@@ -568,6 +584,7 @@ interface ActivityDao {
                    accounts.name AS accountName,
                    NULL AS counterpartyAccountName,
                    accounts.currency AS currency,
+                   accounts.fraction_digits AS fractionDigits,
                    balance_adjustments.delta_minor AS amountMinor,
                    NULL AS transactionType,
                    balance_adjustments.occurred_at AS occurredAt,

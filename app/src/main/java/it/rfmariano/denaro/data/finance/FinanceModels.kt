@@ -24,6 +24,7 @@ data class AccountSummary(
     val balanceMinor: Long,
     val currency: String,
     val archivedAt: Long?,
+    val fractionDigits: Int = 2,
 )
 
 data class ActivityItem(
@@ -50,6 +51,7 @@ data class ActivityItem(
     val externalCounterpartyName: String? = null,
     val balanceBeforeMinor: Long? = null,
     val balanceAfterMinor: Long? = null,
+    val fractionDigits: Int = 2,
 )
 
 data class BalanceAdjustmentSummary(
@@ -62,6 +64,7 @@ data class BalanceAdjustmentSummary(
     val balanceAfterMinor: Long,
     val occurredAt: Long,
     val localDate: String,
+    val fractionDigits: Int = 2,
 )
 
 data class CounterpartySummary(
@@ -87,6 +90,7 @@ data class DebtSummary(
     val localDate: String,
     val dueDate: String?,
     val note: String?,
+    val fractionDigits: Int = 2,
 ) {
     val outstandingMinor: Long get() = principalMinor - repaidMinor
     val isSettled: Boolean get() = outstandingMinor == 0L
@@ -193,6 +197,7 @@ data class DashboardSnapshot(
     val previousComparable: MonthlyCashFlow,
     val incomeCategories: List<CategoryShare>,
     val expenseCategories: List<CategoryShare>,
+    val fractionDigits: Int = 2,
 )
 
 data class AccountInput(
@@ -234,5 +239,3 @@ data class TransferAccountSuggestions(
     val preferredSourceId: String? = null,
     val preferredDestinationIds: Map<String, String> = emptyMap(),
 )
-
-val SupportedCurrencies = listOf("EUR", "USD", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY")

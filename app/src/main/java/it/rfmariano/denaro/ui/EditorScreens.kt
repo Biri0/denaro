@@ -43,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,10 +54,10 @@ import it.rfmariano.denaro.data.finance.AccountInput
 import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.CategorySummary
+import it.rfmariano.denaro.data.finance.CurrencyCatalog
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.RecurringRuleInput
-import it.rfmariano.denaro.data.finance.SupportedCurrencies
 import it.rfmariano.denaro.data.finance.TransactionInput
 import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransferInput
@@ -64,7 +65,6 @@ import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -73,8 +73,13 @@ import com.composables.icons.lucide.R as LucideR
 @Composable
 fun AccountEditorScreen(
     repository: FinanceRepository,
-    defaultCurrency: String = "EUR",
+    defaultCurrency: String = CurrencyCatalog.localeCurrencyCode(
+        LocalConfiguration.current.locales[0],
+    ) ?: "EUR",
     accountId: String?,
+    usedCurrencies: List<String> = emptyList(),
+    includeAll: Boolean = false,
+    fractionDigitsForNewAccount: suspend (String) -> Int = repository::getFractionDigitsForNewAccount,
     onFinished: (String) -> Unit,
     onBack: () -> Unit,
     onMessage: (String) -> Unit,
@@ -83,24 +88,38 @@ fun AccountEditorScreen(
     var description by rememberSaveable { mutableStateOf("") }
     var openingBalance by rememberSaveable { mutableStateOf("") }
     var currency by rememberSaveable(accountId) { mutableStateOf(defaultCurrency) }
+    var userPickedCurrency by rememberSaveable(accountId) { mutableStateOf(false) }
+    var currencyValid by rememberSaveable(accountId) { mutableStateOf(true) }
     var loaded by rememberSaveable(accountId) { mutableStateOf(accountId == null) }
+    var openingBalanceScale by rememberSaveable(accountId) { mutableStateOf(2) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
-    var showCurrencyMenu by remember { mutableStateOf(false) }
     var confirmArchive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val appLocale = LocalConfiguration.current.locales[0]
     val savedMessage = stringResource(R.string.account_saved)
     val archivedMessage = stringResource(R.string.account_archived)
+    val unsupportedCurrencyMessage = stringResource(R.string.unsupported_currency)
 
     LaunchedEffect(accountId) {
         if (accountId != null) {
             repository.observeAccount(accountId).first { it != null }?.let { account ->
                 name = account.name
                 description = account.description.orEmpty()
-                openingBalance = account.openingBalanceMinor.toInputAmount()
+                openingBalanceScale = account.fractionDigits
+                openingBalance = Money.toInputAmount(
+                    account.openingBalanceMinor,
+                    account.fractionDigits,
+                )
                 currency = account.currency
                 loaded = true
             }
+        }
+    }
+
+    LaunchedEffect(defaultCurrency) {
+        if (accountId == null && !userPickedCurrency) {
+            currency = defaultCurrency
         }
     }
 
@@ -121,18 +140,29 @@ fun AccountEditorScreen(
                 navigationIcon = { BackButton(onBack) },
                 actions = {
                     TextButton(
-                        enabled = loaded && !isSaving,
+                        enabled = loaded && !isSaving && (accountId != null || currencyValid),
                         onClick = {
                             if (isSaving) return@TextButton
                             isSaving = true
                             error = null
                             scope.launch {
+                                if (accountId == null && !CurrencyCatalog.isValid(currency)) {
+                                    error = unsupportedCurrencyMessage
+                                    isSaving = false
+                                    return@launch
+                                }
                                 runCatching {
+                                    val fractionDigits = if (accountId == null) {
+                                        fractionDigitsForNewAccount(currency)
+                                    } else {
+                                        openingBalanceScale
+                                    }
                                     val input = AccountInput(
                                         name = name,
                                         description = description,
                                         openingBalanceMinor = Money.parseMinorUnits(
                                             openingBalance.ifBlank { "0.00" },
+                                            fractionDigits,
                                             allowNegative = true,
                                         ),
                                         currency = currency,
@@ -195,43 +225,19 @@ fun AccountEditorScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
-            ExposedDropdownMenuBox(
-                expanded = showCurrencyMenu,
-                onExpandedChange = {
-                    if (accountId == null) showCurrencyMenu = !showCurrencyMenu
+            CurrencyComboBox(
+                code = currency,
+                enabled = accountId == null,
+                includeAll = includeAll,
+                preferredCodes = remember(usedCurrencies, appLocale) {
+                    CurrencyCatalog.preferredCodes(usedCurrencies, appLocale)
                 },
-            ) {
-                OutlinedTextField(
-                    value = currency,
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = accountId == null,
-                    label = { Text(stringResource(R.string.currency)) },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(showCurrencyMenu)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(
-                            ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                            enabled = accountId == null,
-                        ),
-                )
-                ExposedDropdownMenu(
-                    expanded = showCurrencyMenu,
-                    onDismissRequest = { showCurrencyMenu = false },
-                ) {
-                    SupportedCurrencies.forEach { code ->
-                        DropdownMenuItem(
-                            text = { Text(code) },
-                            onClick = {
-                                currency = code
-                                showCurrencyMenu = false
-                            },
-                        )
-                    }
-                }
-            }
+                onCodeChange = {
+                    currency = it
+                    userPickedCurrency = true
+                },
+                onValidChange = { currencyValid = it },
+            )
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
@@ -291,6 +297,7 @@ fun ActivityEditorScreen(
     onAddCategory: (TransactionType) -> Unit = {},
 ) {
     val accounts by repository.observeActiveAccounts().collectAsStateWithLifecycle(emptyList())
+    val allAccounts by repository.observeAllAccounts().collectAsStateWithLifecycle(emptyList())
     val categories by repository.observeCategories(includeArchived = true)
         .collectAsStateWithLifecycle(emptyList())
     var kind by rememberSaveable { mutableStateOf(route.kind) }
@@ -333,6 +340,7 @@ fun ActivityEditorScreen(
     val deletedMessage = stringResource(R.string.activity_deleted)
     val pausedMessage = stringResource(R.string.schedule_paused)
     val resumedMessage = stringResource(R.string.schedule_resumed)
+    val selectedAccount = accounts.firstOrNull { it.id == accountId }
 
     LaunchedEffect(createdCategoryId, loaded) {
         if (loaded) createdCategoryId?.let {
@@ -406,54 +414,56 @@ fun ActivityEditorScreen(
             transferDefaultsApplied = true
         }
     }
-    LaunchedEffect(route.id) {
-        route.id?.let { id ->
-            if (route.kind == ActivityKind.TRANSFER) {
-                repository.getTransfer(id)?.let {
-                    accountId = it.fromAccountId
-                    destinationId = it.toAccountId
-                    amount = it.amountMinor.toInputAmount()
-                    description = it.description.orEmpty()
-                    occurredAt = it.occurredAt
-                }
+    LaunchedEffect(route.id, accounts, allAccounts) {
+        val id = route.id ?: return@LaunchedEffect
+        if (loaded) return@LaunchedEffect
+        if (route.kind == ActivityKind.TRANSFER) {
+            val transfer = repository.getTransfer(id) ?: return@LaunchedEffect
+            val account = allAccounts.firstOrNull { it.id == transfer.fromAccountId }
+                ?: return@LaunchedEffect
+            accountId = transfer.fromAccountId
+            destinationId = transfer.toAccountId
+            amount = Money.toInputAmount(transfer.amountMinor, account.fractionDigits)
+            description = transfer.description.orEmpty()
+            occurredAt = transfer.occurredAt
+        } else {
+            val transaction = repository.getTransaction(id) ?: return@LaunchedEffect
+            val account = allAccounts.firstOrNull { it.id == transaction.accountId }
+                ?: return@LaunchedEffect
+            kind = if (transaction.type == TransactionType.INCOME) {
+                ActivityKind.INCOME
             } else {
-                repository.getTransaction(id)?.let {
-                    kind = if (it.type == TransactionType.INCOME) {
-                        ActivityKind.INCOME
-                    } else {
-                        ActivityKind.EXPENSE
-                    }
-                    accountId = it.accountId
-                    amount = it.amountMinor.toInputAmount()
-                    description = it.description.orEmpty()
-                    occurredAt = it.occurredAt
-                    recurringRuleId = it.recurringRuleId
-                    categoryId = it.categoryId
-                }
+                ActivityKind.EXPENSE
             }
-            loaded = true
+            accountId = transaction.accountId
+            amount = Money.toInputAmount(transaction.amountMinor, account.fractionDigits)
+            description = transaction.description.orEmpty()
+            occurredAt = transaction.occurredAt
+            recurringRuleId = transaction.recurringRuleId
+            categoryId = transaction.categoryId
         }
+        loaded = true
     }
-    LaunchedEffect(route.recurringRuleId) {
-        route.recurringRuleId?.let { id ->
-            repository.getRecurringRule(id)?.let {
-                kind = if (it.transactionType == TransactionType.INCOME) {
-                    ActivityKind.INCOME
-                } else {
-                    ActivityKind.EXPENSE
-                }
-                accountId = it.accountId
-                amount = it.amountMinor.toInputAmount()
-                description = it.description.orEmpty()
-                occurredAt = it.nextOccurrenceAt
-                frequency = it.frequency
-                intervalCount = it.intervalCount.toString()
-                ruleActive = it.isActive
-                isScheduled = true
-                categoryId = it.categoryId
-            }
-            loaded = true
+    LaunchedEffect(route.recurringRuleId, accounts, allAccounts) {
+        val id = route.recurringRuleId ?: return@LaunchedEffect
+        if (loaded) return@LaunchedEffect
+        val rule = repository.getRecurringRule(id) ?: return@LaunchedEffect
+        val account = allAccounts.firstOrNull { it.id == rule.accountId } ?: return@LaunchedEffect
+        kind = if (rule.transactionType == TransactionType.INCOME) {
+            ActivityKind.INCOME
+        } else {
+            ActivityKind.EXPENSE
         }
+        accountId = rule.accountId
+        amount = Money.toInputAmount(rule.amountMinor, account.fractionDigits)
+        description = rule.description.orEmpty()
+        occurredAt = rule.nextOccurrenceAt
+        frequency = rule.frequency
+        intervalCount = rule.intervalCount.toString()
+        ruleActive = rule.isActive
+        isScheduled = true
+        categoryId = rule.categoryId
+        loaded = true
     }
 
     Scaffold(
@@ -478,14 +488,18 @@ fun ActivityEditorScreen(
                 navigationIcon = { BackButton(onBack) },
                 actions = {
                     TextButton(
-                        enabled = loaded && !isSaving,
+                        enabled = loaded && selectedAccount != null && !isSaving,
                         onClick = {
                             if (isSaving) return@TextButton
+                            val account = selectedAccount ?: return@TextButton
                             isSaving = true
                             error = null
                             scope.launch {
                                 runCatching {
-                                    val amountMinor = Money.parseMinorUnits(amount)
+                                    val amountMinor = Money.parseMinorUnits(
+                                        amount,
+                                        account.fractionDigits,
+                                    )
                                     if (isScheduled) {
                                         val input = RecurringRuleInput(
                                             accountId = accountId,
@@ -649,6 +663,11 @@ fun ActivityEditorScreen(
                 selectedId = accountId,
                 enabled = loaded,
                 onSelected = {
+                    amount = Money.rescaleInput(
+                        amount,
+                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                    )
                     accountId = it
                     if (kind == ActivityKind.TRANSFER) {
                         transferSourceCustomized = true
@@ -665,13 +684,14 @@ fun ActivityEditorScreen(
                 },
             )
             if (kind == ActivityKind.TRANSFER) {
+                val sourceCurrency = selectedAccount?.currency
+                val sourceFractionDigits = selectedAccount?.fractionDigits
                 AccountSelector(
                     label = stringResource(R.string.to_account),
                     accounts = accounts.filter {
                         it.id != accountId &&
-                                it.currency == accounts.find { source ->
-                            source.id == accountId
-                        }?.currency
+                                it.currency == sourceCurrency &&
+                                it.fractionDigits == sourceFractionDigits
                     },
                     selectedId = destinationId,
                     enabled = loaded,
@@ -696,6 +716,7 @@ fun ActivityEditorScreen(
             OutlinedTextField(
                 value = amount,
                 onValueChange = { amount = it },
+                enabled = loaded,
                 label = { Text(stringResource(R.string.amount)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
@@ -933,9 +954,13 @@ private fun suggestedDestinationId(
     suggestions: TransferAccountSuggestions,
 ): String {
     suggestions.preferredDestinationIds[sourceId]?.let { return it }
-    val sourceCurrency = accounts.find { it.id == sourceId }?.currency
+    val source = accounts.find { it.id == sourceId }
+    val sourceCurrency = source?.currency
+    val sourceFractionDigits = source?.fractionDigits
     return accounts.singleOrNull {
-        it.id != sourceId && it.currency == sourceCurrency
+        it.id != sourceId &&
+                it.currency == sourceCurrency &&
+                it.fractionDigits == sourceFractionDigits
     }?.id.orEmpty()
 }
 
@@ -1073,9 +1098,6 @@ fun CategorySelector(
         }
     }
 }
-
-private fun Long.toInputAmount(): String =
-    BigDecimal.valueOf(this, 2).setScale(2).toPlainString()
 
 private fun Long.toUtcDateMillis(): Long {
     val date = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()

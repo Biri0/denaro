@@ -1,5 +1,6 @@
 package it.rfmariano.denaro.data.migration
 
+import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.RecurringRuleEntity
@@ -50,23 +51,33 @@ class LegacyTransformer(
                 id = bucket.id,
                 name = bucket.title.trim(),
                 description = bucket.description?.trim()?.takeIf(String::isNotEmpty),
-                openingBalanceMinor = bucket.initialBalanceMinor,
+                openingBalanceMinor = Money.convertMinorUnits(
+                    bucket.initialBalanceMinor,
+                    2,
+                    Money.fractionDigitsForCurrency(bucket.currency),
+                ),
                 currency = bucket.currency,
                 archivedAt = null,
                 createdAt = bucket.createdAt,
                 updatedAt = bucket.createdAt,
+                fractionDigits = Money.fractionDigitsForCurrency(bucket.currency),
             )
         }
         val transactions = snapshot.transactions
             .filterNot { it.id in transferredIds }
             .map { legacy ->
                 val rule = rulesByTransactionId[legacy.id]
+                val currency = bucketsById.getValue(legacy.bucketId).currency
                 TransactionEntity(
                     id = legacy.id,
                     accountId = legacy.bucketId,
                     recurringRuleId = rule?.id,
                     occurrenceKey = rule?.let { "legacy:${legacy.id}" },
-                    amountMinor = abs(legacy.amountMinor),
+                    amountMinor = Money.convertMinorUnits(
+                        abs(legacy.amountMinor),
+                        2,
+                        Money.fractionDigitsForCurrency(currency),
+                    ),
                     type = legacy.amountMinor.toTransactionType(),
                     occurredAt = legacy.date,
                     localDate = legacy.date.toLocalDate(),
@@ -76,11 +87,16 @@ class LegacyTransformer(
                 )
             }
         val transfers = transferPairs.map { pair ->
+            val currency = bucketsById.getValue(pair.outgoing.bucketId).currency
             TransferEntity(
                 id = idGenerator(pair.outgoing.date),
                 fromAccountId = pair.outgoing.bucketId,
                 toAccountId = pair.incoming.bucketId,
-                amountMinor = abs(pair.outgoing.amountMinor),
+                amountMinor = Money.convertMinorUnits(
+                    abs(pair.outgoing.amountMinor),
+                    2,
+                    Money.fractionDigitsForCurrency(currency),
+                ),
                 occurredAt = pair.outgoing.date,
                 localDate = pair.outgoing.date.toLocalDate(),
                 description = pair.outgoing.description?.trim()?.takeIf(String::isNotEmpty),

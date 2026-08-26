@@ -69,6 +69,7 @@ data class AccountEntity(
     @ColumnInfo(name = "archived_at") val archivedAt: Long?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "fraction_digits", defaultValue = "2") val fractionDigits: Int = 2,
 )
 
 @Entity(

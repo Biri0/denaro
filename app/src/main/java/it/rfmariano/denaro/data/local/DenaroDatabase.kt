@@ -18,7 +18,7 @@ import androidx.room.TypeConverters
         LegacyImportEntity::class,
     ],
     views = [AccountBalance::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

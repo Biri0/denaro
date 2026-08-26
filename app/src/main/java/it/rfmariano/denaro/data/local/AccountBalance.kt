@@ -28,11 +28,12 @@ JOIN debts ON debts.id = debt_repayments.debt_id
 )
 SELECT accounts.id AS account_id,
        accounts.currency AS currency,
+       accounts.fraction_digits AS fraction_digits,
        accounts.opening_balance_minor +
            COALESCE(SUM(account_movements.amount_minor), 0) AS balance_minor
 FROM accounts
 LEFT JOIN account_movements ON account_movements.account_id = accounts.id
-GROUP BY accounts.id, accounts.currency, accounts.opening_balance_minor"""
+GROUP BY accounts.id, accounts.currency, accounts.fraction_digits, accounts.opening_balance_minor"""
 
 @DatabaseView(
     viewName = "account_balances",
@@ -41,6 +42,7 @@ GROUP BY accounts.id, accounts.currency, accounts.opening_balance_minor"""
 data class AccountBalance(
     @ColumnInfo(name = "account_id") val accountId: String,
     val currency: String,
+    @ColumnInfo(name = "fraction_digits") val fractionDigits: Int,
     @ColumnInfo(name = "balance_minor") val balanceMinor: Long,
 )
 
@@ -65,5 +67,6 @@ data class AccountWithBalance(
     @ColumnInfo(name = "archived_at") val archivedAt: Long?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "fraction_digits") val fractionDigits: Int,
     val balanceMinor: Long,
 )

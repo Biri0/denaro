@@ -2,6 +2,8 @@ package it.rfmariano.denaro.data.backup
 
 import android.util.Base64
 import androidx.room.withTransaction
+import it.rfmariano.denaro.data.finance.CurrencyCatalog
+import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
@@ -128,11 +130,12 @@ class DenaroBackupService(
     suspend fun inspect(input: InputStream, password: CharArray?): BackupInspection {
         val decoded = readEnvelope(input, password)
         validate(decoded.payload)
+        val upgraded = decoded.payload.upgradedToCurrentVersion()
         val current = database.withTransaction { snapshot() }
         return BackupInspection(
-            preview = decoded.payload.preview(decoded.protection),
+            preview = upgraded.preview(decoded.protection),
             currentCounts = current.counts(),
-            hasFinanceChanges = !decoded.payload.sameFinanceDataAs(current),
+            hasFinanceChanges = !upgraded.sameFinanceDataAs(current),
             contentDigest = decoded.contentDigest.base64(),
         )
     }
@@ -149,12 +152,12 @@ class DenaroBackupService(
             throw BackupException.InvalidBackup("The backup changed after it was inspected")
         }
         validate(decoded.payload)
-        val payload = decoded.payload
+        val payload = decoded.payload.upgradedToCurrentVersion()
         database.withTransaction {
             deleteFinanceData()
             val dao = database.backupDao()
 
-            payload.accounts.map(BackupAccount::toEntity).also {
+            payload.accounts.map { it.toEntity(payload.schemaVersion) }.also {
                 if (it.isNotEmpty()) database.accountDao().insertAll(it)
             }
             topologicallySortedCategories(payload.categories).map(BackupCategory::toEntity).also {
@@ -205,6 +208,7 @@ class DenaroBackupService(
     private suspend fun snapshot(): BackupPayload {
         val dao = database.backupDao()
         return BackupPayload(
+            schemaVersion = PAYLOAD_VERSION,
             createdAt = now(),
             appVersion = appVersion,
             accounts = dao.accounts().map(BackupAccount::from),
@@ -388,9 +392,10 @@ class DenaroBackupService(
     }
 
     private fun validate(payload: BackupPayload) {
-        if (payload.schemaVersion != PAYLOAD_VERSION) {
+        if (payload.schemaVersion !in LEGACY_PAYLOAD_VERSION..PAYLOAD_VERSION) {
             throw BackupException.InvalidBackup("Unsupported backup data version")
         }
+
         val counts = payload.counts()
         if (counts.total > MAX_RECORDS) throw BackupException.InvalidBackup("Backup contains too many records")
         if (payload.createdAt < 0L || payload.appVersion.isBlank()) invalid("Invalid backup metadata")
@@ -405,7 +410,18 @@ class DenaroBackupService(
         uniqueIds("repayment", payload.debtRepayments.map { it.id })
 
         payload.accounts.forEach {
-            if (it.name.isBlank() || !CURRENCY_CODE.matches(it.currency)) invalid("Invalid account")
+            val fractionDigits = it.resolvedFractionDigits(payload.schemaVersion)
+            if (it.name.isBlank() || !CurrencyCatalog.isValid(it.currency) ||
+                !Money.isValidFractionDigits(fractionDigits)
+            ) {
+                invalid("Invalid account")
+            }
+        }
+        payload.accounts.groupBy(BackupAccount::currency).forEach { (_, accounts) ->
+            if (accounts.map { it.resolvedFractionDigits(payload.schemaVersion) }
+                    .distinct().size > 1) {
+                invalid("Accounts using one currency must use the same fraction digits")
+            }
         }
         val accountsById = payload.accounts.associateBy { it.id }
         val categoriesById = payload.categories.associateBy { it.id }
@@ -467,7 +483,7 @@ class DenaroBackupService(
         payload.debts.forEach {
             parseDebtDirection(it.direction)
             if (it.counterpartyId !in counterpartyIds || it.accountId !in accountIds ||
-                !CURRENCY_CODE.matches(it.currency)
+                !CurrencyCatalog.isValid(it.currency)
             ) invalid("Invalid debt")
             if (accountsById.getValue(it.accountId).currency != it.currency) {
                 invalid("Debt currency does not match its account")
@@ -532,7 +548,7 @@ class DenaroBackupService(
     )
 
     private fun BackupPayload.sameFinanceDataAs(other: BackupPayload): Boolean =
-        accounts.associateBy { it.id } == other.accounts.associateBy { it.id } &&
+        normalizedAccounts() == other.normalizedAccounts() &&
                 categories.associateBy { it.id } == other.categories.associateBy { it.id } &&
                 recurringRules.associateBy { it.id } == other.recurringRules.associateBy { it.id } &&
                 transactions.associateBy { it.id } == other.transactions.associateBy { it.id } &&
@@ -542,10 +558,67 @@ class DenaroBackupService(
                 debts.associateBy { it.id } == other.debts.associateBy { it.id } &&
                 debtRepayments.associateBy { it.id } == other.debtRepayments.associateBy { it.id }
 
+    private fun BackupPayload.normalizedAccounts(): Map<String, BackupAccount> =
+        accounts.associate { account ->
+            account.id to account.copy(
+                fractionDigits = account.resolvedFractionDigits(schemaVersion),
+            )
+        }
+
+    private fun BackupPayload.upgradedToCurrentVersion(): BackupPayload {
+        if (schemaVersion == PAYLOAD_VERSION) return this
+        val accountsByCurrency =
+            accounts.associate { it.currency to Money.fractionDigitsForCurrency(it.currency) }
+        val accountCurrencyById = accounts.associate { it.id to it.currency }
+        val debtCurrencyById = debts.associate { it.id to it.currency }
+        fun scaled(currency: String, value: Long): Long {
+            val target = accountsByCurrency[currency] ?: return value
+            return Money.convertMinorUnits(value, 2, target)
+        }
+        return copy(
+            schemaVersion = PAYLOAD_VERSION,
+            accounts = accounts.map { account ->
+                val target = accountsByCurrency[account.currency] ?: 2
+                account.copy(
+                    fractionDigits = target,
+                    openingBalanceMinor = scaled(account.currency, account.openingBalanceMinor),
+                )
+            },
+            transactions = transactions.map { transaction ->
+                val currency = accountCurrencyById[transaction.accountId] ?: return@map transaction
+                transaction.copy(amountMinor = scaled(currency, transaction.amountMinor))
+            },
+            transfers = transfers.map { transfer ->
+                val currency = accountCurrencyById[transfer.fromAccountId] ?: return@map transfer
+                transfer.copy(amountMinor = scaled(currency, transfer.amountMinor))
+            },
+            balanceAdjustments = balanceAdjustments.map { adjustment ->
+                val currency = accountCurrencyById[adjustment.accountId] ?: return@map adjustment
+                adjustment.copy(
+                    deltaMinor = scaled(currency, adjustment.deltaMinor),
+                    balanceBeforeMinor = scaled(currency, adjustment.balanceBeforeMinor),
+                    balanceAfterMinor = scaled(currency, adjustment.balanceAfterMinor),
+                )
+            },
+            recurringRules = recurringRules.map { rule ->
+                val currency = accountCurrencyById[rule.accountId] ?: return@map rule
+                rule.copy(amountMinor = scaled(currency, rule.amountMinor))
+            },
+            debts = debts.map { debt ->
+                debt.copy(principalMinor = scaled(debt.currency, debt.principalMinor))
+            },
+            debtRepayments = debtRepayments.map { repayment ->
+                val currency = debtCurrencyById[repayment.debtId] ?: return@map repayment
+                repayment.copy(amountMinor = scaled(currency, repayment.amountMinor))
+            },
+        )
+    }
+
     private companion object {
         val MAGIC = "DENARO_BACKUP\n".toByteArray(Charsets.US_ASCII)
         const val ENVELOPE_VERSION = 1
-        const val PAYLOAD_VERSION = 1
+        const val LEGACY_PAYLOAD_VERSION = 1
+        const val PAYLOAD_VERSION = 2
         const val PBKDF2_ITERATIONS = 600_000
         const val SALT_BYTES = 16
         const val IV_BYTES = 12
@@ -557,7 +630,6 @@ class DenaroBackupService(
         const val MAX_STORED_PAYLOAD_BYTES = 16 * 1024 * 1024
         const val MAX_UNCOMPRESSED_BYTES = 16 * 1024 * 1024
         const val MAX_RECORDS = 50_000
-        val CURRENCY_CODE = Regex("[A-Z]{3}")
         val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
     }
 }
@@ -596,30 +668,42 @@ private data class BackupPayload(
 
 @Serializable
 private data class BackupAccount(
-    val id: String, val name: String, val description: String?, val openingBalanceMinor: Long,
-    val currency: String, val archivedAt: Long?, val createdAt: Long, val updatedAt: Long,
+    val id: String,
+    val name: String,
+    val description: String?,
+    val openingBalanceMinor: Long,
+    val currency: String,
+    val archivedAt: Long?,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val fractionDigits: Int? = null,
 ) {
-    fun toEntity() = AccountEntity(
-        id,
-        name,
-        description,
-        openingBalanceMinor,
-        currency,
-        archivedAt,
-        createdAt,
-        updatedAt
+    fun resolvedFractionDigits(schemaVersion: Int): Int =
+        if (schemaVersion == 1) 2 else fractionDigits ?: invalid("Missing account fraction digits")
+
+    fun toEntity(schemaVersion: Int) = AccountEntity(
+        id = id,
+        name = name,
+        description = description,
+        openingBalanceMinor = openingBalanceMinor,
+        currency = currency,
+        archivedAt = archivedAt,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        fractionDigits = resolvedFractionDigits(schemaVersion),
     )
 
     companion object {
         fun from(v: AccountEntity) = BackupAccount(
-            v.id,
-            v.name,
-            v.description,
-            v.openingBalanceMinor,
-            v.currency,
-            v.archivedAt,
-            v.createdAt,
-            v.updatedAt
+            id = v.id,
+            name = v.name,
+            description = v.description,
+            openingBalanceMinor = v.openingBalanceMinor,
+            currency = v.currency,
+            archivedAt = v.archivedAt,
+            createdAt = v.createdAt,
+            updatedAt = v.updatedAt,
+            fractionDigits = v.fractionDigits,
         )
     }
 }

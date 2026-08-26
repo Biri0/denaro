@@ -157,7 +157,7 @@ class DenaroNavigationStateTest {
         composeRule.setContent {
             DenaroTheme {
                 DenaroApp(
-                    state = rememberDenaroAppState(session, defaultCurrency = "EUR"),
+                    state = rememberDenaroAppState(session),
                     financeSessionProvider = financeSessionProvider,
                     preferencesRepository = preferencesRepository,
                     securityPreferencesRepository = securityPreferencesRepository,
@@ -243,7 +243,6 @@ class DenaroNavigationStateTest {
                         .collectAsStateWithLifecycle()
                     val appState = rememberDenaroAppState(
                         requireNotNull(activeSession),
-                        defaultCurrency = "EUR",
                     )
                     DenaroApp(
                         state = appState,
@@ -331,7 +330,7 @@ class DenaroNavigationStateTest {
         composeRule.setContent {
             DenaroTheme {
                 DenaroApp(
-                    state = rememberDenaroAppState(session, defaultCurrency = "EUR"),
+                    state = rememberDenaroAppState(session),
                     financeSessionProvider = financeSessionProvider,
                     preferencesRepository = preferencesRepository,
                     securityPreferencesRepository = securityPreferencesRepository,

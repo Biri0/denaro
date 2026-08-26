@@ -51,13 +51,14 @@ import com.composables.icons.lucide.R as LucideR
 fun AmountText(
     amountMinor: Long,
     currency: String,
+    fractionDigits: Int,
     amountsVisible: Boolean,
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
 ) {
     Text(
         text = if (amountsVisible) {
-            Money.format(amountMinor, currency)
+            Money.format(amountMinor, currency, fractionDigits)
         } else {
             stringResource(R.string.amount_hidden)
         },
@@ -103,6 +104,7 @@ fun AccountRow(
         AmountText(
             amountMinor = account.balanceMinor,
             currency = account.currency,
+            fractionDigits = account.fractionDigits,
             amountsVisible = amountsVisible,
         )
         if (trailingAction != null) {
@@ -179,6 +181,7 @@ fun ActivityRow(
             AmountText(
                 amountMinor = signedAmount,
                 currency = item.currency,
+                fractionDigits = item.fractionDigits,
                 amountsVisible = amountsVisible,
                 color = when (item.kind) {
                     ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {

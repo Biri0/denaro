@@ -4,6 +4,7 @@ import androidx.paging.PagingSource
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
@@ -54,6 +55,7 @@ class FinanceRepositoryTest {
             ) as PagingSource.LoadResult.Page
             assertEquals(2, page.data.size)
             assertTrue(page.data.all { it.kind == ActivityKind.ADJUSTMENT.name })
+            assertTrue(page.data.all { it.fractionDigits == 2 })
 
             val dashboard = repository.observeDashboard(
                 DashboardFilter("EUR", accountId, "2026-07"),
@@ -579,6 +581,49 @@ class FinanceRepositoryTest {
             assertNull(repository.getCategory(cascadeChildId)?.archivedAt)
             assertNull(repository.getCategory(cascadeChildId)?.archivedByParentId)
             assertEquals(10L, repository.getCategory(independentChildId)?.archivedAt)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun newAccountsReuseArchivedCurrencyScaleAndOtherwiseUsePlatformDefault() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            database.accountDao().insert(
+                AccountEntity(
+                    id = "archived-yen",
+                    name = "Legacy yen",
+                    description = null,
+                    openingBalanceMinor = 12_345,
+                    currency = "JPY",
+                    archivedAt = 5,
+                    createdAt = 1,
+                    updatedAt = 5,
+                    fractionDigits = 2,
+                ),
+            )
+            val repository = FinanceRepository(database, clock = { 10 })
+
+            assertEquals(2, repository.getFractionDigitsForNewAccount("JPY"))
+            val yenId = repository.createAccount(accountInput("New yen", "JPY"))
+            assertEquals(2, database.accountDao().getById(yenId)?.fractionDigits)
+            assertEquals(2, repository.observeAccount(yenId).first()?.fractionDigits)
+
+            val dinarId = repository.createAccount(accountInput("Dinars", "KWD"))
+            assertEquals(
+                Money.fractionDigitsForCurrency("KWD"),
+                database.accountDao().getById(dinarId)?.fractionDigits,
+            )
+
+            repository.updateAccount(yenId, accountInput("Renamed yen", "JPY"))
+            assertEquals(2, database.accountDao().getById(yenId)?.fractionDigits)
+            val currencyChange = runCatching {
+                repository.updateAccount(yenId, accountInput("Renamed yen", "USD"))
+            }.exceptionOrNull()
+            assertEquals("Account currency cannot be changed", currencyChange?.message)
         } finally {
             database.close()
         }

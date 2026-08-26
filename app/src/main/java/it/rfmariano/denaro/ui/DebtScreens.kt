@@ -66,7 +66,6 @@ import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.DebtDirection
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -111,6 +110,7 @@ fun DebtsPanel(
                     group.filter { it.direction == DebtDirection.BORROWED }
                         .sumOf { it.outstandingMinor },
                     currency,
+                    group.first().fractionDigits,
                     amountsVisible,
                     Modifier.weight(1f),
                 )
@@ -119,6 +119,7 @@ fun DebtsPanel(
                     group.filter { it.direction == DebtDirection.LENT }
                         .sumOf { it.outstandingMinor },
                     currency,
+                    group.first().fractionDigits,
                     amountsVisible,
                     Modifier.weight(1f),
                 )
@@ -185,13 +186,18 @@ private fun DebtTotal(
     label: Int,
     amount: Long,
     currency: String,
+    fractionDigits: Int,
     visible: Boolean,
     modifier: Modifier
 ) {
     Column(modifier.padding(12.dp)) {
         Text(stringResource(label), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
-            if (visible) Money.format(amount, currency) else stringResource(R.string.amount_hidden),
+            if (visible) Money.format(
+                amount,
+                currency,
+                fractionDigits
+            ) else stringResource(R.string.amount_hidden),
             style = MaterialTheme.typography.titleLarge,
         )
     }
@@ -227,7 +233,8 @@ private fun DebtRow(debt: DebtSummary, amountsVisible: Boolean, onClick: () -> U
                 Text(
                     if (amountsVisible) Money.format(
                         debt.outstandingMinor,
-                        debt.currency
+                        debt.currency,
+                        debt.fractionDigits
                     ) else stringResource(R.string.amount_hidden)
                 )
                 Text(
@@ -284,7 +291,8 @@ fun DebtDetailScreen(
                         Text(
                             if (amountsVisible) Money.format(
                                 debt.outstandingMinor,
-                                debt.currency
+                                debt.currency,
+                                debt.fractionDigits
                             ) else stringResource(R.string.amount_hidden),
                             style = MaterialTheme.typography.headlineMedium,
                         )
@@ -292,7 +300,8 @@ fun DebtDetailScreen(
                             "${stringResource(R.string.principal)}: ${
                                 if (amountsVisible) Money.format(
                                     debt.principalMinor,
-                                    debt.currency
+                                    debt.currency,
+                                    debt.fractionDigits
                                 ) else stringResource(R.string.amount_hidden)
                             }"
                         )
@@ -300,7 +309,8 @@ fun DebtDetailScreen(
                             "${stringResource(R.string.repaid)}: ${
                                 if (amountsVisible) Money.format(
                                     debt.repaidMinor,
-                                    debt.currency
+                                    debt.currency,
+                                    debt.fractionDigits
                                 ) else stringResource(R.string.amount_hidden)
                             }"
                         )
@@ -338,7 +348,8 @@ fun DebtDetailScreen(
                             Text(
                                 if (amountsVisible) Money.format(
                                     payment.amountMinor,
-                                    debt.currency
+                                    debt.currency,
+                                    debt.fractionDigits
                                 ) else stringResource(R.string.amount_hidden)
                             )
                         },
@@ -404,6 +415,7 @@ fun DebtEditorScreen(
     val scope = rememberCoroutineScope()
     val saved = stringResource(R.string.debt_saved)
     val deleted = stringResource(R.string.debt_deleted)
+    val selectedAccount = accounts.firstOrNull { it.id == accountId }
     val selectorsReady = loaded
 
     LaunchedEffect(direction, debtId) {
@@ -450,7 +462,7 @@ fun DebtEditorScreen(
                 direction = debt.direction
                 counterpartyId = debt.counterpartyId
                 accountId = debt.accountId
-                amount = debt.principalMinor.inputAmount()
+                amount = Money.toInputAmount(debt.principalMinor, debt.fractionDigits)
                 openedAt = debt.openedAt
                 dueDate = debt.dueDate
                 note = debt.note.orEmpty()
@@ -465,7 +477,8 @@ fun DebtEditorScreen(
                 title = { Text(stringResource(if (debtId == null) R.string.add_debt else R.string.edit_debt)) },
                 navigationIcon = { BackButton(onBack) },
                 actions = {
-                    TextButton(enabled = loaded && !saving, onClick = {
+                    TextButton(enabled = loaded && selectedAccount != null && !saving, onClick = {
+                        val account = selectedAccount ?: return@TextButton
                         saving = true
                         scope.launch {
                             runCatching {
@@ -473,7 +486,7 @@ fun DebtEditorScreen(
                                     counterpartyId,
                                     accountId,
                                     direction,
-                                    Money.parseMinorUnits(amount),
+                                    Money.parseMinorUnits(amount, account.fractionDigits),
                                     openedAt,
                                     dueDate,
                                     note
@@ -565,6 +578,11 @@ fun DebtEditorScreen(
                 accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
                 selectedId = accountId,
                 onSelected = {
+                    amount = Money.rescaleInput(
+                        amount,
+                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                    )
                     accountId = it
                     accountCustomized = true
                 },
@@ -658,6 +676,9 @@ fun DebtRepaymentEditorScreen(
     val accounts by remember(repository) { repository.observeActiveAccounts() }.collectAsStateWithLifecycle(
         emptyList()
     )
+    val allAccounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
+        emptyList()
+    )
     var accountId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
     var occurredAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
@@ -666,31 +687,47 @@ fun DebtRepaymentEditorScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var loaded by rememberSaveable(debtId, repaymentId) {
+        mutableStateOf(repaymentId == null)
+    }
     val scope = rememberCoroutineScope()
     val saved = stringResource(R.string.repayment_saved)
-    LaunchedEffect(debt, accounts) {
-        if (accountId.isBlank()) accountId =
-            accounts.firstOrNull { it.currency == debt?.currency }?.id.orEmpty()
-    }
-    LaunchedEffect(repaymentId) {
-        repaymentId?.let { repository.getDebtRepayment(it) }?.let {
-            accountId = it.accountId; amount = it.amountMinor.inputAmount(); occurredAt =
-            it.occurredAt; note = it.note.orEmpty()
+    val selectedAccount = accounts.firstOrNull { it.id == accountId }
+    val requiredDataLoaded = loaded && debt != null && selectedAccount != null
+    LaunchedEffect(debt, accounts, repaymentId) {
+        if (repaymentId == null && accountId.isBlank()) {
+            accountId = accounts.firstOrNull { it.currency == debt?.currency }?.id.orEmpty()
         }
+    }
+    LaunchedEffect(repaymentId, debt, allAccounts) {
+        val existingRepaymentId = repaymentId ?: return@LaunchedEffect
+        if (loaded) return@LaunchedEffect
+        val currentDebt = debt ?: return@LaunchedEffect
+        val repayment = repository.getDebtRepayment(existingRepaymentId)
+            ?: return@LaunchedEffect
+        val account = allAccounts.firstOrNull { it.id == repayment.accountId }
+        if (account == null || account.currency != currentDebt.currency) return@LaunchedEffect
+        accountId = repayment.accountId
+        amount = Money.toInputAmount(repayment.amountMinor, currentDebt.fractionDigits)
+        occurredAt = repayment.occurredAt
+        note = repayment.note.orEmpty()
+        loaded = true
     }
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(stringResource(if (repaymentId == null) R.string.add_repayment else R.string.edit_repayment)) },
             navigationIcon = { BackButton(onBack) },
             actions = {
-                TextButton(enabled = !saving, onClick = {
+                TextButton(enabled = requiredDataLoaded && !saving, onClick = {
+                    val account = selectedAccount ?: return@TextButton
+                    if (debt == null) return@TextButton
                     saving = true
                     scope.launch {
                         runCatching {
                             val input = DebtRepaymentInput(
                                 debtId,
                                 accountId,
-                                Money.parseMinorUnits(amount),
+                                Money.parseMinorUnits(amount, account.fractionDigits),
                                 occurredAt,
                                 note
                             )
@@ -715,10 +752,20 @@ fun DebtRepaymentEditorScreen(
                 stringResource(R.string.account),
                 accounts.filter { it.currency == debt?.currency },
                 accountId,
-                { accountId = it })
+                {
+                    amount = Money.rescaleInput(
+                        amount,
+                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                    )
+                    accountId = it
+                },
+                enabled = loaded && debt != null,
+            )
             OutlinedTextField(
                 value = amount,
                 onValueChange = { amount = it },
+                enabled = loaded,
                 label = { Text(stringResource(R.string.amount)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth()
@@ -920,9 +967,6 @@ private fun LocalDatePicker(initial: Long, onDismiss: () -> Unit, onSelected: (L
         )
     }
 }
-
-private fun Long.inputAmount(): String =
-    BigDecimal.valueOf(this, 2).stripTrailingZeros().toPlainString()
 
 private fun Long.utcDateMillis(): Long =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()

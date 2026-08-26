@@ -120,7 +120,7 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
             val home: HomeViewModel = viewModel(
                 key = "capture-home-${session.id}",
                 factory = viewModelFactory {
-                    HomeViewModel(repository, "EUR", session.initialDashboardMonth)
+                    HomeViewModel(repository, session.initialDashboardMonth)
                 },
             )
             HomeRouteContent(

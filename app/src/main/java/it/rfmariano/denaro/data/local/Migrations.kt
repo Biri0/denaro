@@ -2,12 +2,45 @@ package it.rfmariano.denaro.data.local
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import it.rfmariano.denaro.data.finance.Money
 
 private const val ACCOUNT_BALANCE_QUERY_V4 =
     """WITH account_movements(account_id, amount_minor) AS (
 SELECT account_id,
        CASE type WHEN 'INCOME' THEN amount_minor ELSE -amount_minor END
 FROM transactions
+UNION ALL
+SELECT from_account_id, -amount_minor
+FROM transfers
+UNION ALL
+SELECT to_account_id, amount_minor
+FROM transfers
+UNION ALL
+SELECT account_id,
+       CASE direction WHEN 'BORROWED' THEN principal_minor ELSE -principal_minor END
+FROM debts
+UNION ALL
+SELECT debt_repayments.account_id,
+       CASE debts.direction WHEN 'BORROWED' THEN -debt_repayments.amount_minor ELSE debt_repayments.amount_minor END
+FROM debt_repayments
+JOIN debts ON debts.id = debt_repayments.debt_id
+)
+SELECT accounts.id AS account_id,
+       accounts.currency AS currency,
+       accounts.opening_balance_minor +
+           COALESCE(SUM(account_movements.amount_minor), 0) AS balance_minor
+FROM accounts
+LEFT JOIN account_movements ON account_movements.account_id = accounts.id
+GROUP BY accounts.id, accounts.currency, accounts.opening_balance_minor"""
+
+private const val ACCOUNT_BALANCE_QUERY_V5 =
+    """WITH account_movements(account_id, amount_minor) AS (
+SELECT account_id,
+       CASE type WHEN 'INCOME' THEN amount_minor ELSE -amount_minor END
+FROM transactions
+UNION ALL
+SELECT account_id, delta_minor
+FROM balance_adjustments
 UNION ALL
 SELECT from_account_id, -amount_minor
 FROM transfers
@@ -157,6 +190,74 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
                     "ON `balance_adjustments` (`account_id`, `occurred_at`)",
         )
         db.execSQL("DROP VIEW IF EXISTS `account_balances`")
+        db.execSQL("CREATE VIEW `account_balances` AS $ACCOUNT_BALANCE_QUERY_V5")
+    }
+}
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `accounts` ADD COLUMN `fraction_digits` INTEGER NOT NULL DEFAULT 2",
+        )
+        convertLegacyAmountsToNaturalScales(db)
+        db.execSQL("DROP VIEW IF EXISTS `account_balances`")
         db.execSQL("CREATE VIEW `account_balances` AS $ACCOUNT_BALANCE_QUERY")
+    }
+
+    private fun convertLegacyAmountsToNaturalScales(db: SupportSQLiteDatabase) {
+        val currencies = mutableSetOf<String>()
+        db.query("SELECT DISTINCT currency FROM accounts").use { cursor ->
+            while (cursor.moveToNext()) currencies += cursor.getString(0)
+        }
+        for (currency in currencies) {
+            val scale = Money.fractionDigitsForCurrency(currency)
+            if (scale == 2) continue
+            val factor = pow10(if (scale > 2) scale - 2 else 2 - scale)
+            val op = if (scale > 2) "*" else "/"
+            db.execSQL(
+                "UPDATE accounts SET fraction_digits = ?, " +
+                        "opening_balance_minor = opening_balance_minor $op ? " +
+                        "WHERE currency = ?",
+                arrayOf<Any?>(scale, factor, currency),
+            )
+            db.execSQL(
+                "UPDATE transactions SET amount_minor = amount_minor $op ? " +
+                        "WHERE account_id IN (SELECT id FROM accounts WHERE currency = ?)",
+                arrayOf<Any?>(factor, currency),
+            )
+            db.execSQL(
+                "UPDATE transfers SET amount_minor = amount_minor $op ? " +
+                        "WHERE from_account_id IN (SELECT id FROM accounts WHERE currency = ?)",
+                arrayOf<Any?>(factor, currency),
+            )
+            db.execSQL(
+                "UPDATE recurring_rules SET amount_minor = amount_minor $op ? " +
+                        "WHERE account_id IN (SELECT id FROM accounts WHERE currency = ?)",
+                arrayOf<Any?>(factor, currency),
+            )
+            db.execSQL(
+                "UPDATE balance_adjustments SET " +
+                        "delta_minor = delta_minor $op ?, " +
+                        "balance_before_minor = balance_before_minor $op ?, " +
+                        "balance_after_minor = balance_after_minor $op ? " +
+                        "WHERE account_id IN (SELECT id FROM accounts WHERE currency = ?)",
+                arrayOf<Any?>(factor, factor, factor, currency),
+            )
+            db.execSQL(
+                "UPDATE debts SET principal_minor = principal_minor $op ? WHERE currency = ?",
+                arrayOf<Any?>(factor, currency),
+            )
+            db.execSQL(
+                "UPDATE debt_repayments SET amount_minor = amount_minor $op ? " +
+                        "WHERE debt_id IN (SELECT id FROM debts WHERE currency = ?)",
+                arrayOf<Any?>(factor, currency),
+            )
+        }
+    }
+
+    private fun pow10(exponent: Int): Long {
+        var value = 1L
+        repeat(exponent) { value *= 10L }
+        return value
     }
 }

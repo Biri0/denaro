@@ -12,6 +12,7 @@ import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.BalanceAdjustmentSummary
+import it.rfmariano.denaro.data.finance.CurrencyCatalog
 import it.rfmariano.denaro.data.finance.DashboardFilter
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
 import it.rfmariano.denaro.data.finance.DebtRepaymentSummary
@@ -22,12 +23,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.time.YearMonth
+import java.util.Locale
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -49,13 +53,26 @@ private data class DashboardLoadState(
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     private val repository: FinanceRepository,
-    defaultCurrency: String,
     initialDashboardMonth: String = YearMonth.now().toString(),
+    locale: Locale = Locale.getDefault(),
 ) : ViewModel() {
     private val refreshRequests = MutableStateFlow(0L)
-    val selectedCurrency = MutableStateFlow(defaultCurrency)
+    private val initialCurrency = CurrencyCatalog.automaticDefault(emptyList(), locale)
+    val selectedCurrency = MutableStateFlow(initialCurrency)
     val selectedAccountId = MutableStateFlow<String?>(null)
     val selectedMonth = MutableStateFlow(initialDashboardMonth)
+
+    init {
+        viewModelScope.launch {
+            val accounts = repository.observeActiveAccounts().first()
+            if (selectedCurrency.value == initialCurrency) {
+                selectedCurrency.value = CurrencyCatalog.automaticDefault(
+                    accounts.map(AccountSummary::currency),
+                    locale,
+                )
+            }
+        }
+    }
 
     private val dashboard = combine(
         selectedCurrency,
