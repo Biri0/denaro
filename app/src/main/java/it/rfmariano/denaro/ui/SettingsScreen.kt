@@ -61,6 +61,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onCategories: () -> Unit,
     onCounterparties: () -> Unit,
+    onExportStatement: () -> Unit,
 ) {
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     val securityPreferences by securityPreferencesRepository.state.collectAsStateWithLifecycle()
@@ -167,6 +168,11 @@ fun SettingsScreen(
                 onClick = onCounterparties,
             )
             SectionLabel(R.string.data)
+            SettingsItem(
+                title = stringResource(R.string.export_statement),
+                value = stringResource(R.string.export_statement_description),
+                onClick = onExportStatement,
+            )
             BackupSettings(
                 financeSessionProvider = financeSessionProvider,
                 snackbarHostState = snackbarHostState,
