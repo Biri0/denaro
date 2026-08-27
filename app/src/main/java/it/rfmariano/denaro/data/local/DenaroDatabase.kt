@@ -35,4 +35,5 @@ abstract class DenaroDatabase : RoomDatabase() {
     abstract fun activityDao(): ActivityDao
     abstract fun legacyImportDao(): LegacyImportDao
     abstract fun backupDao(): BackupDao
+    abstract fun statementDao(): StatementDao
 }

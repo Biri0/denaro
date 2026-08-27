@@ -77,6 +77,9 @@ private data object CategoriesRoute : NavKey
 private data object CounterpartiesRoute : NavKey
 
 @Serializable
+private data object ExportStatementRoute : NavKey
+
+@Serializable
 private data class CategoryEditorRoute(
     val categoryId: String? = null,
     val type: String,
@@ -411,10 +414,18 @@ private fun SessionDenaroApp(
                     onBack = onBack,
                     onCategories = { homeBackStack.add(CategoriesRoute) },
                     onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
+                    onExportStatement = { homeBackStack.add(ExportStatementRoute) },
                 )
             }
             entry<CounterpartiesRoute> {
                 CounterpartiesScreen(repository) { homeBackStack.removeLastOrNull() }
+            }
+            entry<ExportStatementRoute> {
+                ExportStatementScreen(
+                    repository = repository,
+                    preferencesRepository = preferencesRepository,
+                    onBack = { homeBackStack.removeLastOrNull() },
+                )
             }
             entry<CategoriesRoute> {
                 CategoryManagementScreen(

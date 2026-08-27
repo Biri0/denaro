@@ -3,6 +3,10 @@ package it.rfmariano.denaro.data.preferences
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import it.rfmariano.denaro.data.export.DEFAULT_STATEMENT_COLUMNS
+import it.rfmariano.denaro.data.export.StatementColumn
+import it.rfmariano.denaro.data.export.StatementDateRange
+import it.rfmariano.denaro.data.export.StatementLayout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +28,13 @@ data class AppPreferences(
     val language: LanguageOption = LanguageOption.SYSTEM,
     val amountsVisible: Boolean = true,
     val showAllCurrencies: Boolean = false,
+    val statementAccountIds: Set<String>? = null,
+    val statementDateRange: StatementDateRange = StatementDateRange.THIS_YEAR,
+    val statementFromDate: String? = null,
+    val statementToDate: String? = null,
+    val statementColumns: Set<StatementColumn> = DEFAULT_STATEMENT_COLUMNS,
+    val statementLayout: StatementLayout = StatementLayout.GROUPED,
+    val statementAccountColumn: Boolean = true,
 )
 
 class AppPreferencesRepository(context: Context) {
@@ -59,6 +70,53 @@ class AppPreferencesRepository(context: Context) {
         }
     }
 
+    fun setStatementAccountIds(value: Set<String>) {
+        update {
+            preferences.edit().putString(KEY_STATEMENT_ACCOUNT_IDS, value.joinToString(",")).apply()
+            copy(statementAccountIds = value)
+        }
+    }
+
+    fun setStatementDateRange(value: StatementDateRange) {
+        update {
+            preferences.edit().putString(KEY_STATEMENT_DATE_RANGE, value.name).apply()
+            copy(statementDateRange = value)
+        }
+    }
+
+    fun setStatementCustomDates(from: String?, to: String?) {
+        update {
+            preferences.edit()
+                .putString(KEY_STATEMENT_FROM_DATE, from)
+                .putString(KEY_STATEMENT_TO_DATE, to)
+                .apply()
+            copy(statementFromDate = from, statementToDate = to)
+        }
+    }
+
+    fun setStatementColumns(value: Set<StatementColumn>) {
+        update {
+            preferences.edit()
+                .putString(KEY_STATEMENT_COLUMNS, value.joinToString(",") { it.name })
+                .apply()
+            copy(statementColumns = value)
+        }
+    }
+
+    fun setStatementLayout(value: StatementLayout) {
+        update {
+            preferences.edit().putString(KEY_STATEMENT_LAYOUT, value.name).apply()
+            copy(statementLayout = value)
+        }
+    }
+
+    fun setStatementAccountColumn(value: Boolean) {
+        update {
+            preferences.edit().putBoolean(KEY_STATEMENT_ACCOUNT_COLUMN, value).apply()
+            copy(statementAccountColumn = value)
+        }
+    }
+
     fun applyStoredLanguage() {
         applyLanguage(_state.value.language)
     }
@@ -74,6 +132,15 @@ class AppPreferencesRepository(context: Context) {
                 .putString(KEY_LANGUAGE, value.language.name)
                 .putBoolean(KEY_AMOUNTS_VISIBLE, value.amountsVisible)
                 .putBoolean(KEY_SHOW_ALL_CURRENCIES, value.showAllCurrencies)
+                .putString(KEY_STATEMENT_ACCOUNT_IDS, value.statementAccountIds?.joinToString(","))
+                .putString(KEY_STATEMENT_DATE_RANGE, value.statementDateRange.name)
+                .putString(KEY_STATEMENT_FROM_DATE, value.statementFromDate)
+                .putString(KEY_STATEMENT_TO_DATE, value.statementToDate)
+                .putString(
+                    KEY_STATEMENT_COLUMNS,
+                    value.statementColumns.joinToString(",") { it.name })
+                .putString(KEY_STATEMENT_LAYOUT, value.statementLayout.name)
+                .putBoolean(KEY_STATEMENT_ACCOUNT_COLUMN, value.statementAccountColumn)
                 .commit(),
         ) { "Could not restore preferences" }
         _state.value = value
@@ -95,7 +162,38 @@ class AppPreferencesRepository(context: Context) {
             ?: LanguageOption.SYSTEM
         val amountsVisible = preferences.getBoolean(KEY_AMOUNTS_VISIBLE, true)
         val showAllCurrencies = preferences.getBoolean(KEY_SHOW_ALL_CURRENCIES, false)
-        return AppPreferences(theme, language, amountsVisible, showAllCurrencies)
+        val statementAccountIds = preferences.getString(KEY_STATEMENT_ACCOUNT_IDS, null)
+            ?.split(",")
+            ?.filter(String::isNotBlank)
+            ?.toSet()
+        val statementDateRange = preferences.getString(KEY_STATEMENT_DATE_RANGE, null)
+            ?.let { runCatching { StatementDateRange.valueOf(it) }.getOrNull() }
+            ?: StatementDateRange.THIS_YEAR
+        val statementFromDate = preferences.getString(KEY_STATEMENT_FROM_DATE, null)
+        val statementToDate = preferences.getString(KEY_STATEMENT_TO_DATE, null)
+        val statementColumns = preferences.getString(KEY_STATEMENT_COLUMNS, null)
+            ?.split(",")
+            ?.mapNotNull { runCatching { StatementColumn.valueOf(it) }.getOrNull() }
+            ?.toSet()
+            ?.takeIf(Set<StatementColumn>::isNotEmpty)
+            ?: DEFAULT_STATEMENT_COLUMNS
+        val statementLayout = preferences.getString(KEY_STATEMENT_LAYOUT, null)
+            ?.let { runCatching { StatementLayout.valueOf(it) }.getOrNull() }
+            ?: StatementLayout.GROUPED
+        val statementAccountColumn = preferences.getBoolean(KEY_STATEMENT_ACCOUNT_COLUMN, true)
+        return AppPreferences(
+            theme,
+            language,
+            amountsVisible,
+            showAllCurrencies,
+            statementAccountIds,
+            statementDateRange,
+            statementFromDate,
+            statementToDate,
+            statementColumns,
+            statementLayout,
+            statementAccountColumn,
+        )
     }
 
     private fun applyLanguage(value: LanguageOption) {
@@ -125,5 +223,12 @@ class AppPreferencesRepository(context: Context) {
         const val KEY_AMOUNTS_VISIBLE = "amounts_visible"
         const val KEY_SHOW_ALL_CURRENCIES = "show_all_currencies"
         const val KEY_LEGACY_CURRENCY = "default_currency"
+        const val KEY_STATEMENT_ACCOUNT_IDS = "statement_account_ids"
+        const val KEY_STATEMENT_DATE_RANGE = "statement_date_range"
+        const val KEY_STATEMENT_FROM_DATE = "statement_from_date"
+        const val KEY_STATEMENT_TO_DATE = "statement_to_date"
+        const val KEY_STATEMENT_COLUMNS = "statement_columns"
+        const val KEY_STATEMENT_LAYOUT = "statement_layout"
+        const val KEY_STATEMENT_ACCOUNT_COLUMN = "statement_account_column"
     }
 }

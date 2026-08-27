@@ -5,6 +5,8 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import androidx.room.withTransaction
+import it.rfmariano.denaro.data.export.StatementAccount
+import it.rfmariano.denaro.data.export.StatementSnapshot
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.AccountWithBalance
 import it.rfmariano.denaro.data.local.ActivityRecord
@@ -702,6 +704,37 @@ class FinanceRepository(
 
     suspend fun processDueRecurrences() {
         recurrenceProcessor.processDueRules()
+    }
+
+    suspend fun statementSnapshot(accountIds: Set<String>): StatementSnapshot {
+        require(accountIds.isNotEmpty()) { "Select at least one account" }
+        val allAccounts = database.accountDao().getAll()
+        val accounts = allAccounts
+            .filter { it.id in accountIds }
+            .sortedBy { it.name.lowercase() }
+        val accountNames = allAccounts.associate { it.id to it.name }
+        val categoryNames = database.categoryDao().getAll().associate { it.id to it.name }
+        val counterpartyNames = database.counterpartyDao().getAll().associate { it.id to it.name }
+        val ids = accountIds.toList()
+        return StatementSnapshot(
+            accounts = accounts.map {
+                StatementAccount(
+                    id = it.id,
+                    name = it.name,
+                    currency = it.currency,
+                    fractionDigits = it.fractionDigits,
+                    openingBalanceMinor = it.openingBalanceMinor,
+                )
+            },
+            accountNames = accountNames,
+            categoryNames = categoryNames,
+            counterpartyNames = counterpartyNames,
+            transactions = database.statementDao().transactions(ids),
+            transfers = database.statementDao().transfers(ids),
+            balanceAdjustments = database.statementDao().balanceAdjustments(ids),
+            debts = database.statementDao().debts(ids),
+            debtRepayments = database.statementDao().debtRepayments(ids),
+        )
     }
 
     suspend fun getRecurringRule(id: String): RecurringRuleEntity? =

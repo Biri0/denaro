@@ -307,6 +307,9 @@ interface CounterpartyDao {
     @Query("SELECT * FROM counterparties WHERE id = :id")
     suspend fun getById(id: String): CounterpartyEntity?
 
+    @Query("SELECT * FROM counterparties ORDER BY created_at, id")
+    suspend fun getAll(): List<CounterpartyEntity>
+
     @Update
     suspend fun update(counterparty: CounterpartyEntity)
 
