@@ -23,9 +23,16 @@ enum class LanguageOption(val languageTag: String?) {
     ITALIAN("it"),
 }
 
+enum class DefaultScreen {
+    HOME,
+    ACCOUNTS,
+    ACTIVITY,
+}
+
 data class AppPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val language: LanguageOption = LanguageOption.SYSTEM,
+    val defaultScreen: DefaultScreen = DefaultScreen.HOME,
     val amountsVisible: Boolean = true,
     val showAllCurrencies: Boolean = false,
     val statementAccountIds: Set<String>? = null,
@@ -54,6 +61,13 @@ class AppPreferencesRepository(context: Context) {
             copy(language = value)
         }
         applyLanguage(value)
+    }
+
+    fun setDefaultScreen(value: DefaultScreen) {
+        update {
+            preferences.edit().putString(KEY_DEFAULT_SCREEN, value.name).apply()
+            copy(defaultScreen = value)
+        }
     }
 
     fun setAmountsVisible(value: Boolean) {
@@ -130,6 +144,7 @@ class AppPreferencesRepository(context: Context) {
             preferences.edit()
                 .putString(KEY_THEME, value.themeMode.name)
                 .putString(KEY_LANGUAGE, value.language.name)
+                .putString(KEY_DEFAULT_SCREEN, value.defaultScreen.name)
                 .putBoolean(KEY_AMOUNTS_VISIBLE, value.amountsVisible)
                 .putBoolean(KEY_SHOW_ALL_CURRENCIES, value.showAllCurrencies)
                 .putString(KEY_STATEMENT_ACCOUNT_IDS, value.statementAccountIds?.joinToString(","))
@@ -160,6 +175,9 @@ class AppPreferencesRepository(context: Context) {
         val language = preferences.getString(KEY_LANGUAGE, null)
             ?.let { runCatching { LanguageOption.valueOf(it) }.getOrNull() }
             ?: LanguageOption.SYSTEM
+        val defaultScreen = preferences.getString(KEY_DEFAULT_SCREEN, null)
+            ?.let { runCatching { DefaultScreen.valueOf(it) }.getOrNull() }
+            ?: DefaultScreen.HOME
         val amountsVisible = preferences.getBoolean(KEY_AMOUNTS_VISIBLE, true)
         val showAllCurrencies = preferences.getBoolean(KEY_SHOW_ALL_CURRENCIES, false)
         val statementAccountIds = preferences.getString(KEY_STATEMENT_ACCOUNT_IDS, null)
@@ -184,6 +202,7 @@ class AppPreferencesRepository(context: Context) {
         return AppPreferences(
             theme,
             language,
+            defaultScreen,
             amountsVisible,
             showAllCurrencies,
             statementAccountIds,
@@ -220,6 +239,7 @@ class AppPreferencesRepository(context: Context) {
         const val PREFERENCES_NAME = "denaro_preferences"
         const val KEY_THEME = "theme"
         const val KEY_LANGUAGE = "language"
+        const val KEY_DEFAULT_SCREEN = "default_screen"
         const val KEY_AMOUNTS_VISIBLE = "amounts_visible"
         const val KEY_SHOW_ALL_CURRENCIES = "show_all_currencies"
         const val KEY_LEGACY_CURRENCY = "default_currency"
