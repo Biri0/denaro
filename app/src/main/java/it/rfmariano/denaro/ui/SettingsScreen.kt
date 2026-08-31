@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
+import it.rfmariano.denaro.data.preferences.DefaultScreen
 import it.rfmariano.denaro.data.preferences.LanguageOption
 import it.rfmariano.denaro.data.preferences.ThemeMode
 import it.rfmariano.denaro.data.security.DeviceAuthenticationResult
@@ -48,6 +49,7 @@ import com.composables.icons.lucide.R as LucideR
 private enum class SettingsDialog {
     THEME,
     LANGUAGE,
+    DEFAULT_SCREEN,
 }
 
 @Composable
@@ -151,6 +153,11 @@ fun SettingsScreen(
             )
 
             SectionLabel(R.string.general)
+            SettingsItem(
+                title = stringResource(R.string.default_screen),
+                value = defaultScreenLabel(preferences.defaultScreen),
+                onClick = { dialog = SettingsDialog.DEFAULT_SCREEN },
+            )
             SwitchSettingsItem(
                 title = stringResource(R.string.show_all_currencies),
                 value = stringResource(R.string.show_all_currencies_description),
@@ -201,6 +208,18 @@ fun SettingsScreen(
             label = { languageLabel(it) },
             onSelect = {
                 preferencesRepository.setLanguage(it)
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+
+        SettingsDialog.DEFAULT_SCREEN -> ChoiceDialog(
+            title = stringResource(R.string.default_screen),
+            choices = DefaultScreen.entries,
+            selected = preferences.defaultScreen,
+            label = { defaultScreenLabel(it) },
+            onSelect = {
+                preferencesRepository.setDefaultScreen(it)
                 dialog = null
             },
             onDismiss = { dialog = null },
@@ -337,5 +356,14 @@ private fun languageLabel(value: LanguageOption): String = stringResource(
         LanguageOption.SYSTEM -> R.string.system_default
         LanguageOption.ENGLISH -> R.string.english
         LanguageOption.ITALIAN -> R.string.italian
+    },
+)
+
+@Composable
+private fun defaultScreenLabel(value: DefaultScreen): String = stringResource(
+    when (value) {
+        DefaultScreen.HOME -> R.string.home
+        DefaultScreen.ACCOUNTS -> R.string.accounts
+        DefaultScreen.ACTIVITY -> R.string.activity
     },
 )

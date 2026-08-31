@@ -179,6 +179,7 @@
     <string name="language">Lingua</string>
     <string name="show_all_currencies">Mostra tutte le valute</string>
     <string name="show_all_currencies_description">Mostra anche le valute non più in uso o riservate a scopi speciali.</string>
+    <string name="default_screen">Schermata predefinita</string>
     <string name="unsupported_currency">Valuta non supportata</string>
     <string name="more_currencies_available">%1$d altre: continua a digitare per restringere</string>
     <string name="system_default">Predefinito di sistema</string>

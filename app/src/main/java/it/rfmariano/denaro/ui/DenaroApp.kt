@@ -49,6 +49,7 @@ import it.rfmariano.denaro.data.finance.FinanceSessionProvider
 import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.preferences.AppPreferencesRepository
+import it.rfmariano.denaro.data.preferences.DefaultScreen
 import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
@@ -147,6 +148,12 @@ private enum class TopLevelDestination(
     HOME(R.string.home, LucideR.drawable.lucide_ic_house),
     ACCOUNTS(R.string.accounts, LucideR.drawable.lucide_ic_wallet),
     ACTIVITY(R.string.activity, LucideR.drawable.lucide_ic_list),
+}
+
+private fun DefaultScreen.toTopLevelDestination(): TopLevelDestination = when (this) {
+    DefaultScreen.HOME -> TopLevelDestination.HOME
+    DefaultScreen.ACCOUNTS -> TopLevelDestination.ACCOUNTS
+    DefaultScreen.ACTIVITY -> TopLevelDestination.ACTIVITY
 }
 
 data class DenaroAppState(
@@ -293,7 +300,7 @@ private fun SessionDenaroApp(
             if (initialQuickEntry != null) {
                 TopLevelDestination.ACTIVITY
             } else {
-                TopLevelDestination.HOME
+                preferences.defaultScreen.toTopLevelDestination()
             },
         )
     }
