@@ -2,9 +2,12 @@ package it.rfmariano.denaro.data.finance
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.util.Currency
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import android.icu.util.Currency as IcuCurrency
 
 object Money {
     const val MIN_FRACTION_DIGITS = 0
@@ -48,7 +51,36 @@ object Money {
             minimumFractionDigits = fractionDigits
             maximumFractionDigits = fractionDigits
         }
+        val symbol = currencySymbol(currencyCode, locale)
+        if (formatter is DecimalFormat && symbol != currencyCode) {
+            formatter.decimalFormatSymbols = formatter.decimalFormatSymbols.apply {
+                currencySymbol = symbol
+            }
+        }
         return formatter.format(BigDecimal.valueOf(amountMinor, fractionDigits))
+    }
+
+    private val currencySymbolCache = ConcurrentHashMap<String, String>()
+
+    private fun currencySymbol(currencyCode: String, locale: Locale): String =
+        currencySymbolCache.computeIfAbsent("$currencyCode\u0000${locale.toLanguageTag()}") {
+            resolveCurrencySymbol(currencyCode, locale)
+        }
+
+    private fun resolveCurrencySymbol(currencyCode: String, locale: Locale): String {
+        val icuCurrency = runCatching { IcuCurrency.getInstance(currencyCode) }.getOrNull()
+        if (icuCurrency != null) {
+            val standard = runCatching { icuCurrency.getSymbol(locale) }.getOrNull()
+            if (!standard.isNullOrBlank() && standard != currencyCode) return standard
+            val narrow = runCatching {
+                icuCurrency.getName(locale, IcuCurrency.NARROW_SYMBOL_NAME, null as BooleanArray?)
+            }.getOrNull()
+            if (!narrow.isNullOrBlank() && narrow != currencyCode) return narrow
+        }
+        return runCatching { Currency.getInstance(currencyCode).getSymbol(locale) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: currencyCode
     }
 
     fun toInputAmount(amountMinor: Long, fractionDigits: Int): String {
