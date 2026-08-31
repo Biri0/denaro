@@ -119,6 +119,7 @@
     <string name="save">Salva</string>
     <string name="cancel">Annulla</string>
     <string name="delete">Elimina</string>
+    <string name="edit">Modifica</string>
     <string name="archive">Archivia</string>
     <string name="archive_account">Archiviare il conto?</string>
     <string name="archive_account_message">Il conto verrà nascosto e i movimenti programmati attivi verranno interrotti. La cronologia resterà disponibile.</string>
@@ -149,6 +150,7 @@
     <string name="delete_account_message">Il conto e tutti i suoi movimenti, trasferimenti, debiti e movimenti programmati verranno eliminati definitivamente, incluse le rate registrate su altri conti. Questa operazione non può essere annullata.</string>
     <string name="account_deleted">Conto eliminato.</string>
     <string name="account_delete_failed">Impossibile eliminare il conto.</string>
+    <string name="account_archive_failed">Impossibile archiviare il conto.</string>
     <string name="activity_deleted">Movimento eliminato.</string>
     <string name="choose_same_currency">Scegli due conti diversi con la stessa valuta.</string>
     <string name="filter_account">Filtra per conto</string>

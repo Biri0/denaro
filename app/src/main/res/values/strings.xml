@@ -119,6 +119,7 @@
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
     <string name="archive">Archive</string>
     <string name="archive_account">Archive account?</string>
     <string name="archive_account_message">The account will be hidden and its active scheduled transactions will be stopped. Its history will remain available.</string>
@@ -149,6 +150,7 @@
     <string name="delete_account_message">This will permanently delete the account and all of its transactions, transfers, debts and scheduled transactions, including debt repayments recorded against other accounts. This cannot be undone.</string>
     <string name="account_deleted">Account deleted.</string>
     <string name="account_delete_failed">Could not delete the account.</string>
+    <string name="account_archive_failed">Could not archive the account.</string>
     <string name="activity_deleted">Activity deleted.</string>
     <string name="choose_same_currency">Choose two different accounts with the same currency.</string>
     <string name="filter_account">Filter by account</string>
