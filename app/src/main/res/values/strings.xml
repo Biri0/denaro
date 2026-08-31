@@ -145,6 +145,10 @@
     <string name="account_saved">Account saved.</string>
     <string name="activity_saved">Activity saved.</string>
     <string name="account_archived">Account archived.</string>
+    <string name="delete_account">Delete account?</string>
+    <string name="delete_account_message">This will permanently delete the account and all of its transactions, transfers, debts and scheduled transactions, including debt repayments recorded against other accounts. This cannot be undone.</string>
+    <string name="account_deleted">Account deleted.</string>
+    <string name="account_delete_failed">Could not delete the account.</string>
     <string name="activity_deleted">Activity deleted.</string>
     <string name="choose_same_currency">Choose two different accounts with the same currency.</string>
     <string name="filter_account">Filter by account</string>

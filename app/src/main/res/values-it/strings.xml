@@ -145,6 +145,10 @@
     <string name="account_saved">Conto salvato.</string>
     <string name="activity_saved">Movimento salvato.</string>
     <string name="account_archived">Conto archiviato.</string>
+    <string name="delete_account">Eliminare il conto?</string>
+    <string name="delete_account_message">Il conto e tutti i suoi movimenti, trasferimenti, debiti e movimenti programmati verranno eliminati definitivamente, incluse le rate registrate su altri conti. Questa operazione non può essere annullata.</string>
+    <string name="account_deleted">Conto eliminato.</string>
+    <string name="account_delete_failed">Impossibile eliminare il conto.</string>
     <string name="activity_deleted">Movimento eliminato.</string>
     <string name="choose_same_currency">Scegli due conti diversi con la stessa valuta.</string>
     <string name="filter_account">Filtra per conto</string>
