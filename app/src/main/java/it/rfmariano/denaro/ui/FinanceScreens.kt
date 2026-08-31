@@ -29,13 +29,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -335,6 +340,11 @@ fun AccountDetailRouteContent(
     var showDelete by rememberSaveable { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
+    var showArchive by rememberSaveable { mutableStateOf(false) }
+    var isArchiving by remember { mutableStateOf(false) }
+    var archiveError by remember { mutableStateOf<String?>(null) }
+    val archivedMessage = stringResource(R.string.account_archived)
+    val archiveFailedMessage = stringResource(R.string.account_archive_failed)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -342,21 +352,60 @@ fun AccountDetailRouteContent(
                 navigationIcon = { BackButton(onBack) },
                 actions = {
                     account?.let {
-                        IconButton(onClick = { onEdit(it.id) }) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_pencil),
-                                contentDescription = null,
-                            )
-                        }
-                        IconButton(
-                            onClick = { showDelete = true },
-                            modifier = Modifier.testTag("delete_account_action"),
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                TooltipAnchorPosition.Above,
+                            ),
+                            tooltip = {
+                                PlainTooltip { Text(stringResource(R.string.edit)) }
+                            },
+                            state = rememberTooltipState(),
                         ) {
-                            Icon(
-                                painterResource(LucideR.drawable.lucide_ic_trash_2),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                            )
+                            IconButton(onClick = { onEdit(it.id) }) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_pencil),
+                                    contentDescription = stringResource(R.string.edit),
+                                )
+                            }
+                        }
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                TooltipAnchorPosition.Above,
+                            ),
+                            tooltip = {
+                                PlainTooltip { Text(stringResource(R.string.archive)) }
+                            },
+                            state = rememberTooltipState(),
+                        ) {
+                            IconButton(
+                                onClick = { showArchive = true },
+                                modifier = Modifier.testTag("archive_account_action"),
+                            ) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_archive),
+                                    contentDescription = stringResource(R.string.archive),
+                                )
+                            }
+                        }
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                TooltipAnchorPosition.Above,
+                            ),
+                            tooltip = {
+                                PlainTooltip { Text(stringResource(R.string.delete)) }
+                            },
+                            state = rememberTooltipState(),
+                        ) {
+                            IconButton(
+                                onClick = { showDelete = true },
+                                modifier = Modifier.testTag("delete_account_action"),
+                            ) {
+                                Icon(
+                                    painterResource(LucideR.drawable.lucide_ic_trash_2),
+                                    contentDescription = stringResource(R.string.delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
                 },
@@ -520,6 +569,56 @@ fun AccountDetailRouteContent(
                         }
                         .onFailure { balanceError = it.message }
                     isSavingBalance = false
+                }
+            },
+        )
+    }
+
+    if (showArchive && account != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isArchiving) {
+                    showArchive = false
+                    archiveError = null
+                }
+            },
+            title = { Text(stringResource(R.string.archive_account)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.archive_account_message))
+                    archiveError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (isArchiving) return@TextButton
+                        isArchiving = true
+                        archiveError = null
+                        scope.launch {
+                            viewModel.archive()
+                                .onSuccess {
+                                    showArchive = false
+                                    onMessage(archivedMessage)
+                                    onBack()
+                                }
+                                .onFailure { archiveError = archiveFailedMessage }
+                            isArchiving = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.archive))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (!isArchiving) showArchive = false
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )

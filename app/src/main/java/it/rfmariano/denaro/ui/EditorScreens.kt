@@ -94,11 +94,9 @@ fun AccountEditorScreen(
     var openingBalanceScale by rememberSaveable(accountId) { mutableStateOf(2) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
-    var confirmArchive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val appLocale = LocalConfiguration.current.locales[0]
     val savedMessage = stringResource(R.string.account_saved)
-    val archivedMessage = stringResource(R.string.account_archived)
     val unsupportedCurrencyMessage = stringResource(R.string.unsupported_currency)
 
     LaunchedEffect(accountId) {
@@ -241,46 +239,7 @@ fun AccountEditorScreen(
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
-            if (accountId != null) {
-                HorizontalDivider()
-                OutlinedButton(
-                    onClick = { confirmArchive = true },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.archive))
-                }
-            }
         }
-    }
-
-    if (confirmArchive && accountId != null) {
-        AlertDialog(
-            onDismissRequest = { confirmArchive = false },
-            title = { Text(stringResource(R.string.archive_account)) },
-            text = { Text(stringResource(R.string.archive_account_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmArchive = false
-                        scope.launch {
-                            runCatching { repository.archiveAccount(accountId) }
-                                .onSuccess {
-                                    onMessage(archivedMessage)
-                                    onFinished(accountId)
-                                }
-                                .onFailure { error = it.message }
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.archive))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmArchive = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
     }
 }
 

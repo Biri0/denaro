@@ -187,6 +187,10 @@ class AccountDetailViewModel(
     suspend fun delete(): Result<Unit> = runCatching {
         repository.deleteAccount(accountId)
     }
+
+    suspend fun archive(): Result<Unit> = runCatching {
+        repository.archiveAccount(accountId)
+    }
 }
 
 data class BalanceAdjustmentDetailUiState(
