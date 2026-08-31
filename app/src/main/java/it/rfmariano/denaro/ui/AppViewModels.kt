@@ -183,6 +183,10 @@ class AccountDetailViewModel(
     suspend fun setBalance(targetBalanceMinor: Long): Result<Unit> = runCatching {
         repository.createBalanceAdjustment(accountId, targetBalanceMinor)
     }
+
+    suspend fun delete(): Result<Unit> = runCatching {
+        repository.deleteAccount(accountId)
+    }
 }
 
 data class BalanceAdjustmentDetailUiState(

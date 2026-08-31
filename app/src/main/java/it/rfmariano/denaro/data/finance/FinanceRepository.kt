@@ -611,6 +611,21 @@ class FinanceRepository(
         database.accountDao().setArchived(accountId, null, timestamp)
     }
 
+    suspend fun deleteAccount(accountId: String) {
+        database.withTransaction {
+            requireNotNull(database.accountDao().getById(accountId)) {
+                "Account not found"
+            }
+            database.debtDao().deleteRepaymentsForAccount(accountId)
+            database.debtDao().deleteForAccount(accountId)
+            database.transactionDao().deleteForAccount(accountId)
+            database.transferDao().deleteForAccount(accountId)
+            database.balanceAdjustmentDao().deleteForAccount(accountId)
+            database.recurringRuleDao().deleteForAccount(accountId)
+            database.accountDao().deleteById(accountId)
+        }
+    }
+
     suspend fun getTransaction(id: String): TransactionEntity? =
         database.transactionDao().getById(id)
 

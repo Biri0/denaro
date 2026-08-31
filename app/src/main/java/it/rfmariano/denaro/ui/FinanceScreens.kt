@@ -330,6 +330,11 @@ fun AccountDetailRouteContent(
     var balanceError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val adjustedMessage = stringResource(R.string.balance_adjusted)
+    val deletedMessage = stringResource(R.string.account_deleted)
+    val deleteFailedMessage = stringResource(R.string.account_delete_failed)
+    var showDelete by rememberSaveable { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -341,6 +346,16 @@ fun AccountDetailRouteContent(
                             Icon(
                                 painterResource(LucideR.drawable.lucide_ic_pencil),
                                 contentDescription = null,
+                            )
+                        }
+                        IconButton(
+                            onClick = { showDelete = true },
+                            modifier = Modifier.testTag("delete_account_action"),
+                        ) {
+                            Icon(
+                                painterResource(LucideR.drawable.lucide_ic_trash_2),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -505,6 +520,56 @@ fun AccountDetailRouteContent(
                         }
                         .onFailure { balanceError = it.message }
                     isSavingBalance = false
+                }
+            },
+        )
+    }
+
+    if (showDelete && account != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeleting) {
+                    showDelete = false
+                    deleteError = null
+                }
+            },
+            title = { Text(stringResource(R.string.delete_account)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.delete_account_message))
+                    deleteError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (isDeleting) return@TextButton
+                        isDeleting = true
+                        deleteError = null
+                        scope.launch {
+                            viewModel.delete()
+                                .onSuccess {
+                                    showDelete = false
+                                    onMessage(deletedMessage)
+                                    onBack()
+                                }
+                                .onFailure { deleteError = deleteFailedMessage }
+                            isDeleting = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (!isDeleting) showDelete = false
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )

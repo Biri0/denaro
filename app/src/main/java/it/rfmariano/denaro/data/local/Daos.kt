@@ -66,6 +66,9 @@ interface AccountDao {
     @Query("SELECT COUNT(*) FROM accounts")
     suspend fun count(): Int
 
+    @Query("DELETE FROM accounts WHERE id = :id")
+    suspend fun deleteById(id: String)
+
 }
 
 @Dao
@@ -181,6 +184,9 @@ interface TransactionDao {
     @Delete
     suspend fun delete(transaction: TransactionEntity)
 
+    @Query("DELETE FROM transactions WHERE account_id = :accountId")
+    suspend fun deleteForAccount(accountId: String)
+
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 
@@ -199,6 +205,9 @@ interface BalanceAdjustmentDao {
 
     @Delete
     suspend fun delete(adjustment: BalanceAdjustmentEntity)
+
+    @Query("DELETE FROM balance_adjustments WHERE account_id = :accountId")
+    suspend fun deleteForAccount(accountId: String)
 }
 
 @Dao
@@ -254,6 +263,9 @@ interface RecurringRuleDao {
     )
     suspend fun deactivateForAccount(accountId: String, updatedAt: Long)
 
+    @Query("DELETE FROM recurring_rules WHERE account_id = :accountId")
+    suspend fun deleteForAccount(accountId: String)
+
     @Query("SELECT COUNT(*) FROM recurring_rules")
     suspend fun count(): Int
 
@@ -290,6 +302,14 @@ interface TransferDao {
 
     @Delete
     suspend fun delete(transfer: TransferEntity)
+
+    @Query(
+        """
+        DELETE FROM transfers
+        WHERE from_account_id = :accountId OR to_account_id = :accountId
+        """,
+    )
+    suspend fun deleteForAccount(accountId: String)
 
     @Query("SELECT COUNT(*) FROM transfers")
     suspend fun count(): Int
@@ -377,6 +397,9 @@ interface DebtDao {
     @Delete
     suspend fun delete(debt: DebtEntity)
 
+    @Query("DELETE FROM debts WHERE account_id = :accountId")
+    suspend fun deleteForAccount(accountId: String)
+
     @Query("UPDATE debts SET updated_at = :updatedAt WHERE id = :id")
     suspend fun touch(id: String, updatedAt: Long)
 
@@ -397,6 +420,9 @@ interface DebtDao {
 
     @Delete
     suspend fun deleteRepayment(repayment: DebtRepaymentEntity)
+
+    @Query("DELETE FROM debt_repayments WHERE account_id = :accountId")
+    suspend fun deleteRepaymentsForAccount(accountId: String)
 
     @Query(
         """
