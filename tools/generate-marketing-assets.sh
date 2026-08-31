@@ -151,7 +151,7 @@ split_diagonal() {
 }
 
 split_diagonal "$RAW_DIR/en-home-light.png" "$RAW_DIR/en-home-dark.png" "$README_DIR/home.png"
-split_diagonal "$RAW_DIR/en-accounts-light.png" "$RAW_DIR/en-account_detail-dark.png" "$README_DIR/accounts.png"
+split_diagonal "$RAW_DIR/en-accounts-light.png" "$RAW_DIR/en-accounts-dark.png" "$README_DIR/accounts.png"
 split_diagonal "$RAW_DIR/en-activity-light.png" "$RAW_DIR/en-activity-dark.png" "$README_DIR/activity.png"
 split_diagonal "$RAW_DIR/en-debts-light.png" "$RAW_DIR/en-debts-dark.png" "$README_DIR/debts.png"
 

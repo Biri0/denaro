@@ -1,1 +1,1 @@
-Aggiunti backup e ripristino portatili con protezione tramite password opzionale, oltre alla possibilità di cancellare tutti i dati finanziari. Risolto un arresto anomalo durante lo scorrimento indietro dalle Impostazioni.
+Aggiunta l'eliminazione definitiva dei conti e un'impostazione per scegliere la schermata predefinita. I simboli di valuta ora vengono visualizzati correttamente per tutte le valute e l'archiviazione dei conti è stata spostata nella schermata dei dettagli del conto.
