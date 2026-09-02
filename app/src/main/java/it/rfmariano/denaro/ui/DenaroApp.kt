@@ -378,6 +378,14 @@ private fun SessionDenaroApp(
             currentDestination = TopLevelDestination.HOME
         }
     }
+    val onBackButton: () -> Unit = {
+        if (backStack.size > 1) {
+            if (backStack.lastOrNull() is SettingsRoute) {
+                onSettingsOpenChanged(false)
+            }
+            backStack.removeLastOrNull()
+        }
+    }
     val navEntryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>()
     val decoratedEntries = rememberDecoratedNavEntries(
         backStack = backStack,
@@ -418,26 +426,26 @@ private fun SessionDenaroApp(
                     processUnlockSession = processUnlockSession,
                     authenticator = authenticator,
                     scrollState = settingsScrollState,
-                    onBack = onBack,
+                    onBack = onBackButton,
                     onCategories = { homeBackStack.add(CategoriesRoute) },
                     onCounterparties = { homeBackStack.add(CounterpartiesRoute) },
                     onExportStatement = { homeBackStack.add(ExportStatementRoute) },
                 )
             }
             entry<CounterpartiesRoute> {
-                CounterpartiesScreen(repository) { homeBackStack.removeLastOrNull() }
+                CounterpartiesScreen(repository, onBackButton)
             }
             entry<ExportStatementRoute> {
                 ExportStatementScreen(
                     repository = repository,
                     preferencesRepository = preferencesRepository,
-                    onBack = { homeBackStack.removeLastOrNull() },
+                    onBack = onBackButton,
                 )
             }
             entry<CategoriesRoute> {
                 CategoryManagementScreen(
                     repository = repository,
-                    onBack = { homeBackStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onEdit = { id, type, parentId ->
                         homeBackStack.add(CategoryEditorRoute(id, type.name, parentId))
                     },
@@ -449,7 +457,7 @@ private fun SessionDenaroApp(
                     categoryId = route.categoryId,
                     type = TransactionType.valueOf(route.type),
                     initialParentId = route.parentId,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onFinished = { categoryId ->
                         if (route.selectForActivityEditor) {
                             pendingActivityCategoryId = categoryId
@@ -513,7 +521,7 @@ private fun SessionDenaroApp(
                     state = state,
                     accounts = accounts,
                     amountsVisible = preferences.amountsVisible,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onEdit = { backStack.add(DebtEditorRoute(it)) },
                     onAddRepayment = { backStack.add(DebtRepaymentEditorRoute(it)) },
                     onEditRepayment = { debtId, repaymentId ->
@@ -528,7 +536,7 @@ private fun SessionDenaroApp(
                     repository,
                     route.debtId,
                     initialDirection = route.initialDirection,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onFinished = { backStack.removeLastOrNull() },
                     onDeleted = {
                         backStack.removeLastOrNull()
@@ -540,7 +548,7 @@ private fun SessionDenaroApp(
             entry<DebtRepaymentEditorRoute> { route ->
                 DebtRepaymentEditorScreen(
                     repository, route.debtId, route.repaymentId,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onFinished = { backStack.removeLastOrNull() },
                     onMessage = ::showMessage,
                 )
@@ -555,7 +563,7 @@ private fun SessionDenaroApp(
                 AccountDetailRouteContent(
                     viewModel = detailViewModel,
                     amountsVisible = preferences.amountsVisible,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onEdit = { backStack.add(AccountEditorRoute(it)) },
                     onEditSchedule = {
                         backStack.add(ActivityEditorRoute(recurringRuleId = it))
@@ -573,7 +581,7 @@ private fun SessionDenaroApp(
                 BalanceAdjustmentDetailRouteContent(
                     viewModel = detailViewModel,
                     amountsVisible = preferences.amountsVisible,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onDeleted = { backStack.removeLastOrNull() },
                     onMessage = ::showMessage,
                 )
@@ -584,7 +592,7 @@ private fun SessionDenaroApp(
                     accounts = state.archived,
                     isLoading = state.isLoading,
                     amountsVisible = preferences.amountsVisible,
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onRestore = { accountId ->
                         scope.launch {
                             runCatching { repository.restoreAccount(accountId) }
@@ -617,7 +625,7 @@ private fun SessionDenaroApp(
                     usedCurrencies = usedCurrencies,
                     includeAll = includeAll,
                     onFinished = { backStack.removeLastOrNull() },
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onMessage = ::showMessage,
                 )
             }
@@ -626,7 +634,7 @@ private fun SessionDenaroApp(
                     repository = repository,
                     route = route,
                     onFinished = { backStack.removeLastOrNull() },
-                    onBack = { backStack.removeLastOrNull() },
+                    onBack = onBackButton,
                     onMessage = ::showMessage,
                     onEditSchedule = {
                         backStack.add(ActivityEditorRoute(recurringRuleId = it))
