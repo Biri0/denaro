@@ -822,7 +822,11 @@ fun ActivityEditorScreen(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let {
-                            occurredAt = it.withTimeFrom(occurredAt)
+                            occurredAt = if (isScheduled) {
+                                it.toLocalStartOfDayMillis()
+                            } else {
+                                it.withTimeFrom(occurredAt)
+                            }
                         }
                         showDatePicker = false
                     },
@@ -1067,4 +1071,9 @@ private fun Long.withTimeFrom(existing: Long): Long {
     val date = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
     val time = Instant.ofEpochMilli(existing).atZone(ZoneId.systemDefault()).toLocalTime()
     return date.atTime(time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+}
+
+private fun Long.toLocalStartOfDayMillis(): Long {
+    val date = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
+    return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 }

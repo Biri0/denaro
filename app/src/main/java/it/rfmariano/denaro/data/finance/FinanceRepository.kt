@@ -762,6 +762,7 @@ class FinanceRepository(
         val id = UuidV7.generate()
         val zoneId = ZoneId.systemDefault()
         val occurrence = Instant.ofEpochMilli(input.nextOccurrenceAt).atZone(zoneId)
+        val startAt = occurrence.startOfDayMillis(zoneId)
         database.recurringRuleDao().insert(
             RecurringRuleEntity(
                 id = id,
@@ -775,9 +776,9 @@ class FinanceRepository(
                 timezoneId = zoneId.id,
                 anchorDay = occurrence.anchorDay(input.frequency),
                 anchorMonth = occurrence.anchorMonth(input.frequency),
-                startAt = input.nextOccurrenceAt,
+                startAt = startAt,
                 lastGeneratedAt = null,
-                nextOccurrenceAt = input.nextOccurrenceAt,
+                nextOccurrenceAt = startAt,
                 isActive = true,
                 createdAt = timestamp,
                 updatedAt = timestamp,
@@ -806,7 +807,7 @@ class FinanceRepository(
                 intervalCount = input.intervalCount,
                 anchorDay = occurrence.anchorDay(input.frequency),
                 anchorMonth = occurrence.anchorMonth(input.frequency),
-                nextOccurrenceAt = input.nextOccurrenceAt,
+                nextOccurrenceAt = occurrence.startOfDayMillis(zoneId),
                 updatedAt = clock(),
             ),
         )
@@ -1009,6 +1010,9 @@ class FinanceRepository(
         Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 
     private fun String?.normalized(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+
+    private fun java.time.ZonedDateTime.startOfDayMillis(zoneId: ZoneId): Long =
+        toLocalDate().atStartOfDay(zoneId).toInstant().toEpochMilli()
 
     private fun java.time.ZonedDateTime.anchorDay(
         frequency: RecurrenceFrequency,
