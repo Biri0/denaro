@@ -1,1 +1,2 @@
-Added permanent account deletion and a setting to choose the default screen. Currency symbols now render correctly for all currencies, and account archiving has moved to the account details screen.
+- Fix crash on double-clicking back from editor screens
+- Generate scheduled transaction at midnight

@@ -1,1 +1,2 @@
-Aggiunta l'eliminazione definitiva dei conti e un'impostazione per scegliere la schermata predefinita. I simboli di valuta ora vengono visualizzati correttamente per tutte le valute e l'archiviazione dei conti è stata spostata nella schermata dei dettagli del conto.
+- Risolto crash dovuto al doppio click sui pulsanti per tornare alla schermata precedente
+- Spostata la generazione delle transazioni programmate a mezzanotte
