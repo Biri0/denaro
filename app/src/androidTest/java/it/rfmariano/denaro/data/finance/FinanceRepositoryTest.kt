@@ -421,6 +421,36 @@ class FinanceRepositoryTest {
     }
 
     @Test
+    fun scheduledRuleAnchorsFirstOccurrenceToStartOfDay() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(
+            context,
+            DenaroDatabase::class.java,
+        ).build()
+
+        try {
+            val zoneId = java.time.ZoneId.systemDefault()
+            val anchor = java.time.LocalDate.of(2026, 9, 1)
+            val midnight = anchor.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val midday = anchor.atTime(15, 30).atZone(zoneId).toInstant().toEpochMilli()
+            val repository = FinanceRepository(database, clock = { midnight + 1 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+
+            val ruleId = repository.createRecurringRule(
+                recurringRuleInput(accountId, nextOccurrenceAt = midday),
+            )
+
+            val rule = requireNotNull(repository.getRecurringRule(ruleId))
+            assertEquals(midnight, rule.startAt)
+            val generated = database.transactionDao().observeAll().first().single()
+            assertEquals(midnight, generated.occurredAt)
+            assertEquals("2026-09-01", generated.localDate)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun resumeSkipsOccurrencesMissedWhilePaused() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(
