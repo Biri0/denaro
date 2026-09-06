@@ -7,7 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = DenaroGreenDark,
     secondary = DenaroNeutralDark,
     tertiary = DenaroAmberDark,
@@ -17,7 +17,7 @@ private val DarkColorScheme = darkColorScheme(
     error = Color(0xFFFFB4AB),
 )
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = DenaroGreen,
     secondary = DenaroNeutral,
     tertiary = DenaroAmber,

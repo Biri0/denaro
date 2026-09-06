@@ -29,7 +29,6 @@ class QuickEntryWidgetTest {
             onNode(hasContentDescriptionEqualTo(context.getString(R.string.borrow))).assertExists()
             onNode(hasContentDescriptionEqualTo(context.getString(R.string.lend))).assertExists()
             onNode(hasTextEqualTo(context.getString(R.string.income))).assertDoesNotExist()
-            onNode(hasTextEqualTo(context.getString(R.string.widget_header))).assertDoesNotExist()
         }
 
     @Test
@@ -73,11 +72,10 @@ class QuickEntryWidgetTest {
         onNode(hasTextEqualTo(context.getString(R.string.income))).assertExists()
         onNode(hasTextEqualTo(context.getString(R.string.expense))).assertExists()
         onNode(hasTextEqualTo(context.getString(R.string.transfer))).assertExists()
-        onNode(hasTextEqualTo(context.getString(R.string.widget_header))).assertDoesNotExist()
     }
 
     @Test
-    fun tallDebtWidgetAddsLabelsAndHeader() = runGlanceAppWidgetUnitTest {
+    fun tallDebtWidgetAddsLabels() = runGlanceAppWidgetUnitTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         setContext(context)
         setAppWidgetSize(DpSize(200.dp, 120.dp))
@@ -86,6 +84,5 @@ class QuickEntryWidgetTest {
         onAllNodes(hasClickAction()).assertCountEquals(2)
         onNode(hasTextEqualTo(context.getString(R.string.borrow))).assertExists()
         onNode(hasTextEqualTo(context.getString(R.string.lend))).assertExists()
-        onNode(hasTextEqualTo(context.getString(R.string.widget_header))).assertExists()
     }
 }

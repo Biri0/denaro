@@ -6,7 +6,6 @@
     <string name="widget_quick_transaction_description">Crea entrate, uscite o trasferimenti dalla schermata Home</string>
     <string name="widget_quick_debt_name">Debito rapido</string>
     <string name="widget_quick_debt_description">Registra denaro preso o dato in prestito dalla schermata Home</string>
-    <string name="widget_header">Aggiungi a Denaro</string>
     <string name="borrow">Prendi</string>
     <string name="lend">Presta</string>
     <string name="migration_progress">Preparazione dei dati…</string>
