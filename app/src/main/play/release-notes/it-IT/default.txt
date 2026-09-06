@@ -1,2 +1,2 @@
-- Risolto crash dovuto al doppio click sui pulsanti per tornare alla schermata precedente
-- Spostata la generazione delle transazioni programmate a mezzanotte
+- Widget: ora si adatta al tema di sistema (light/dark)
+- Widget: rimosso testo superfluo

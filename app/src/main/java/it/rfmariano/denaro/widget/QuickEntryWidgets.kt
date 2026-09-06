@@ -1,7 +1,6 @@
 package it.rfmariano.denaro.widget
 
 import android.content.Context
-import android.content.res.Configuration
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
@@ -11,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
@@ -23,6 +23,8 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.color.ColorProvider
+import androidx.glance.color.colorProviders
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.ColumnScope
@@ -40,10 +42,24 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.quickentry.QuickEntryAction
 import it.rfmariano.denaro.quickentry.QuickEntryIntent
+import it.rfmariano.denaro.ui.theme.DarkColorScheme
+import it.rfmariano.denaro.ui.theme.DenaroActionSurfaceDark
+import it.rfmariano.denaro.ui.theme.DenaroActionSurfaceLight
+import it.rfmariano.denaro.ui.theme.DenaroAmber
+import it.rfmariano.denaro.ui.theme.DenaroAmberDark
+import it.rfmariano.denaro.ui.theme.DenaroBackground
+import it.rfmariano.denaro.ui.theme.DenaroBackgroundDark
+import it.rfmariano.denaro.ui.theme.DenaroGreen
+import it.rfmariano.denaro.ui.theme.DenaroGreenDark
+import it.rfmariano.denaro.ui.theme.DenaroNeutral
+import it.rfmariano.denaro.ui.theme.DenaroNeutralDark
+import it.rfmariano.denaro.ui.theme.DenaroOnSurfaceDark
+import it.rfmariano.denaro.ui.theme.DenaroOnSurfaceLight
+import it.rfmariano.denaro.ui.theme.DenaroSurfaceDark
+import it.rfmariano.denaro.ui.theme.LightColorScheme
 import com.composables.icons.lucide.R as LucideR
 
 internal enum class QuickWidgetKind(
@@ -94,7 +110,9 @@ private class QuickEntryGlanceWidget(
 
     override suspend fun provideGlance(context: Context, id: androidx.glance.GlanceId) {
         provideContent {
-            QuickEntryWidgetContent(kind)
+            GlanceTheme(colors = DenaroWidgetColorsProvider) {
+                QuickEntryWidgetContent(kind)
+            }
         }
     }
 }
@@ -120,31 +138,16 @@ internal fun QuickEntryWidgetContent(kind: QuickWidgetKind) {
         QuickWidgetKind.TRANSACTIONS -> size.width >= 260.dp
         QuickWidgetKind.DEBTS -> size.width >= 180.dp
     }
-    val showHeader = when (kind) {
-        QuickWidgetKind.ALL -> size.height >= 150.dp
-        else -> size.height >= 110.dp
-    }
     val useSingleRow = kind != QuickWidgetKind.ALL || size.width >= 340.dp
 
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(widgetColor(WIDGET_BACKGROUND_LIGHT, WIDGET_BACKGROUND_DARK))
+            .background(GlanceTheme.colors.widgetBackground)
             .cornerRadius(24.dp)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showHeader) {
-            Text(
-                text = LocalContext.current.getString(R.string.widget_header),
-                style = TextStyle(
-                    color = widgetColor(WIDGET_TEXT_LIGHT, WIDGET_TEXT_DARK),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
-            Spacer(modifier = GlanceModifier.height(8.dp))
-        }
         if (useSingleRow) {
             ActionRow(kind.actions, showLabels)
         } else {
@@ -179,7 +182,7 @@ private fun RowScope.QuickAction(action: QuickEntryAction, showLabel: Boolean) {
         modifier = GlanceModifier
             .defaultWeight()
             .fillMaxHeight()
-            .background(widgetColor(WIDGET_ACTION_LIGHT, WIDGET_ACTION_DARK))
+            .background(GlanceTheme.colors.surface)
             .cornerRadius(18.dp)
             .clickable(actionStartActivity(QuickEntryIntent.create(context, action)))
             .padding(vertical = 7.dp, horizontal = 4.dp),
@@ -190,14 +193,14 @@ private fun RowScope.QuickAction(action: QuickEntryAction, showLabel: Boolean) {
             provider = ImageProvider(visual.icon),
             contentDescription = context.getString(visual.label),
             modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(widgetColor(visual.lightColor, visual.darkColor)),
+            colorFilter = ColorFilter.tint(ColorProvider(visual.lightColor, visual.darkColor)),
         )
         if (showLabel) {
             Spacer(modifier = GlanceModifier.height(3.dp))
             Text(
                 text = context.getString(visual.label),
                 style = TextStyle(
-                    color = widgetColor(WIDGET_TEXT_LIGHT, WIDGET_TEXT_DARK),
+                    color = GlanceTheme.colors.onSurface,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -252,16 +255,38 @@ private fun QuickEntryAction.visual(): ActionVisual = when (this) {
     )
 }
 
-@Composable
-private fun widgetColor(light: Color, dark: Color): ColorProvider {
-    val nightMode = LocalContext.current.resources.configuration.uiMode and
-            Configuration.UI_MODE_NIGHT_MASK
-    return ColorProvider(if (nightMode == Configuration.UI_MODE_NIGHT_YES) dark else light)
-}
-
-private val WIDGET_BACKGROUND_LIGHT = Color(0xFFF7FAF8)
-private val WIDGET_BACKGROUND_DARK = Color(0xFF171C19)
-private val WIDGET_ACTION_LIGHT = Color(0xFFE7F2EC)
-private val WIDGET_ACTION_DARK = Color(0xFF24342C)
-private val WIDGET_TEXT_LIGHT = Color(0xFF1A1C1B)
-private val WIDGET_TEXT_DARK = Color(0xFFE1E3E0)
+private val DenaroWidgetColorsProvider = colorProviders(
+    primary = ColorProvider(DenaroGreen, DenaroGreenDark),
+    onPrimary = ColorProvider(LightColorScheme.onPrimary, DarkColorScheme.onPrimary),
+    primaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
+    onPrimaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    secondary = ColorProvider(DenaroNeutral, DenaroNeutralDark),
+    onSecondary = ColorProvider(LightColorScheme.onSecondary, DarkColorScheme.onSecondary),
+    secondaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
+    onSecondaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    tertiary = ColorProvider(DenaroAmber, DenaroAmberDark),
+    onTertiary = ColorProvider(LightColorScheme.onTertiary, DarkColorScheme.onTertiary),
+    tertiaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
+    onTertiaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    error = ColorProvider(LightColorScheme.error, DarkColorScheme.error),
+    errorContainer = ColorProvider(LightColorScheme.errorContainer, DarkColorScheme.errorContainer),
+    onError = ColorProvider(LightColorScheme.onError, DarkColorScheme.onError),
+    onErrorContainer = ColorProvider(
+        LightColorScheme.onErrorContainer,
+        DarkColorScheme.onErrorContainer
+    ),
+    background = ColorProvider(DenaroBackground, DenaroBackgroundDark),
+    onBackground = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    surface = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
+    onSurface = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    surfaceVariant = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
+    onSurfaceVariant = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    outline = ColorProvider(LightColorScheme.outline, DarkColorScheme.outline),
+    inverseOnSurface = ColorProvider(
+        LightColorScheme.inverseOnSurface,
+        DarkColorScheme.inverseOnSurface
+    ),
+    inverseSurface = ColorProvider(LightColorScheme.inverseSurface, DarkColorScheme.inverseSurface),
+    inversePrimary = ColorProvider(LightColorScheme.inversePrimary, DarkColorScheme.inversePrimary),
+    widgetBackground = ColorProvider(DenaroBackground, DenaroSurfaceDark),
+)

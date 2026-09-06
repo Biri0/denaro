@@ -6,7 +6,6 @@
     <string name="widget_quick_transaction_description">Create income, expenses, or transfers from your Home screen</string>
     <string name="widget_quick_debt_name">Quick debt</string>
     <string name="widget_quick_debt_description">Record money borrowed or lent from your Home screen</string>
-    <string name="widget_header">Add to Denaro</string>
     <string name="borrow">Borrow</string>
     <string name="lend">Lend</string>
     <string name="migration_progress">Preparing your data…</string>

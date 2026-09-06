@@ -1,2 +1,2 @@
-- Fix crash on double-clicking back from editor screens
-- Generate scheduled transaction at midnight
+- Widget: now follows system theme (light/dark)
+- Widget: removed unneeded text
