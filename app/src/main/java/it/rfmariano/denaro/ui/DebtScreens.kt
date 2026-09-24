@@ -232,7 +232,7 @@ private fun DebtRow(debt: DebtSummary, amountsVisible: Boolean, onClick: () -> U
             Column {
                 Text(
                     if (amountsVisible) Money.format(
-                        debt.outstandingMinor,
+                        maxOf(0L, debt.outstandingMinor),
                         debt.currency,
                         debt.fractionDigits
                     ) else stringResource(R.string.amount_hidden)
@@ -290,7 +290,7 @@ fun DebtDetailScreen(
                         Text(stringResource(if (debt.direction == DebtDirection.BORROWED) R.string.you_owe else R.string.owed_to_you))
                         Text(
                             if (amountsVisible) Money.format(
-                                debt.outstandingMinor,
+                                maxOf(0L, debt.outstandingMinor),
                                 debt.currency,
                                 debt.fractionDigits
                             ) else stringResource(R.string.amount_hidden),
@@ -314,6 +314,19 @@ fun DebtDetailScreen(
                                 ) else stringResource(R.string.amount_hidden)
                             }"
                         )
+                        if (debt.overpaidMinor > 0) {
+                            Text(
+                                stringResource(
+                                    R.string.overpaid_by,
+                                    if (amountsVisible) Money.format(
+                                        debt.overpaidMinor,
+                                        debt.currency,
+                                        debt.fractionDigits
+                                    ) else stringResource(R.string.amount_hidden),
+                                ),
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                         Text(debt.accountName)
                         debt.dueDate?.let {
                             Text(
@@ -329,13 +342,11 @@ fun DebtDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (!debt.isSettled) {
-                            Button(
-                                onClick = { onAddRepayment(debt.id) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.add_repayment))
-                            }
+                        Button(
+                            onClick = { onAddRepayment(debt.id) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.add_repayment))
                         }
                     }
                 }
@@ -392,6 +403,7 @@ fun DebtEditorScreen(
     var dueDate by rememberSaveable { mutableStateOf<String?>(null) }
     var note by rememberSaveable { mutableStateOf("") }
     var hasRepayments by rememberSaveable { mutableStateOf(false) }
+    var repaidAmountMinor by rememberSaveable { mutableLongStateOf(0L) }
     var loaded by rememberSaveable(debtId) { mutableStateOf(debtId == null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -417,6 +429,23 @@ fun DebtEditorScreen(
     val deleted = stringResource(R.string.debt_deleted)
     val selectedAccount = accounts.firstOrNull { it.id == accountId }
     val selectorsReady = loaded
+    val belowRepaymentsWarning = selectedAccount?.let { account ->
+        runCatching { Money.parseMinorUnits(amount, account.fractionDigits) }.getOrNull()
+            ?.let { parsed ->
+                if (repaidAmountMinor > 0 && parsed < repaidAmountMinor) {
+                    stringResource(
+                        R.string.principal_below_repayments,
+                        Money.format(
+                            repaidAmountMinor,
+                            account.currency,
+                            account.fractionDigits,
+                        ),
+                    )
+                } else {
+                    null
+                }
+            }
+    }
 
     LaunchedEffect(direction, debtId) {
         if (debtId == null && defaultsAppliedDirection != direction) {
@@ -467,6 +496,7 @@ fun DebtEditorScreen(
                 dueDate = debt.dueDate
                 note = debt.note.orEmpty()
                 hasRepayments = debt.repaidMinor > 0
+                repaidAmountMinor = debt.repaidMinor
                 loaded = true
             }
         }
@@ -595,6 +625,9 @@ fun DebtEditorScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth()
             )
+            belowRepaymentsWarning?.takeIf { !saving }?.let {
+                Text(it, color = MaterialTheme.colorScheme.tertiary)
+            }
             DateField(
                 label = R.string.opened_date,
                 value = openedAt.formattedDate(),
@@ -681,6 +714,7 @@ fun DebtRepaymentEditorScreen(
     )
     var accountId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
+    var originalAmountMinor by rememberSaveable { mutableLongStateOf(0L) }
     var occurredAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var note by rememberSaveable { mutableStateOf("") }
     var showDate by remember { mutableStateOf(false) }
@@ -694,6 +728,25 @@ fun DebtRepaymentEditorScreen(
     val saved = stringResource(R.string.repayment_saved)
     val selectedAccount = accounts.firstOrNull { it.id == accountId }
     val requiredDataLoaded = loaded && debt != null && selectedAccount != null
+    val overOutstandingWarning = debt?.let { currentDebt ->
+        runCatching { Money.parseMinorUnits(amount, currentDebt.fractionDigits) }.getOrNull()
+            ?.let { parsed ->
+                val baseOutstanding = currentDebt.principalMinor -
+                        (currentDebt.repaidMinor - if (repaymentId == null) 0L else originalAmountMinor)
+                if (parsed > baseOutstanding) {
+                    stringResource(
+                        R.string.repayment_over_outstanding,
+                        Money.format(
+                            maxOf(0L, baseOutstanding),
+                            currentDebt.currency,
+                            currentDebt.fractionDigits,
+                        ),
+                    )
+                } else {
+                    null
+                }
+            }
+    }
     LaunchedEffect(debt, accounts, repaymentId) {
         if (repaymentId == null && accountId.isBlank()) {
             accountId = accounts.firstOrNull { it.currency == debt?.currency }?.id.orEmpty()
@@ -709,6 +762,7 @@ fun DebtRepaymentEditorScreen(
         if (account == null || account.currency != currentDebt.currency) return@LaunchedEffect
         accountId = repayment.accountId
         amount = Money.toInputAmount(repayment.amountMinor, currentDebt.fractionDigits)
+        originalAmountMinor = repayment.amountMinor
         occurredAt = repayment.occurredAt
         note = repayment.note.orEmpty()
         loaded = true
@@ -770,6 +824,9 @@ fun DebtRepaymentEditorScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth()
             )
+            overOutstandingWarning?.takeIf { !saving }?.let {
+                Text(it, color = MaterialTheme.colorScheme.tertiary)
+            }
             DateField(
                 label = R.string.date,
                 value = occurredAt.formattedDate(),

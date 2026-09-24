@@ -507,7 +507,6 @@ class DenaroBackupService(
             } catch (_: ArithmeticException) {
                 invalid("Invalid repayment total")
             }
-            if (total > debt.principalMinor) invalid("Repayments exceed the debt principal")
             repaidByDebt[it.debtId] = total
         }
     }

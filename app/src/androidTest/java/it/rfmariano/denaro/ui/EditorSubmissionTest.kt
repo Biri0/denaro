@@ -26,7 +26,9 @@ import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.CategoryInput
 import it.rfmariano.denaro.data.finance.CounterpartyInput
 import it.rfmariano.denaro.data.finance.DebtInput
+import it.rfmariano.denaro.data.finance.DebtRepaymentInput
 import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.TransactionInput
 import it.rfmariano.denaro.data.local.DebtDirection
 import it.rfmariano.denaro.data.local.DenaroDatabase
@@ -466,6 +468,110 @@ class EditorSubmissionTest {
 
         composeRule.waitUntil { completions.get() == 1 }
         assertNull(database.debtDao().getById(debtId)?.dueDate)
+    }
+
+    @Test
+    fun overOutstandingWarningDisappearsAfterSave() = runBlocking {
+        val accountId = repository.createAccount(AccountInput("Cash", null, 0, "EUR"))
+        val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+        val debtId = repository.createDebt(
+            DebtInput(counterpartyId, accountId, DebtDirection.LENT, 999, 1, null, null),
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+        // A successful save leaves `saving` set (the screen is normally dismissed
+        // via onFinished), and warnings only render while !saving — so neither the
+        // original text nor the recomputed one (outstanding now clamped to 0) shows up.
+        val warningOutstanding = context.getString(
+            R.string.repayment_over_outstanding,
+            Money.format(999, "EUR", 2),
+        )
+        val warningZero = context.getString(
+            R.string.repayment_over_outstanding,
+            Money.format(0, "EUR", 2),
+        )
+
+        composeRule.setContent {
+            DenaroTheme {
+                DebtRepaymentEditorScreen(
+                    repository = repository,
+                    debtId = debtId,
+                    repaymentId = null,
+                    onBack = {},
+                    onFinished = { completions.incrementAndGet() },
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Cash").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.amount))
+            .performTextInput("10.00")
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText(warningOutstanding)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+        composeRule.waitUntil { completions.get() == 1 }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(warningOutstanding).assertDoesNotExist()
+        composeRule.onNodeWithText(warningZero).assertDoesNotExist()
+        assertEquals(1_000L, repository.observeDebt(debtId).first()?.repaidMinor)
+    }
+
+    @Test
+    fun principalBelowRepaymentsWarningDisappearsAfterSave() = runBlocking {
+        val accountId = repository.createAccount(AccountInput("Cash", null, 0, "EUR"))
+        val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+        val debtId = repository.createDebt(
+            DebtInput(counterpartyId, accountId, DebtDirection.LENT, 1_000, 1, null, null),
+        )
+        repository.createDebtRepayment(
+            DebtRepaymentInput(debtId, accountId, 800, 2, null),
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val completions = AtomicInteger()
+        // Same mechanism as the test above: `saving` stays true after the save, so
+        // the warning is suppressed even though principal (500) remains below
+        // repayments (800).
+        val warningText = context.getString(
+            R.string.principal_below_repayments,
+            Money.format(800, "EUR", 2),
+        )
+
+        composeRule.setContent {
+            DenaroTheme {
+                DebtEditorScreen(
+                    repository = repository,
+                    debtId = debtId,
+                    onBack = {},
+                    onFinished = { completions.incrementAndGet() },
+                    onDeleted = {},
+                    onMessage = {},
+                )
+            }
+        }
+
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText("Alex").fetchSemanticsNodes().isNotEmpty() &&
+                    composeRule.onAllNodesWithText("Cash").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(context.getString(R.string.amount))
+            .performTextReplacement("5.00")
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithText(warningText).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.save)).performClick()
+        composeRule.waitUntil { completions.get() == 1 }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(warningText).assertDoesNotExist()
+        assertEquals(500L, repository.observeDebt(debtId).first()?.principalMinor)
     }
 
     @Test

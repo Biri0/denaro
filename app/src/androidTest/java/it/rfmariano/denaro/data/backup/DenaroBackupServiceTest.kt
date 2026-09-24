@@ -688,7 +688,7 @@ class DenaroBackupServiceTest {
     }
 
     @Test
-    fun restoreRejectsRepaymentsExceedingPrincipalWithoutChanges() = runBlocking {
+    fun restoreAcceptsRepaymentsExceedingPrincipal() = runBlocking {
         withDatabase { database ->
             seed(database)
             val debtDao = database.debtDao()
@@ -697,11 +697,19 @@ class DenaroBackupServiceTest {
             debtDao.updateRepayment(original.copy(amountMinor = 600))
             debtDao.insertRepayment(second)
             val service = DenaroBackupService(database, "2.0-test")
-            val malformed = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            val backup = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            val expected = snapshot(database)
             debtDao.deleteRepayment(second)
             debtDao.updateRepayment(original)
 
-            assertRestoreRejectedWithoutChanges(database, service, malformed)
+            service.restore(
+                ByteArrayInputStream(backup),
+                null,
+                backup.contentDigest(),
+                postRestoreInTransaction = {},
+            )
+
+            assertEquals(expected, snapshot(database))
         }
     }
 

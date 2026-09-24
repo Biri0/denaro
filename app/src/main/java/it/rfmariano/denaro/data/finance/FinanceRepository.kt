@@ -298,9 +298,6 @@ class FinanceRepository(
         require(repayments.isEmpty() || input.direction == existing.direction) {
             "Direction cannot be changed after a repayment"
         }
-        require(input.principalMinor >= repayments.sumOf { it.amountMinor }) {
-            "Principal cannot be less than repayments"
-        }
         require(repayments.all { it.occurredAt >= input.openedAt }) {
             "Opening date cannot be after a repayment"
         }
@@ -346,7 +343,7 @@ class FinanceRepository(
             val existing =
                 requireNotNull(database.debtDao().getRepaymentById(id)) { "Repayment not found" }
             require(existing.debtId == input.debtId) { "Repayment debt cannot be changed" }
-            validateDebtRepayment(input, existing.amountMinor)
+            validateDebtRepayment(input)
             database.debtDao().updateRepayment(
                 existing.copy(
                     accountId = input.accountId,
@@ -894,20 +891,13 @@ class FinanceRepository(
         return account
     }
 
-    private suspend fun validateDebtRepayment(
-        input: DebtRepaymentInput,
-        replacingAmountMinor: Long = 0,
-    ) {
+    private suspend fun validateDebtRepayment(input: DebtRepaymentInput) {
         require(input.amountMinor > 0) { "Amount must be greater than zero" }
         require(input.occurredAt >= 0) { "Date is invalid" }
         val debt = requireNotNull(database.debtDao().getById(input.debtId)) { "Debt not found" }
         require(input.occurredAt >= debt.openedAt) { "Repayment cannot be before the opening date" }
         val account = requireActiveAccount(input.accountId)
         require(account.currency == debt.currency) { "Repayment account must use ${debt.currency}" }
-        val alreadyRepaid = database.debtDao().getRepayments(input.debtId).sumOf { it.amountMinor }
-        require(input.amountMinor <= debt.principalMinor - alreadyRepaid + replacingAmountMinor) {
-            "Repayment cannot exceed the outstanding amount"
-        }
     }
 
     private suspend fun requireActiveAccount(id: String): AccountEntity {

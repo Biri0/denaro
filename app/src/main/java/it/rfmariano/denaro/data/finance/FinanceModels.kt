@@ -93,7 +93,8 @@ data class DebtSummary(
     val fractionDigits: Int = 2,
 ) {
     val outstandingMinor: Long get() = principalMinor - repaidMinor
-    val isSettled: Boolean get() = outstandingMinor == 0L
+    val overpaidMinor: Long get() = maxOf(0L, repaidMinor - principalMinor)
+    val isSettled: Boolean get() = outstandingMinor <= 0L
 }
 
 data class DebtInput(
