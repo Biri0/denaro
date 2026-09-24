@@ -177,7 +177,7 @@ class FinanceRepositoryTest {
     }
 
     @Test
-    fun debtRepaymentCannotExceedOutstandingAmount() = runBlocking {
+    fun debtRepaymentMayExceedOutstandingAmount() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
         try {
@@ -187,18 +187,44 @@ class FinanceRepositoryTest {
             val debtId = repository.createDebt(
                 DebtInput(counterpartyId, accountId, DebtDirection.LENT, 1_000, 1, null, null),
             )
-            val failure = runCatching {
-                repository.createDebtRepayment(
-                    DebtRepaymentInput(
-                        debtId,
-                        accountId,
-                        1_001,
-                        2,
-                        null
-                    )
-                )
-            }.exceptionOrNull()
-            assertEquals("Repayment cannot exceed the outstanding amount", failure?.message)
+            repository.createDebtRepayment(
+                DebtRepaymentInput(debtId, accountId, 1_001, 2, null),
+            )
+
+            val debt = repository.observeDebt(debtId).first()
+            assertEquals(-1L, debt?.outstandingMinor)
+            assertEquals(1L, debt?.overpaidMinor)
+            assertEquals(true, debt?.isSettled)
+            assertEquals(1L, repository.observeAccount(accountId).first()?.balanceMinor)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun debtPrincipalMayBeLoweredBelowTotalRepayments() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val counterpartyId = repository.createCounterparty(CounterpartyInput("Alex", null))
+            val debtId = repository.createDebt(
+                DebtInput(counterpartyId, accountId, DebtDirection.LENT, 1_000, 1, null, null),
+            )
+            repository.createDebtRepayment(
+                DebtRepaymentInput(debtId, accountId, 1_001, 2, null),
+            )
+
+            repository.updateDebt(
+                debtId,
+                DebtInput(counterpartyId, accountId, DebtDirection.LENT, 999, 1, null, null),
+            )
+
+            val debt = repository.observeDebt(debtId).first()
+            assertEquals(999L, debt?.principalMinor)
+            assertEquals(-2L, debt?.outstandingMinor)
+            assertEquals(2L, debt?.overpaidMinor)
         } finally {
             database.close()
         }

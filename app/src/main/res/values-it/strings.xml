@@ -82,11 +82,14 @@
     <string name="add_repayment">Aggiungi rimborso</string>
     <string name="edit_repayment">Modifica rimborso</string>
     <string name="repayment_saved">Rimborso salvato.</string>
+    <string name="repayment_over_outstanding">Più del residuo di %1$s. Puoi salvare comunque.</string>
+    <string name="principal_below_repayments">I rimborsi totalizzano %1$s, più di questo importo. Puoi salvare comunque.</string>
     <string name="delete_repayment">Eliminare il rimborso?</string>
     <string name="you_owe">Devi</string>
     <string name="owed_to_you">Ti devono</string>
     <string name="open">Aperti</string>
     <string name="settled">Saldati</string>
+    <string name="overpaid_by">Restituito in più %1$s</string>
     <string name="overdue">Scaduto</string>
     <string name="due_today">Scade oggi</string>
     <string name="due_on">Scade il %1$s</string>

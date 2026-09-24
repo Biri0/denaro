@@ -82,11 +82,14 @@
     <string name="add_repayment">Add repayment</string>
     <string name="edit_repayment">Edit repayment</string>
     <string name="repayment_saved">Repayment saved.</string>
+    <string name="repayment_over_outstanding">More than the outstanding %1$s. You can still save.</string>
+    <string name="principal_below_repayments">Repayments total %1$s, more than this amount. You can still save.</string>
     <string name="delete_repayment">Delete repayment?</string>
     <string name="you_owe">You owe</string>
     <string name="owed_to_you">Owed to you</string>
     <string name="open">Open</string>
     <string name="settled">Settled</string>
+    <string name="overpaid_by">Overpaid %1$s</string>
     <string name="overdue">Overdue</string>
     <string name="due_today">Due today</string>
     <string name="due_on">Due %1$s</string>
