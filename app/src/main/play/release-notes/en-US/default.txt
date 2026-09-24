@@ -1,2 +1,1 @@
-- Widget: now follows system theme (light/dark)
-- Widget: removed unneeded text
+You can now record loan repayments that exceed the original amount!

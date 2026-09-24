@@ -1,2 +1,1 @@
-- Widget: ora si adatta al tema di sistema (light/dark)
-- Widget: rimosso testo superfluo
+Ora puoi registrare rimborsi con importi superiori al totale del prestito iniziale!
