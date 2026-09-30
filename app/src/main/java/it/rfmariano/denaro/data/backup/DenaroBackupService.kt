@@ -6,6 +6,7 @@ import it.rfmariano.denaro.data.finance.CurrencyCatalog
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
+import it.rfmariano.denaro.data.local.BudgetEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -55,10 +56,11 @@ data class BackupRecordCounts(
     val counterparties: Int,
     val debts: Int,
     val debtRepayments: Int,
+    val budgets: Int = 0,
 ) {
     val total: Int
         get() = accounts + categories + recurringRules + transactions + balanceAdjustments +
-                transfers + counterparties + debts + debtRepayments
+                transfers + counterparties + debts + debtRepayments + budgets
 }
 
 data class BackupPreview(
@@ -110,6 +112,7 @@ class DenaroBackupService(
             counterparties = dao.counterparties().size,
             debts = dao.debts().size,
             debtRepayments = dao.debtRepayments().size,
+            budgets = dao.budgets().size,
         )
     }
 
@@ -184,6 +187,9 @@ class DenaroBackupService(
             payload.debtRepayments.map(BackupDebtRepayment::toEntity).also {
                 if (it.isNotEmpty()) dao.insertDebtRepayments(it)
             }
+            payload.budgets.map(BackupBudget::toEntity).also {
+                if (it.isNotEmpty()) dao.insertBudgets(it)
+            }
             postRestoreInTransaction()
         }
     }
@@ -200,6 +206,7 @@ class DenaroBackupService(
         dao.deleteTransfers()
         dao.deleteBalanceAdjustments()
         dao.deleteRecurringRules()
+        dao.deleteBudgets()
         dao.deleteCategories()
         dao.deleteCounterparties()
         dao.deleteAccounts()
@@ -220,6 +227,7 @@ class DenaroBackupService(
             counterparties = dao.counterparties().map(BackupCounterparty::from),
             debts = dao.debts().map(BackupDebt::from),
             debtRepayments = dao.debtRepayments().map(BackupDebtRepayment::from),
+            budgets = dao.budgets().map(BackupBudget::from),
         )
     }
 
@@ -509,6 +517,21 @@ class DenaroBackupService(
             }
             repaidByDebt[it.debtId] = total
         }
+
+        uniqueIds("budget", payload.budgets.map { it.id })
+        val budgetPairs = mutableSetOf<Pair<String, String>>()
+        payload.budgets.forEach {
+            if (it.categoryId !in categoryIds) invalid("Invalid budget")
+            val category = categoriesById.getValue(it.categoryId)
+            if (category.type != TransactionType.EXPENSE.name || category.parentId != null) {
+                invalid("Budget category must be a top-level expense category")
+            }
+            if (!CurrencyCatalog.isValid(it.currency)) invalid("Invalid budget currency")
+            if (it.amountMinor <= 0) invalid("Invalid budget amount")
+            if (!budgetPairs.add(it.categoryId to it.currency)) {
+                invalid("Duplicate budget for category and currency")
+            }
+        }
     }
 
     private fun encrypt(
@@ -543,7 +566,7 @@ class DenaroBackupService(
     private fun BackupPayload.counts() = BackupRecordCounts(
         accounts.size, categories.size, recurringRules.size, transactions.size,
         balanceAdjustments.size, transfers.size, counterparties.size, debts.size,
-        debtRepayments.size,
+        debtRepayments.size, budgets.size,
     )
 
     private fun BackupPayload.sameFinanceDataAs(other: BackupPayload): Boolean =
@@ -555,7 +578,8 @@ class DenaroBackupService(
                 transfers.associateBy { it.id } == other.transfers.associateBy { it.id } &&
                 counterparties.associateBy { it.id } == other.counterparties.associateBy { it.id } &&
                 debts.associateBy { it.id } == other.debts.associateBy { it.id } &&
-                debtRepayments.associateBy { it.id } == other.debtRepayments.associateBy { it.id }
+                debtRepayments.associateBy { it.id } == other.debtRepayments.associateBy { it.id } &&
+                budgets.associateBy { it.id } == other.budgets.associateBy { it.id }
 
     private fun BackupPayload.normalizedAccounts(): Map<String, BackupAccount> =
         accounts.associate { account ->
@@ -565,7 +589,9 @@ class DenaroBackupService(
         }
 
     private fun BackupPayload.upgradedToCurrentVersion(): BackupPayload {
-        if (schemaVersion == PAYLOAD_VERSION) return this
+        // Only legacy v1 payloads carry fixed-scale-2 amounts. v2 and later already store
+        // amounts in each currency's natural scale, so rescaling them would corrupt data.
+        if (schemaVersion != LEGACY_PAYLOAD_VERSION) return this
         val accountsByCurrency =
             accounts.associate { it.currency to Money.fractionDigitsForCurrency(it.currency) }
         val accountCurrencyById = accounts.associate { it.id to it.currency }
@@ -617,7 +643,7 @@ class DenaroBackupService(
         val MAGIC = "DENARO_BACKUP\n".toByteArray(Charsets.US_ASCII)
         const val ENVELOPE_VERSION = 1
         const val LEGACY_PAYLOAD_VERSION = 1
-        const val PAYLOAD_VERSION = 2
+        const val PAYLOAD_VERSION = 3
         const val PBKDF2_ITERATIONS = 600_000
         const val SALT_BYTES = 16
         const val IV_BYTES = 12
@@ -663,6 +689,7 @@ private data class BackupPayload(
     val counterparties: List<BackupCounterparty> = emptyList(),
     val debts: List<BackupDebt> = emptyList(),
     val debtRepayments: List<BackupDebtRepayment> = emptyList(),
+    val budgets: List<BackupBudget> = emptyList(),
 )
 
 @Serializable
@@ -676,6 +703,8 @@ private data class BackupAccount(
     val createdAt: Long,
     val updatedAt: Long,
     val fractionDigits: Int? = null,
+    val isSavings: Boolean = false,
+    val savingsTargetMinor: Long? = null,
 ) {
     fun resolvedFractionDigits(schemaVersion: Int): Int =
         if (schemaVersion == 1) 2 else fractionDigits ?: invalid("Missing account fraction digits")
@@ -690,6 +719,8 @@ private data class BackupAccount(
         createdAt = createdAt,
         updatedAt = updatedAt,
         fractionDigits = resolvedFractionDigits(schemaVersion),
+        isSavings = isSavings,
+        savingsTargetMinor = savingsTargetMinor,
     )
 
     companion object {
@@ -703,6 +734,8 @@ private data class BackupAccount(
             createdAt = v.createdAt,
             updatedAt = v.updatedAt,
             fractionDigits = v.fractionDigits,
+            isSavings = v.isSavings,
+            savingsTargetMinor = v.savingsTargetMinor,
         )
     }
 }
@@ -1001,6 +1034,36 @@ private data class BackupDebtRepayment(
 
 private fun parseTransactionType(value: String) = runCatching { TransactionType.valueOf(value) }
     .getOrElse { invalid("Invalid transaction type") }
+
+@Serializable
+private data class BackupBudget(
+    val id: String,
+    val categoryId: String,
+    val currency: String,
+    val amountMinor: Long,
+    val createdAt: Long,
+    val updatedAt: Long,
+) {
+    fun toEntity() = BudgetEntity(
+        id = id,
+        categoryId = categoryId,
+        currency = currency,
+        amountMinor = amountMinor,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
+    companion object {
+        fun from(v: BudgetEntity) = BackupBudget(
+            id = v.id,
+            categoryId = v.categoryId,
+            currency = v.currency,
+            amountMinor = v.amountMinor,
+            createdAt = v.createdAt,
+            updatedAt = v.updatedAt,
+        )
+    }
+}
 
 private fun parseFrequency(value: String) = runCatching { RecurrenceFrequency.valueOf(value) }
     .getOrElse { invalid("Invalid recurrence frequency") }

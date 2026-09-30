@@ -12,6 +12,7 @@ import it.rfmariano.denaro.data.finance.ActivityFilter
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.BalanceAdjustmentSummary
+import it.rfmariano.denaro.data.finance.BudgetProgress
 import it.rfmariano.denaro.data.finance.CurrencyCatalog
 import it.rfmariano.denaro.data.finance.DashboardFilter
 import it.rfmariano.denaro.data.finance.DashboardSnapshot
@@ -38,6 +39,8 @@ data class HomeUiState(
     val isDashboardLoading: Boolean = true,
     val accounts: List<AccountSummary> = emptyList(),
     val totalsByCurrency: Map<String, Long> = emptyMap(),
+    val savingsTotalsByCurrency: Map<String, Long> = emptyMap(),
+    val budgets: List<BudgetProgress> = emptyList(),
     val dashboard: DashboardSnapshot? = null,
     val selectedCurrency: String = "EUR",
     val selectedAccountId: String? = null,
@@ -87,18 +90,37 @@ class HomeViewModel(
             .onStart { emit(DashboardLoadState(filter)) }
     }
 
+    private val budgets = combine(
+        selectedCurrency,
+        selectedMonth,
+        refreshRequests,
+    ) { currency, month, _ -> currency to month }
+        .flatMapLatest { (currency, month) ->
+            repository.observeBudgetProgress(currency, month)
+        }
+
     val uiState = combine(
         repository.observeActiveAccounts(),
         dashboard,
-    ) { accounts, dashboardState ->
+        budgets,
+    ) { accounts, dashboardState, budgetProgress ->
+        val available = accounts
+            .filterNot(AccountSummary::isSavings)
+            .groupBy(AccountSummary::currency)
+            .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
+            .toSortedMap()
+        val savings = accounts
+            .filter(AccountSummary::isSavings)
+            .groupBy(AccountSummary::currency)
+            .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
+            .toSortedMap()
         HomeUiState(
             isLoading = false,
             isDashboardLoading = dashboardState.isLoading,
             accounts = accounts,
-            totalsByCurrency = accounts
-                .groupBy(AccountSummary::currency)
-                .mapValues { (_, values) -> values.sumOf(AccountSummary::balanceMinor) }
-                .toSortedMap(),
+            totalsByCurrency = available,
+            savingsTotalsByCurrency = savings,
+            budgets = budgetProgress,
             dashboard = dashboardState.snapshot,
             selectedCurrency = dashboardState.filter.currency,
             selectedAccountId = dashboardState.filter.accountId,

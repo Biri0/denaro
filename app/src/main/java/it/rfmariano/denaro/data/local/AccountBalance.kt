@@ -68,5 +68,7 @@ data class AccountWithBalance(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "fraction_digits") val fractionDigits: Int,
+    @ColumnInfo(name = "is_savings") val isSavings: Boolean,
+    @ColumnInfo(name = "savings_target_minor") val savingsTargetMinor: Long?,
     val balanceMinor: Long,
 )

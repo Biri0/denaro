@@ -139,9 +139,11 @@ fun DashboardControls(
 
 @Composable
 fun DashboardSummary(snapshot: DashboardSnapshot, amountsVisible: Boolean) {
-    Column(Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 16.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SummaryCard(
                 R.string.income,
@@ -243,9 +245,11 @@ fun MonthlyCashFlowChart(
             )
         }, ${Money.format(month.expenseMinor, currency, fractionDigits)}"
     } else stringResource(R.string.amounts_hidden_chart_note)
-    Column(Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+    ) {
         Text(stringResource(R.string.six_month_trend), style = MaterialTheme.typography.titleMedium)
         Row(
             Modifier.padding(vertical = 8.dp),
@@ -301,13 +305,17 @@ fun MonthlyCashFlowChart(
 @Composable
 private fun ChartLegend(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier
-            .width(12.dp)
-            .height(12.dp)
-            .padding(1.dp))
-        Canvas(Modifier
-            .width(12.dp)
-            .height(12.dp)) { drawCircle(color) }
+        Box(
+            Modifier
+                .width(12.dp)
+                .height(12.dp)
+                .padding(1.dp)
+        )
+        Canvas(
+            Modifier
+                .width(12.dp)
+                .height(12.dp)
+        ) { drawCircle(color) }
         Spacer(Modifier.width(6.dp))
         Text(label, style = MaterialTheme.typography.labelMedium)
     }
@@ -319,71 +327,139 @@ fun CategoryBreakdown(
     amountsVisible: Boolean,
     onCategoryClick: (ActivityKind, String?) -> Unit,
 ) {
-    var kind by rememberSaveable { mutableStateOf(ActivityKind.EXPENSE) }
-    val shares =
-        if (kind == ActivityKind.EXPENSE) dashboard.expenseCategories else dashboard.incomeCategories
-    val total = shares.sumOf(CategoryShare::amountMinor).coerceAtLeast(1)
-    Column(Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Text(stringResource(R.string.by_category), style = MaterialTheme.typography.titleMedium)
-        SingleChoiceSegmentedButtonRow(Modifier
+    var mode by rememberSaveable { mutableStateOf(MODE_EXPENSE) }
+    Column(
+        Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp)) {
-            listOf(ActivityKind.EXPENSE, ActivityKind.INCOME).forEachIndexed { index, option ->
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Text(stringResource(R.string.by_category), style = MaterialTheme.typography.titleMedium)
+        SingleChoiceSegmentedButtonRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
+        ) {
+            listOf(
+                MODE_EXPENSE to R.string.expense,
+                MODE_INCOME to R.string.income,
+                MODE_BOTH to R.string.both,
+            ).forEachIndexed { index, (value, labelRes) ->
                 SegmentedButton(
-                    selected = kind == option,
-                    onClick = { kind = option },
-                    shape = SegmentedButtonDefaults.itemShape(index, 2),
-                ) { Text(stringResource(if (option == ActivityKind.EXPENSE) R.string.expense else R.string.income)) }
+                    selected = mode == value,
+                    onClick = { mode = value },
+                    shape = SegmentedButtonDefaults.itemShape(index, 3),
+                ) { Text(stringResource(labelRes)) }
             }
         }
-        if (shares.isEmpty()) {
-            Text(
-                stringResource(R.string.no_data_for_period),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        when (mode) {
+            MODE_BOTH -> {
+                CategoryShareSection(R.string.expense)
+                CategoryShareList(
+                    dashboard.expenseCategories,
+                    ActivityKind.EXPENSE,
+                    dashboard,
+                    amountsVisible,
+                    onCategoryClick,
+                )
+                Spacer(Modifier.height(8.dp))
+                CategoryShareSection(R.string.income)
+                CategoryShareList(
+                    dashboard.incomeCategories,
+                    ActivityKind.INCOME,
+                    dashboard,
+                    amountsVisible,
+                    onCategoryClick,
+                )
+            }
+
+            MODE_INCOME -> CategoryShareList(
+                dashboard.incomeCategories,
+                ActivityKind.INCOME,
+                dashboard,
+                amountsVisible,
+                onCategoryClick,
             )
-        } else {
-            shares.forEach { share ->
-                val fraction = share.amountMinor.toFloat() / total
-                Row(
+
+            else -> CategoryShareList(
+                dashboard.expenseCategories,
+                ActivityKind.EXPENSE,
+                dashboard,
+                amountsVisible,
+                onCategoryClick,
+            )
+        }
+    }
+}
+
+private const val MODE_EXPENSE = "EXPENSE"
+private const val MODE_INCOME = "INCOME"
+private const val MODE_BOTH = "BOTH"
+
+@Composable
+private fun CategoryShareSection(titleRes: Int) {
+    Text(
+        stringResource(titleRes),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun CategoryShareList(
+    shares: List<CategoryShare>,
+    kind: ActivityKind,
+    dashboard: DashboardSnapshot,
+    amountsVisible: Boolean,
+    onCategoryClick: (ActivityKind, String?) -> Unit,
+) {
+    if (shares.isEmpty()) {
+        Text(
+            stringResource(R.string.no_data_for_period),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+    val total = shares.sumOf(CategoryShare::amountMinor).coerceAtLeast(1)
+    shares.forEach { share ->
+        val fraction = share.amountMinor.toFloat() / total
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCategoryClick(kind, share.categoryId) }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CategoryIcon(share.iconName ?: "circle_help", share.colorIndex)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp)
+            ) {
+                Row {
+                    Text(
+                        share.name ?: stringResource(R.string.no_category),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        if (amountsVisible) Money.format(
+                            share.amountMinor,
+                            dashboard.filter.currency,
+                            dashboard.fractionDigits
+                        ) else stringResource(R.string.amount_hidden)
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { fraction },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onCategoryClick(kind, share.categoryId) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CategoryIcon(share.iconName ?: "circle_help", share.colorIndex)
-                    Column(Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)) {
-                        Row {
-                            Text(
-                                share.name ?: stringResource(R.string.no_category),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                if (amountsVisible) Money.format(
-                                    share.amountMinor,
-                                    dashboard.filter.currency,
-                                    dashboard.fractionDigits
-                                ) else stringResource(R.string.amount_hidden)
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = { fraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 5.dp),
-                            color = CategoryPalette[(share.colorIndex
-                                ?: 0).mod(CategoryPalette.size)],
-                        )
-                        Text(
-                            "${(fraction * 100).toInt()}% · ${share.transactionCount}",
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
+                        .padding(top = 5.dp),
+                    color = CategoryPalette[(share.colorIndex
+                        ?: 0).mod(CategoryPalette.size)],
+                )
+                Text(
+                    "${(fraction * 100).toInt()}% · ${share.transactionCount}",
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }

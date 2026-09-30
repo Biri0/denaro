@@ -731,6 +731,59 @@ interface ActivityDao {
 }
 
 @Dao
+interface BudgetDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(budget: BudgetEntity)
+
+    @Query("SELECT * FROM budgets ORDER BY currency, created_at, id")
+    fun observeAll(): Flow<List<BudgetEntity>>
+
+    @Query("SELECT * FROM budgets WHERE id = :id")
+    suspend fun getById(id: String): BudgetEntity?
+
+    @Query("SELECT * FROM budgets WHERE category_id = :categoryId ORDER BY currency, created_at, id")
+    suspend fun getForCategory(categoryId: String): List<BudgetEntity>
+
+    @Update
+    suspend fun update(budget: BudgetEntity)
+
+    @Query("DELETE FROM budgets WHERE category_id = :categoryId")
+    suspend fun deleteForCategory(categoryId: String)
+
+    @Query("DELETE FROM budgets WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("SELECT COUNT(*) FROM budgets")
+    suspend fun count(): Int
+
+    @Query(
+        """
+        SELECT COALESCE(parent.id, category.id) AS categoryId,
+               SUM(transactions.amount_minor) AS spentMinor
+        FROM transactions
+        JOIN accounts ON accounts.id = transactions.account_id
+        LEFT JOIN categories AS category ON category.id = transactions.category_id
+        LEFT JOIN categories AS parent ON parent.id = category.parent_id
+        WHERE transactions.type = 'EXPENSE'
+          AND transactions.local_date >= :fromDate
+          AND transactions.local_date < :toDate
+          AND accounts.currency = :currency
+        GROUP BY COALESCE(parent.id, category.id)
+        """,
+    )
+    fun observeSpendByCategory(
+        currency: String,
+        fromDate: String,
+        toDate: String,
+    ): Flow<List<BudgetSpendRecord>>
+}
+
+data class BudgetSpendRecord(
+    val categoryId: String?,
+    val spentMinor: Long,
+)
+
+@Dao
 interface LegacyImportDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(record: LegacyImportEntity)
@@ -746,6 +799,12 @@ interface LegacyImportDao {
 interface BackupDao {
     @Query("SELECT * FROM accounts ORDER BY created_at, id")
     suspend fun accounts(): List<AccountEntity>
+
+    @Query("SELECT * FROM budgets ORDER BY created_at, id")
+    suspend fun budgets(): List<BudgetEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertBudgets(values: List<BudgetEntity>)
 
     @Query("SELECT * FROM categories ORDER BY parent_id IS NOT NULL, created_at, id")
     suspend fun categories(): List<CategoryEntity>
@@ -800,6 +859,9 @@ interface BackupDao {
 
     @Query("DELETE FROM recurring_rules")
     suspend fun deleteRecurringRules()
+
+    @Query("DELETE FROM budgets")
+    suspend fun deleteBudgets()
 
     @Query("DELETE FROM categories")
     suspend fun deleteCategories()

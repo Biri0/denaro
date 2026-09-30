@@ -24,6 +24,12 @@ import androidx.compose.ui.text.input.ImeAction
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.CurrencyCatalog
 
+/**
+ * Currency picker.
+ *
+ * @param allowedCodes restricts the selectable currencies to this set, and reports any other
+ *   code as invalid. Null keeps the whole catalog available.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CurrencyComboBox(
@@ -33,16 +39,19 @@ fun CurrencyComboBox(
     preferredCodes: List<String>,
     modifier: Modifier = Modifier,
     label: String = stringResource(R.string.currency),
+    allowedCodes: Set<String>? = null,
     onCodeChange: (String) -> Unit,
     onValidChange: (Boolean) -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    val allEntries = remember(locale, includeAll, preferredCodes) {
+    val allEntries = remember(locale, includeAll, preferredCodes, allowedCodes) {
         CurrencyCatalog.entries(
             locale = locale,
             includeAll = includeAll,
             preferredCodes = preferredCodes,
-        )
+        ).let { entries ->
+            allowedCodes?.let { entries.filter { entry -> entry.code in it } } ?: entries
+        }
     }
     var text by rememberSaveable { mutableStateOf(code) }
     LaunchedEffect(code) {

@@ -194,6 +194,39 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `accounts` ADD COLUMN `is_savings` INTEGER NOT NULL DEFAULT 0",
+        )
+        db.execSQL(
+            "ALTER TABLE `accounts` ADD COLUMN `savings_target_minor` INTEGER",
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `budgets` (
+                `id` TEXT NOT NULL,
+                `category_id` TEXT NOT NULL,
+                `currency` TEXT NOT NULL,
+                `amount_minor` INTEGER NOT NULL,
+                `created_at` INTEGER NOT NULL,
+                `updated_at` INTEGER NOT NULL,
+                PRIMARY KEY(`id`),
+                FOREIGN KEY(`category_id`) REFERENCES `categories`(`id`)
+                    ON UPDATE NO ACTION ON DELETE RESTRICT
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_budgets_category_id_currency` " +
+                    "ON `budgets` (`category_id`, `currency`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_budgets_currency` ON `budgets` (`currency`)",
+        )
+    }
+}
+
 val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

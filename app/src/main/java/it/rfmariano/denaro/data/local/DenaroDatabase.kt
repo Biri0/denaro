@@ -16,9 +16,10 @@ import androidx.room.TypeConverters
         DebtEntity::class,
         DebtRepaymentEntity::class,
         LegacyImportEntity::class,
+        BudgetEntity::class,
     ],
     views = [AccountBalance::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -36,4 +37,5 @@ abstract class DenaroDatabase : RoomDatabase() {
     abstract fun legacyImportDao(): LegacyImportDao
     abstract fun backupDao(): BackupDao
     abstract fun statementDao(): StatementDao
+    abstract fun budgetDao(): BudgetDao
 }

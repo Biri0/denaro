@@ -26,6 +26,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -64,6 +66,7 @@ import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
 import it.rfmariano.denaro.data.finance.BalanceAdjustmentSummary
+import it.rfmariano.denaro.data.finance.BudgetProgress
 import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.UNCATEGORIZED_CATEGORY_FILTER
@@ -87,6 +90,7 @@ fun HomeRouteContent(
         String,
         String?,
     ) -> Unit,
+    onBudgetClick: (String) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ReportDrawnWhen { isHomeFullyDrawn(state) }
@@ -160,6 +164,9 @@ fun HomeRouteContent(
                     item {
                         BalanceBand(
                             state.totalsByCurrency.filterKeys { it == state.selectedCurrency },
+                            state.savingsTotalsByCurrency.filterKeys {
+                                it == state.selectedCurrency
+                            },
                             state.accounts,
                             amountsVisible,
                         )
@@ -181,6 +188,19 @@ fun HomeRouteContent(
                     } else {
                         state.dashboard?.let { dashboard ->
                             item { DashboardSummary(dashboard, amountsVisible) }
+                            if (state.budgets.any {
+                                    it.budget.currency == dashboard.filter.currency
+                                }
+                            ) {
+                                item {
+                                    BudgetHomeSection(
+                                        budgets = state.budgets,
+                                        currency = dashboard.filter.currency,
+                                        amountsVisible = amountsVisible,
+                                        onBudgetClick = onBudgetClick,
+                                    )
+                                }
+                            }
                             item {
                                 MonthlyCashFlowChart(
                                     dashboard.months,
@@ -221,6 +241,7 @@ internal fun isHomeFullyDrawn(state: HomeUiState): Boolean =
 @Composable
 private fun BalanceBand(
     totals: Map<String, Long>,
+    savingsTotals: Map<String, Long>,
     accounts: List<AccountSummary>,
     amountsVisible: Boolean,
 ) {
@@ -235,17 +256,131 @@ private fun BalanceBand(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        totals.forEach { (currency, amount) ->
+        val hiddenAmount = stringResource(R.string.amount_hidden)
+        (totals.keys + savingsTotals.keys).sorted().forEach { currency ->
             val fractionDigits = accounts.firstOrNull { it.currency == currency }?.fractionDigits
                 ?: Money.fractionDigitsForCurrency(currency)
-            Text(
-                text = if (amountsVisible) {
-                    Money.format(amount, currency, fractionDigits)
-                } else {
-                    stringResource(R.string.amount_hidden)
-                },
-                style = MaterialTheme.typography.headlineMedium,
-            )
+
+            // A currency can be present in only one of the two maps (e.g. savings-only),
+            // so a missing entry means zero rather than a hidden amount.
+            fun amountOf(value: Long?) = if (amountsVisible) {
+                Money.format(value ?: 0L, currency, fractionDigits)
+            } else {
+                hiddenAmount
+            }
+
+            val savings = savingsTotals[currency]
+            if (savings != null) {
+                Text(
+                    text = stringResource(R.string.available),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = amountOf(totals[currency]),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.saved),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = amountOf(savings),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Text(
+                    text = amountOf(totals[currency]),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetHomeSection(
+    budgets: List<BudgetProgress>,
+    currency: String,
+    amountsVisible: Boolean,
+    onBudgetClick: (String) -> Unit,
+) {
+    val visible = budgets.filter { it.budget.currency == currency }
+    if (visible.isEmpty()) return
+    val hiddenAmount = stringResource(R.string.amount_hidden)
+    val spentLabel = stringResource(R.string.budget_spent)
+    val overLabel = stringResource(R.string.over_budget)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(
+            stringResource(R.string.budgets),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        visible.forEach { progress ->
+            val fraction = progress.fraction
+            fun amountOf(minor: Long) = if (amountsVisible) {
+                Money.format(minor, currency, progress.fractionDigits)
+            } else {
+                hiddenAmount
+            }
+
+            val spentText = amountOf(progress.spentMinor)
+            val limitText = amountOf(progress.budget.amountMinor)
+            val rowColor = when {
+                progress.isOver -> MaterialTheme.colorScheme.error
+                fraction >= 0.85f -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onBudgetClick(progress.budget.categoryId) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CategoryIcon(
+                    progress.budget.categoryIconName ?: "circle_help",
+                    progress.budget.categoryColorIndex,
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
+                ) {
+                    Row {
+                        Text(
+                            progress.budget.categoryName
+                                ?: stringResource(R.string.no_category),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(limitText)
+                    }
+                    LinearProgressIndicator(
+                        progress = { fraction.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 5.dp),
+                        color = rowColor,
+                    )
+                    Text(
+                        text = if (progress.isOver) {
+                            "$overLabel · $spentText"
+                        } else {
+                            "$spentLabel: $spentText / $limitText"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = rowColor,
+                    )
+                }
+            }
         }
     }
 }
@@ -448,6 +583,14 @@ fun AccountDetailRouteContent(
                             },
                             style = MaterialTheme.typography.headlineMedium,
                         )
+                        if (account.isSavings) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.savings_account_description),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         Spacer(Modifier.height(18.dp))
                         Text(
                             "${stringResource(R.string.opening_balance)}: " +
