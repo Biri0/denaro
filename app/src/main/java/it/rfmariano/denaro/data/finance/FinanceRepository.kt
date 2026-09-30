@@ -11,6 +11,7 @@ import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.AccountWithBalance
 import it.rfmariano.denaro.data.local.ActivityRecord
 import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
+import it.rfmariano.denaro.data.local.BudgetEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -525,6 +526,7 @@ class FinanceRepository(
                     )
                 }
                 .sortedByDescending(CategoryShare::amountMinor)
+
             val fractionDigits = accounts.firstOrNull { account ->
                 account.id == filter.accountId
             }?.fractionDigits ?: accounts.firstOrNull { account ->
@@ -548,6 +550,130 @@ class FinanceRepository(
             ?: Money.fractionDigitsForCurrency(currency)
     }
 
+    suspend fun createBudget(input: BudgetInput): String {
+        validateBudget(input)
+        val timestamp = clock()
+        val id = UuidV7.generate()
+        database.budgetDao().insert(
+            BudgetEntity(
+                id = id,
+                categoryId = input.categoryId,
+                currency = input.currency,
+                amountMinor = input.amountMinor,
+                createdAt = timestamp,
+                updatedAt = timestamp,
+            ),
+        )
+        return id
+    }
+
+    suspend fun updateBudget(budgetId: String, input: BudgetInput) {
+        validateBudget(input)
+        val existing = requireNotNull(database.budgetDao().getById(budgetId)) {
+            "Budget not found"
+        }
+        require(existing.categoryId == input.categoryId && existing.currency == input.currency) {
+            "Budget category and currency cannot be changed"
+        }
+        database.budgetDao().update(
+            existing.copy(amountMinor = input.amountMinor, updatedAt = clock()),
+        )
+    }
+
+    suspend fun deleteBudget(budgetId: String) = database.budgetDao().deleteById(budgetId)
+
+    /**
+     * Applies the pending per-currency budget edits for [categoryId] in a single transaction,
+     * so a failure partway through leaves no budget behind. Only the currencies present in
+     * [plan] are touched: a null amount means the slot was cleared and that budget is deleted,
+     * while untouched budgets are left alone.
+     */
+    suspend fun applyBudgetPlan(categoryId: String, plan: Map<String, Long?>) {
+        database.withTransaction {
+            val current = database.budgetDao().getForCategory(categoryId)
+            plan.forEach { (currency, amountMinor) ->
+                val before = current.firstOrNull { it.currency == currency }
+                when {
+                    amountMinor == null -> before?.let { deleteBudget(it.id) }
+                    before == null -> createBudget(BudgetInput(categoryId, currency, amountMinor))
+                    amountMinor != before.amountMinor -> updateBudget(
+                        before.id,
+                        BudgetInput(categoryId, currency, amountMinor),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Removes every budget owned by [categoryId]. */
+    suspend fun clearBudgets(categoryId: String) =
+        database.budgetDao().deleteForCategory(categoryId)
+
+    private suspend fun validateBudget(input: BudgetInput) {
+        val category = requireNotNull(database.categoryDao().getById(input.categoryId)) {
+            "Category not found"
+        }
+        require(category.type == TransactionType.EXPENSE && category.parentId == null) {
+            "Budget requires a top-level expense category"
+        }
+        require(CurrencyCatalog.isValid(input.currency)) { "Unsupported currency" }
+        require(input.amountMinor > 0) { "Budget amount must be positive" }
+    }
+
+    fun observeBudgets(): Flow<List<BudgetSummary>> =
+        combine(
+            database.budgetDao().observeAll(),
+            database.categoryDao().observeAll(),
+        ) { budgets, categories ->
+            val categoryById = categories.associateBy(CategoryEntity::id)
+            budgets.mapNotNull { budget ->
+                val category = categoryById[budget.categoryId] ?: return@mapNotNull null
+                budget.toSummary(category)
+            }
+        }.flowOn(Dispatchers.Default)
+
+    fun observeBudgetProgress(currency: String, month: String): Flow<List<BudgetProgress>> {
+        val selectedMonth = YearMonth.parse(month)
+        val fromDate = selectedMonth.atDay(1).toString()
+        val toDate = selectedMonth.plusMonths(1).atDay(1).toString()
+        return combine(
+            database.budgetDao().observeAll(),
+            database.budgetDao().observeSpendByCategory(currency, fromDate, toDate),
+            database.categoryDao().observeAll(),
+            database.accountDao().observeActive(),
+        ) { budgets, spend, categories, accounts ->
+            val fractionDigits = accounts.firstOrNull { it.currency == currency }?.fractionDigits
+                ?: Money.fractionDigitsForCurrency(currency)
+            val categoryById = categories.associateBy(CategoryEntity::id)
+            val spentByCategory = spend
+                .filter { it.categoryId != null }
+                .associate { it.categoryId!! to it.spentMinor }
+            budgets.asSequence()
+                .filter { it.currency == currency }
+                .mapNotNull { budget ->
+                    val category = categoryById[budget.categoryId] ?: return@mapNotNull null
+                    BudgetProgress(
+                        budget = budget.toSummary(category),
+                        spentMinor = spentByCategory[budget.categoryId] ?: 0L,
+                        fractionDigits = fractionDigits,
+                    )
+                }
+                .sortedBy { it.budget.categoryName.orEmpty().lowercase() }
+                .toList()
+        }.flowOn(Dispatchers.Default)
+    }
+
+    private fun BudgetEntity.toSummary(category: CategoryEntity) = BudgetSummary(
+        id = id,
+        categoryId = categoryId,
+        currency = currency,
+        amountMinor = amountMinor,
+        categoryName = category.name,
+        categoryIconName = category.iconName,
+        categoryColorIndex = category.colorIndex,
+        categoryArchivedAt = category.archivedAt,
+    )
+
     suspend fun createAccount(input: AccountInput): String {
         validateAccount(input)
         val timestamp = clock()
@@ -565,6 +691,8 @@ class FinanceRepository(
                     createdAt = timestamp,
                     updatedAt = timestamp,
                     fractionDigits = fractionDigits,
+                    isSavings = input.isSavings,
+                    savingsTargetMinor = input.savingsTargetMinor,
                 ),
             )
             id
@@ -584,6 +712,8 @@ class FinanceRepository(
                 name = input.name.trim(),
                 description = input.description.normalized(),
                 openingBalanceMinor = input.openingBalanceMinor,
+                isSavings = input.isSavings,
+                savingsTargetMinor = input.savingsTargetMinor,
                 updatedAt = clock(),
             ),
         )
@@ -1025,6 +1155,8 @@ class FinanceRepository(
             currency = currency,
             archivedAt = archivedAt,
             fractionDigits = fractionDigits,
+            isSavings = isSavings,
+            savingsTargetMinor = savingsTargetMinor,
         )
 
     private fun AccountWithBalance.toSummary() = AccountSummary(
@@ -1036,6 +1168,8 @@ class FinanceRepository(
         currency = currency,
         archivedAt = archivedAt,
         fractionDigits = fractionDigits,
+        isSavings = isSavings,
+        savingsTargetMinor = savingsTargetMinor,
     )
 
     private fun ActivityRecord.toItem(): ActivityItem =

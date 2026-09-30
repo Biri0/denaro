@@ -416,6 +416,11 @@ private fun SessionDenaroApp(
                         )
                         currentDestination = TopLevelDestination.ACTIVITY
                     },
+                    onBudgetClick = { categoryId ->
+                        homeBackStack.add(
+                            CategoryEditorRoute(categoryId, TransactionType.EXPENSE.name, null),
+                        )
+                    },
                 )
             }
             entry<SettingsRoute> {

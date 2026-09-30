@@ -70,6 +70,32 @@ data class AccountEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "fraction_digits", defaultValue = "2") val fractionDigits: Int = 2,
+    @ColumnInfo(name = "is_savings", defaultValue = "0") val isSavings: Boolean = false,
+    @ColumnInfo(name = "savings_target_minor") val savingsTargetMinor: Long? = null,
+)
+
+@Entity(
+    tableName = "budgets",
+    foreignKeys = [
+        ForeignKey(
+            entity = CategoryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["category_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [
+        Index(value = ["category_id", "currency"], unique = true),
+        Index(value = ["currency"]),
+    ],
+)
+data class BudgetEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "category_id") val categoryId: String,
+    val currency: String,
+    @ColumnInfo(name = "amount_minor") val amountMinor: Long,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )
 
 @Entity(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -53,13 +54,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
+import it.rfmariano.denaro.data.finance.AccountSummary
+import it.rfmariano.denaro.data.finance.BudgetSummary
 import it.rfmariano.denaro.data.finance.CategoryInput
 import it.rfmariano.denaro.data.finance.CategorySummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
+import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.StarterCategoryLanguage
 import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.delay
@@ -275,6 +280,14 @@ fun CategoryEditorScreen(
     var loaded by rememberSaveable(categoryId) { mutableStateOf(categoryId == null) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val budgets by repository.observeBudgets().collectAsStateWithLifecycle(emptyList())
+    val accounts by repository.observeActiveAccounts().collectAsStateWithLifecycle(emptyList())
+    var budgetEdits by rememberSaveable(categoryId) { mutableStateOf(emptyMap<String, String>()) }
+    var budgetDialogOpen by rememberSaveable(categoryId) { mutableStateOf(false) }
+    var budgetDialogCurrency by rememberSaveable(categoryId) { mutableStateOf("") }
+    var budgetDialogAmount by rememberSaveable(categoryId) { mutableStateOf("") }
+    var budgetDialogError by rememberSaveable(categoryId) { mutableStateOf<String?>(null) }
+    var budgetDialogCurrencyValid by remember { mutableStateOf(false) }
     val displayedColorIndex = when {
         hasDraftParent -> draftParentColorIndex
         parentId != null -> categories.find { it.id == parentId }?.colorIndex ?: colorIndex
@@ -308,6 +321,24 @@ fun CategoryEditorScreen(
         }
     }
 
+    val budgetVisible =
+        type == TransactionType.EXPENSE && parentId == null && !hasDraftParent
+    val categoryBudgets = budgets.filter { it.categoryId == categoryId }
+    // Budget spend is measured on the accounts holding that currency, so a budget may only
+    // use a currency the user has an account in (plus currencies already budgeted here).
+    val budgetPreferredCodes =
+        (accounts.map { it.currency } + categoryBudgets.map { it.currency })
+            .distinct()
+            .sorted()
+    val budgetRows = resolveBudgetRows(
+        existing = categoryBudgets,
+        edits = budgetEdits,
+        digitsFor = { fractionDigitsFor(accounts, it) },
+    )
+    val usedBudgetCurrencies = budgetRows.map { it.first }
+    val canAddBudget = budgetPreferredCodes.any { it !in usedBudgetCurrencies }
+    val currencyError = stringResource(R.string.unsupported_currency)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -332,23 +363,41 @@ fun CategoryEditorScreen(
                                         resolvedIcon,
                                         displayedColorIndex,
                                     )
-                                    if (categoryId == null && hasDraftParent) {
-                                        repository.createCategoryWithNewParent(
-                                            parentInput = CategoryInput(
-                                                type = type,
-                                                parentId = null,
-                                                name = draftParentName,
-                                                iconName = draftParentIconName,
-                                                colorIndex = draftParentColorIndex,
-                                            ),
-                                            childInput = input.copy(parentId = null),
-                                        )
-                                    } else if (categoryId == null) {
-                                        repository.createCategory(input)
+                                    val budgetValid =
+                                        type == TransactionType.EXPENSE &&
+                                                parentId == null &&
+                                                !hasDraftParent
+                                    val budgetPlan = if (budgetValid) {
+                                        parseBudgetPlan(budgetEdits) {
+                                            fractionDigitsFor(accounts, it)
+                                        }
                                     } else {
-                                        repository.updateCategory(categoryId, input)
-                                        categoryId
+                                        emptyMap()
                                     }
+                                    val resolvedCategoryId =
+                                        if (categoryId == null && hasDraftParent) {
+                                            repository.createCategoryWithNewParent(
+                                                parentInput = CategoryInput(
+                                                    type = type,
+                                                    parentId = null,
+                                                    name = draftParentName,
+                                                    iconName = draftParentIconName,
+                                                    colorIndex = draftParentColorIndex,
+                                                ),
+                                                childInput = input.copy(parentId = null),
+                                            )
+                                        } else if (categoryId == null) {
+                                            repository.createCategory(input)
+                                        } else {
+                                            repository.updateCategory(categoryId, input)
+                                            categoryId
+                                        }
+                                    if (budgetValid) {
+                                        repository.applyBudgetPlan(resolvedCategoryId, budgetPlan)
+                                    } else {
+                                        repository.clearBudgets(resolvedCategoryId)
+                                    }
+                                    resolvedCategoryId
                                 }.onSuccess(onFinished)
                                     .onFailure {
                                         error = it.message
@@ -420,8 +469,159 @@ fun CategoryEditorScreen(
                         ),
                 )
             }
+            if (loaded && budgetVisible && budgetPreferredCodes.isNotEmpty()) {
+                HorizontalDivider()
+                Text(
+                    stringResource(R.string.budgets),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (budgetRows.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.no_budgets_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                budgetRows.forEach { (currency, amount) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                budgetDialogCurrency = currency
+                                budgetDialogAmount = amount
+                                budgetDialogError = null
+                                budgetDialogOpen = true
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = currency,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        Text(text = amount, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        budgetDialogCurrency = budgetPreferredCodes
+                            .firstOrNull { it !in usedBudgetCurrencies }
+                            ?: ""
+                        budgetDialogAmount = ""
+                        budgetDialogError = null
+                        budgetDialogOpen = true
+                    },
+                    enabled = canAddBudget,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        painter = painterResource(LucideR.drawable.lucide_ic_plus),
+                        contentDescription = null,
+                    )
+                    Text(
+                        text = stringResource(R.string.add_budget),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+                if (budgetRows.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.manage_budgets),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (loaded && !budgetVisible && categoryBudgets.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.budget_removed_on_subcategory),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
+    }
+
+    if (budgetDialogOpen) {
+        val existingCurrencies = budgetRows.map { it.first }
+        val isEditing = budgetDialogCurrency in existingCurrencies
+        AlertDialog(
+            onDismissRequest = { budgetDialogOpen = false },
+            title = {
+                Text(
+                    stringResource(if (isEditing) R.string.edit_budget else R.string.add_budget),
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    CurrencyComboBox(
+                        code = budgetDialogCurrency,
+                        enabled = !isEditing,
+                        includeAll = true,
+                        preferredCodes = budgetPreferredCodes.filterNot {
+                            it in existingCurrencies
+                        },
+                        allowedCodes = budgetPreferredCodes.toSet(),
+                        onCodeChange = { budgetDialogCurrency = it },
+                        onValidChange = { budgetDialogCurrencyValid = it },
+                    )
+                    OutlinedTextField(
+                        value = budgetDialogAmount,
+                        onValueChange = { budgetDialogAmount = it },
+                        label = { Text(stringResource(R.string.monthly_limit)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    budgetDialogError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            require(isEditing || budgetDialogCurrencyValid) { currencyError }
+                            Money.parseMinorUnits(
+                                budgetDialogAmount.trim(),
+                                fractionDigitsFor(accounts, budgetDialogCurrency),
+                            )
+                        }.fold(
+                            onSuccess = {
+                                budgetEdits =
+                                    budgetEdits + (budgetDialogCurrency to budgetDialogAmount.trim())
+                                budgetDialogError = null
+                                budgetDialogOpen = false
+                            },
+                            onFailure = { budgetDialogError = it.message },
+                        )
+                    },
+                ) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isEditing) {
+                        TextButton(
+                            onClick = {
+                                budgetEdits = budgetEdits + (budgetDialogCurrency to "")
+                                budgetDialogError = null
+                                budgetDialogOpen = false
+                            },
+                        ) {
+                            Text(
+                                text = stringResource(R.string.delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    TextButton(onClick = { budgetDialogOpen = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            },
+        )
     }
 
     if (iconPicker) {
@@ -637,4 +837,45 @@ private fun CategoryIconPickerDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
+}
+
+private fun fractionDigitsFor(accounts: List<AccountSummary>, currency: String): Int =
+    accounts.firstOrNull { it.currency == currency }?.fractionDigits
+        ?: Money.fractionDigitsForCurrency(currency)
+
+/**
+ * Turns the staged per-currency budget edits into a plan: the amount in minor units for each
+ * currency, or null when the slot was cleared (meaning that budget must be deleted).
+ *
+ * Only currencies the user actually touched appear here, so untouched budgets are left alone.
+ * Throws [IllegalArgumentException] on invalid input, so it runs before any database write.
+ */
+internal fun parseBudgetPlan(
+    edits: Map<String, String>,
+    digitsFor: (String) -> Int,
+): Map<String, Long?> = edits.mapValues { (currency, text) ->
+    require(currency.isNotBlank()) { "Unsupported currency" }
+    if (text.isBlank()) null else Money.parseMinorUnits(text.trim(), digitsFor(currency))
+}
+
+/**
+ * Resolves every budget the category editor shows: one row per currency, ordered by currency,
+ * merging what is stored with what is staged but not saved yet. A cleared slot disappears.
+ */
+internal fun resolveBudgetRows(
+    existing: List<BudgetSummary>,
+    edits: Map<String, String>,
+    digitsFor: (String) -> Int,
+): List<Pair<String, String>> {
+    val stored = existing.associateBy(BudgetSummary::currency)
+    return (stored.keys + edits.keys)
+        .sorted()
+        .mapNotNull { currency ->
+            val amount = edits[currency]
+                ?: stored[currency]?.let {
+                    Money.toInputAmount(it.amountMinor, digitsFor(currency))
+                }
+                ?: return@mapNotNull null
+            amount.takeIf(String::isNotBlank)?.let { currency to it }
+        }
 }

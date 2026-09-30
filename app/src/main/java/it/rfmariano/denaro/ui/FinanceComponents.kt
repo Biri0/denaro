@@ -84,7 +84,13 @@ fun AccountRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_wallet),
+            painter = painterResource(
+                if (account.isSavings) {
+                    LucideR.drawable.lucide_ic_piggy_bank
+                } else {
+                    LucideR.drawable.lucide_ic_wallet
+                },
+            ),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(22.dp),
@@ -195,6 +201,7 @@ fun ActivityRow(
                     ActivityKind.ADJUSTMENT -> if (signedAmount >= 0) {
                         if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
                     } else MaterialTheme.colorScheme.error
+
                     ActivityKind.DEBT -> if (signedAmount >= 0) {
                         if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
                     } else MaterialTheme.colorScheme.error

@@ -5,6 +5,7 @@ package it.rfmariano.denaro.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -29,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -42,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -92,6 +95,8 @@ fun AccountEditorScreen(
     var currencyValid by rememberSaveable(accountId) { mutableStateOf(true) }
     var loaded by rememberSaveable(accountId) { mutableStateOf(accountId == null) }
     var openingBalanceScale by rememberSaveable(accountId) { mutableStateOf(2) }
+    var isSavings by rememberSaveable(accountId) { mutableStateOf(false) }
+    var savingsTargetMinor by rememberSaveable(accountId) { mutableStateOf<Long?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -110,6 +115,8 @@ fun AccountEditorScreen(
                     account.fractionDigits,
                 )
                 currency = account.currency
+                isSavings = account.isSavings
+                savingsTargetMinor = account.savingsTargetMinor
                 loaded = true
             }
         }
@@ -164,6 +171,8 @@ fun AccountEditorScreen(
                                             allowNegative = true,
                                         ),
                                         currency = currency,
+                                        isSavings = isSavings,
+                                        savingsTargetMinor = savingsTargetMinor,
                                     )
                                     if (accountId == null) {
                                         repository.createAccount(input)
@@ -236,6 +245,20 @@ fun AccountEditorScreen(
                 },
                 onValidChange = { currencyValid = it },
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.savings_account))
+                    Text(
+                        text = stringResource(R.string.savings_account_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = isSavings, onCheckedChange = { isSavings = it })
+            }
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }

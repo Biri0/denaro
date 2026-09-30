@@ -294,6 +294,55 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration6To7AddsSavingsColumnsAndBudgetsTable() {
+        helper.createDatabase(TEST_DATABASE, 6).apply {
+            execSQL(
+                """
+                INSERT INTO accounts
+                    (id, name, description, opening_balance_minor, currency, archived_at,
+                     created_at, updated_at, fraction_digits)
+                VALUES ('plain', 'Current', NULL, 1000, 'EUR', NULL, 10, 10, 2)
+                """.trimIndent(),
+            )
+            execSQL(
+                """
+                INSERT INTO categories
+                    (id, type, parent_id, name, icon_name, color_index, archived_at,
+                     archived_by_parent_id, created_at, updated_at)
+                VALUES ('food', 'EXPENSE', NULL, 'Food', 'utensils', 3, NULL, NULL, 11, 11)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 7, true, MIGRATION_6_7).use { db ->
+            db.query(
+                "SELECT id, is_savings, savings_target_minor FROM accounts ORDER BY id",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("plain", cursor.getString(0))
+                assertEquals(0, cursor.getInt(1))
+                assertTrue(cursor.isNull(2))
+            }
+            db.execSQL(
+                """
+                INSERT INTO budgets
+                    (id, category_id, currency, amount_minor, created_at, updated_at)
+                VALUES ('budget-1', 'food', 'EUR', 30000, 12, 12)
+                """.trimIndent(),
+            )
+            db.query(
+                "SELECT category_id, currency, amount_minor FROM budgets",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("food", cursor.getString(0))
+                assertEquals("EUR", cursor.getString(1))
+                assertEquals(30000L, cursor.getLong(2))
+            }
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "migration-test"
     }

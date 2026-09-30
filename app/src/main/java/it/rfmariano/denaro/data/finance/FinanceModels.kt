@@ -25,6 +25,8 @@ data class AccountSummary(
     val currency: String,
     val archivedAt: Long?,
     val fractionDigits: Int = 2,
+    val isSavings: Boolean = false,
+    val savingsTargetMinor: Long? = null,
 )
 
 data class ActivityItem(
@@ -206,7 +208,37 @@ data class AccountInput(
     val description: String?,
     val openingBalanceMinor: Long,
     val currency: String,
+    val isSavings: Boolean = false,
+    val savingsTargetMinor: Long? = null,
 )
+
+data class BudgetSummary(
+    val id: String,
+    val categoryId: String,
+    val currency: String,
+    val amountMinor: Long,
+    val categoryName: String?,
+    val categoryIconName: String?,
+    val categoryColorIndex: Int?,
+    val categoryArchivedAt: Long?,
+)
+
+data class BudgetInput(
+    val categoryId: String,
+    val currency: String,
+    val amountMinor: Long,
+)
+
+data class BudgetProgress(
+    val budget: BudgetSummary,
+    val spentMinor: Long,
+    val fractionDigits: Int,
+) {
+    val fraction: Float
+        get() = if (budget.amountMinor <= 0) 0f else spentMinor.toFloat() / budget.amountMinor
+
+    val isOver: Boolean get() = spentMinor > budget.amountMinor
+}
 
 data class TransactionInput(
     val accountId: String,

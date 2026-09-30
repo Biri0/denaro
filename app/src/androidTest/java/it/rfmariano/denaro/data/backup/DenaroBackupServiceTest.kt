@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
+import it.rfmariano.denaro.data.local.BudgetEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -904,9 +905,37 @@ class DenaroBackupServiceTest {
         )
     }
 
+    @Test
+    fun backupV3PersistsSavingsFlagsAndBudgets() = runBlocking {
+        withDatabase { database ->
+            seed(database)
+            val accountDao = database.accountDao()
+            val first = requireNotNull(accountDao.getById("a1"))
+            accountDao.update(first.copy(isSavings = true, savingsTargetMinor = 500_000))
+            database.budgetDao().insert(BudgetEntity("b1", "c1", "EUR", 30_000, 7, 7))
+            val service = DenaroBackupService(database, "2.0-test")
+
+            val backup = ByteArrayOutputStream().also { service.create(it, null) }.toByteArray()
+            val inspection = service.inspect(ByteArrayInputStream(backup), null)
+            assertEquals(1, inspection.currentCounts.budgets)
+
+            service.eraseFinanceData()
+            service.restore(ByteArrayInputStream(backup), null, backup.contentDigest()) {}
+
+            val restored = requireNotNull(accountDao.getById("a1"))
+            assertTrue(restored.isSavings)
+            assertEquals(500_000L, restored.savingsTargetMinor)
+            assertFalse(requireNotNull(accountDao.getById("a2")).isSavings)
+            val budget = requireNotNull(database.budgetDao().getById("b1"))
+            assertEquals("c1", budget.categoryId)
+            assertEquals("EUR", budget.currency)
+            assertEquals(30_000L, budget.amountMinor)
+        }
+    }
+
     private suspend fun snapshot(database: DenaroDatabase): List<Any> = database.backupDao().run {
         accounts() + categories() + recurringRules() + transactions() + balanceAdjustments() +
-                transfers() + counterparties() + debts() + debtRepayments()
+                transfers() + counterparties() + debts() + debtRepayments() + budgets()
     }
 
     private suspend fun assertRestoreRejectedWithoutChanges(

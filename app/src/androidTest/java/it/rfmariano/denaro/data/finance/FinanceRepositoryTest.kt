@@ -12,6 +12,7 @@ import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -866,6 +867,163 @@ class FinanceRepositoryTest {
                 DebtEntryDefaults(alphaId, alexId),
                 repository.getDebtEntryDefaults(DebtDirection.BORROWED),
             )
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun budgetsAreTrackedPerCategoryAndCurrency() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val categoryId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+            )
+
+            val eurId = repository.createBudget(BudgetInput(categoryId, "EUR", 30_000))
+            repository.createBudget(BudgetInput(categoryId, "USD", 25_000))
+
+            assertEquals(
+                listOf("EUR", "USD"),
+                repository.observeBudgets().first()
+                    .filter { it.categoryId == categoryId }
+                    .map { it.currency },
+            )
+            assertEquals(2, database.budgetDao().count())
+
+            val duplicate = runCatching {
+                repository.createBudget(BudgetInput(categoryId, "EUR", 1_000))
+            }.exceptionOrNull()
+            assertNotNull(duplicate)
+            assertEquals(2, database.budgetDao().count())
+
+            val movedCurrency = runCatching {
+                repository.updateBudget(eurId, BudgetInput(categoryId, "USD", 30_000))
+            }.exceptionOrNull()
+            assertEquals("Budget category and currency cannot be changed", movedCurrency?.message)
+
+            repository.updateBudget(eurId, BudgetInput(categoryId, "EUR", 45_000))
+            assertEquals(
+                45_000L,
+                repository.observeBudgets().first().single { it.id == eurId }.amountMinor,
+            )
+
+            repository.deleteBudget(eurId)
+            assertEquals(1, database.budgetDao().count())
+            assertEquals(
+                "USD",
+                repository.observeBudgets().first()
+                    .single { it.categoryId == categoryId }
+                    .currency,
+            )
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun budgetsRequireATopLevelExpenseCategory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val parentId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+            )
+            val childId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, parentId, "Groceries", "basket", 2),
+            )
+            val incomeId = repository.createCategory(
+                CategoryInput(TransactionType.INCOME, null, "Salary", "banknote", 3),
+            )
+
+            listOf(childId, incomeId).forEach { id ->
+                val failure = runCatching {
+                    repository.createBudget(BudgetInput(id, "EUR", 1_000))
+                }.exceptionOrNull()
+                assertEquals("Budget requires a top-level expense category", failure?.message)
+            }
+            assertEquals(0, database.budgetDao().count())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun budgetProgressCountsOnlyTheSelectedCurrencysBudget() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val occurredAt = java.time.LocalDate.of(2026, 7, 15)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val repository = FinanceRepository(database, clock = { occurredAt })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val categoryId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+            )
+            repository.createBudget(BudgetInput(categoryId, "EUR", 1_000))
+            repository.createBudget(BudgetInput(categoryId, "USD", 5_000))
+            repository.createTransaction(
+                transactionInput(accountId, categoryId, "Groceries").copy(
+                    amountMinor = 600,
+                    occurredAt = occurredAt,
+                ),
+            )
+
+            val eur = repository.observeBudgetProgress("EUR", "2026-07").first().single()
+            assertEquals(600L, eur.spentMinor)
+            assertEquals(1_000L, eur.budget.amountMinor)
+            assertEquals(0.6f, eur.fraction, 0.001f)
+
+            val usd = repository.observeBudgetProgress("USD", "2026-07").first().single()
+            assertEquals(0L, usd.spentMinor)
+            assertEquals(5_000L, usd.budget.amountMinor)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun applyBudgetPlanUpdatesInsertsAndDeletesAtomically() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val categoryId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Food", "utensils", 1),
+            )
+            repository.createBudget(BudgetInput(categoryId, "EUR", 30_000))
+
+            repository.applyBudgetPlan(
+                categoryId,
+                mapOf("EUR" to 45_000L, "USD" to 25_000L, "GBP" to null),
+            )
+            assertEquals(
+                listOf("EUR" to 45_000L, "USD" to 25_000L),
+                repository.observeBudgets().first()
+                    .filter { it.categoryId == categoryId }
+                    .map { it.currency to it.amountMinor },
+            )
+
+            val failure = runCatching {
+                repository.applyBudgetPlan(categoryId, mapOf("EUR" to 90_000L, "JPY" to 0L))
+            }.exceptionOrNull()
+            assertEquals("Budget amount must be positive", failure?.message)
+            assertEquals(
+                listOf("EUR" to 45_000L, "USD" to 25_000L),
+                repository.observeBudgets().first()
+                    .filter { it.categoryId == categoryId }
+                    .map { it.currency to it.amountMinor },
+            )
+
+            repository.clearBudgets(categoryId)
+            assertEquals(0, database.budgetDao().count())
         } finally {
             database.close()
         }
