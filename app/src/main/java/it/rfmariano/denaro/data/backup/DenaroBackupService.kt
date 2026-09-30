@@ -18,6 +18,7 @@ import it.rfmariano.denaro.data.local.RecurringRuleEntity
 import it.rfmariano.denaro.data.local.TransactionEntity
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.local.TransferEntity
+import it.rfmariano.denaro.data.local.clearFinanceRecords
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -157,7 +158,7 @@ class DenaroBackupService(
         validate(decoded.payload)
         val payload = decoded.payload.upgradedToCurrentVersion()
         database.withTransaction {
-            deleteFinanceData()
+            database.clearFinanceRecords()
             val dao = database.backupDao()
 
             payload.accounts.map { it.toEntity(payload.schemaVersion) }.also {
@@ -195,21 +196,7 @@ class DenaroBackupService(
     }
 
     suspend fun eraseFinanceData() {
-        database.withTransaction { deleteFinanceData() }
-    }
-
-    private suspend fun deleteFinanceData() {
-        val dao = database.backupDao()
-        dao.deleteDebtRepayments()
-        dao.deleteDebts()
-        dao.deleteTransactions()
-        dao.deleteTransfers()
-        dao.deleteBalanceAdjustments()
-        dao.deleteRecurringRules()
-        dao.deleteBudgets()
-        dao.deleteCategories()
-        dao.deleteCounterparties()
-        dao.deleteAccounts()
+        database.withTransaction { database.clearFinanceRecords() }
     }
 
     private suspend fun snapshot(): BackupPayload {

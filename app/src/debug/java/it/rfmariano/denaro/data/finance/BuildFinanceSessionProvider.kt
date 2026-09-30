@@ -1,9 +1,11 @@
 package it.rfmariano.denaro.data.finance
 
 import android.content.Context
+import android.util.Log
 import androidx.room.withTransaction
 import it.rfmariano.denaro.data.backup.DenaroBackupService
 import it.rfmariano.denaro.data.local.AccountEntity
+import it.rfmariano.denaro.data.local.BudgetEntity
 import it.rfmariano.denaro.data.local.CategoryEntity
 import it.rfmariano.denaro.data.local.CounterpartyEntity
 import it.rfmariano.denaro.data.local.DebtDirection
@@ -16,6 +18,8 @@ import it.rfmariano.denaro.data.local.RecurringRuleEntity
 import it.rfmariano.denaro.data.local.TransactionEntity
 import it.rfmariano.denaro.data.local.TransactionType
 import it.rfmariano.denaro.data.local.TransferEntity
+import it.rfmariano.denaro.data.local.clearFinanceRecords
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +36,8 @@ internal fun createBuildFinanceSessionProvider(context: Context): FinanceSession
     DebugFinanceSessionProvider(context)
 
 internal const val DEMO_DATABASE_NAME = "denaro_demo.db"
+
+private const val LOG_TAG = "DenaroDemo"
 
 internal class DebugFinanceSessionProvider(
     private val context: Context,
@@ -52,7 +58,8 @@ internal class DebugFinanceSessionProvider(
             val demoRequested = preferences.getBoolean(KEY_DEMO_ENABLED, false)
             val next = runCatching {
                 if (demoRequested) demoSession(localeTag) else productionSession()
-            }.getOrElse {
+            }.getOrElse { error ->
+                Log.w(LOG_TAG, "Could not start the stored data source, using real data", error)
                 preferences.edit().putBoolean(KEY_DEMO_ENABLED, false).apply()
                 productionSession()
             }
@@ -64,7 +71,12 @@ internal class DebugFinanceSessionProvider(
         mutex.withLock {
             val current = _session.value
             if (!enabled && current?.isDemo == false) return
-            val next = if (enabled) demoSession(localeTag) else productionSession()
+            val next = try {
+                if (enabled) demoSession(localeTag) else productionSession()
+            } catch (error: Throwable) {
+                Log.w(LOG_TAG, "Could not change demo mode", error)
+                throw error
+            }
             preferences.edit().putBoolean(KEY_DEMO_ENABLED, enabled).apply()
             _session.value = next
         }
@@ -111,15 +123,7 @@ internal class DebugFinanceSessionProvider(
         localeTag: String,
         referenceDate: LocalDate = clock(),
     ): FinanceSession = withContext(Dispatchers.IO) {
-        val database = demoDatabase ?: EncryptedDatabaseFactory(
-            context = context,
-            databaseName = DEMO_DATABASE_NAME,
-        ).open().also { demoDatabase = it }
-        DemoDataSeeder(database).reset(
-            referenceDate = referenceDate,
-            zoneId = ZoneId.systemDefault(),
-            italian = localeTag.startsWith("it", ignoreCase = true),
-        )
+        val database = resetDemoDatabase(localeTag, referenceDate)
         val repository = FinanceRepository(database)
         val recurrenceStartupFailed = runCatching { repository.processDueRecurrences() }.isFailure
         FinanceSession(
@@ -136,6 +140,52 @@ internal class DebugFinanceSessionProvider(
         )
     }
 
+    /**
+     * Regenerates the demo database. Because demo data is disposable, a database that cannot be
+     * reset — a stale file left behind by an older build, or a half-written one — is deleted and
+     * recreated once instead of leaving demo mode permanently unavailable.
+     */
+    private suspend fun resetDemoDatabase(
+        localeTag: String,
+        referenceDate: LocalDate,
+    ): DenaroDatabase = runCatching { seedDemoDatabase(localeTag, referenceDate) }
+        .getOrElse { firstFailure ->
+            if (firstFailure is CancellationException) throw firstFailure
+            Log.w(LOG_TAG, "Could not reset the demo database, recreating it", firstFailure)
+            deleteDemoDatabase()
+            runCatching { seedDemoDatabase(localeTag, referenceDate) }
+                .getOrElse { secondFailure ->
+                    if (secondFailure is CancellationException) throw secondFailure
+                    deleteDemoDatabase()
+                    secondFailure.addSuppressed(firstFailure)
+                    throw secondFailure
+                }
+        }
+
+    private suspend fun seedDemoDatabase(
+        localeTag: String,
+        referenceDate: LocalDate,
+    ): DenaroDatabase {
+        val database = demoDatabase ?: EncryptedDatabaseFactory(
+            context = context,
+            databaseName = DEMO_DATABASE_NAME,
+        ).open().also { demoDatabase = it }
+        DemoDataSeeder(database).reset(
+            referenceDate = referenceDate,
+            zoneId = ZoneId.systemDefault(),
+            italian = localeTag.startsWith("it", ignoreCase = true),
+        )
+        return database
+    }
+
+    private fun deleteDemoDatabase() {
+        demoDatabase?.close()
+        demoDatabase = null
+        // Only the demo file: EncryptedDatabaseFactory.deleteDatabaseAndKey() would also drop the
+        // key material shared with the real database.
+        context.deleteDatabase(DEMO_DATABASE_NAME)
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "denaro_debug_preferences"
         const val KEY_DEMO_ENABLED = "demo_enabled"
@@ -148,19 +198,11 @@ internal class DemoDataSeeder(
     suspend fun reset(referenceDate: LocalDate, zoneId: ZoneId, italian: Boolean) {
         val fixture = demoFixture(referenceDate, zoneId, italian)
         database.withTransaction {
-            val sqlite = database.openHelper.writableDatabase
-            sqlite.execSQL("DELETE FROM balance_adjustments")
-            sqlite.execSQL("DELETE FROM transactions")
-            sqlite.execSQL("DELETE FROM transfers")
-            sqlite.execSQL("DELETE FROM debt_repayments")
-            sqlite.execSQL("DELETE FROM debts")
-            sqlite.execSQL("DELETE FROM counterparties")
-            sqlite.execSQL("DELETE FROM recurring_rules")
-            sqlite.execSQL("DELETE FROM categories")
-            sqlite.execSQL("DELETE FROM accounts")
-            sqlite.execSQL("DELETE FROM legacy_imports")
+            database.clearFinanceRecords()
+            database.openHelper.writableDatabase.execSQL("DELETE FROM legacy_imports")
             database.accountDao().insertAll(fixture.accounts)
             database.categoryDao().insertAll(fixture.categories)
+            fixture.budgets.forEach { database.budgetDao().insert(it) }
             database.recurringRuleDao().insertAll(fixture.rules)
             database.transactionDao().insertAll(fixture.transactions)
             database.transferDao().insertAll(fixture.transfers)
@@ -174,6 +216,7 @@ internal class DemoDataSeeder(
 internal data class DemoFixture(
     val accounts: List<AccountEntity>,
     val categories: List<CategoryEntity>,
+    val budgets: List<BudgetEntity>,
     val rules: List<RecurringRuleEntity>,
     val transactions: List<TransactionEntity>,
     val transfers: List<TransferEntity>,
@@ -207,14 +250,16 @@ internal fun demoFixture(
             timestamp
         ),
         AccountEntity(
-            savingsId,
-            text("Savings", "Risparmi"),
-            text("Long-term goals", "Obiettivi a lungo termine"),
-            850_000,
-            "EUR",
-            null,
-            timestamp + 1,
-            timestamp + 1
+            id = savingsId,
+            name = text("Savings", "Risparmi"),
+            description = text("Long-term goals", "Obiettivi a lungo termine"),
+            openingBalanceMinor = 850_000,
+            currency = "EUR",
+            archivedAt = null,
+            createdAt = timestamp + 1,
+            updatedAt = timestamp + 1,
+            isSavings = true,
+            savingsTargetMinor = 1_500_000,
         ),
         AccountEntity(
             cashId,
@@ -349,6 +394,28 @@ internal fun demoFixture(
         )
     }
 
+    fun budget(category: String, amountMinor: Long) = BudgetEntity(
+        id = id("budget", category),
+        categoryId = id("category", category),
+        currency = "EUR",
+        amountMinor = amountMinor,
+        createdAt = timestamp,
+        updatedAt = timestamp,
+    )
+
+    // Budgets must target top-level expense categories: FinanceRepository.validateBudget rejects
+    // subcategories, and BudgetDao.observeSpendByCategory rolls child spending up to the parent
+    // (COALESCE(parent.id, category.id)), so a budget on Rent or Groceries would never accrue a
+    // cent. Amounts sit just above what a completed showcase month spends on the same rollup,
+    // except Leisure, which the trip in the opening month deliberately overshoots.
+    val budgets = listOf(
+        budget("home", 115_000),
+        budget("food", 50_000),
+        budget("transport", 12_000),
+        budget("health", 5_000),
+        budget("leisure", 4_000),
+    )
+
     val transactions = mutableListOf<TransactionEntity>()
     val transfers = mutableListOf<TransferEntity>()
     var sequence = 0
@@ -404,9 +471,11 @@ internal fun demoFixture(
     }
 
     val showcaseMonth = YearMonth.from(referenceDate).minusMonths(1)
-    (5 downTo 0).forEach { offset ->
+    // The dashboard queries from selectedMonth - 6 while rendering only six months of it, so one
+    // month beyond the rendered window is generated as well: stepping back from the month demo
+    // opens on keeps its oldest bar populated instead of showing an empty February.
+    (6 downTo 0).forEach { offset ->
         val month = showcaseMonth.minusMonths(offset.toLong())
-        val monthIndex = 5 - offset
         transaction(
             month,
             27,
@@ -416,7 +485,7 @@ internal fun demoFixture(
             "Monthly salary",
             "Stipendio mensile"
         )
-        if (monthIndex % 2 == 0) {
+        if (offset % 2 == 1) {
             transaction(
                 month,
                 18,
@@ -468,6 +537,15 @@ internal fun demoFixture(
         )
         transaction(
             month,
+            19,
+            1_800,
+            TransactionType.EXPENSE,
+            "leisure",
+            "Movie night",
+            "Serata al cinema"
+        )
+        transaction(
+            month,
             20,
             1_499,
             TransactionType.EXPENSE,
@@ -476,7 +554,24 @@ internal fun demoFixture(
             "Abbonamento musica"
         )
         transaction(month, 23, 4_200, TransactionType.EXPENSE, "health", "Pharmacy", "Farmacia")
-        if (monthIndex == 1 || monthIndex == 4) {
+        // The month demo opens on gets a modest weekend away instead of a full holiday: it is
+        // still enough to push Leisure past its budget — the over-budget card is the point of the
+        // first screen — but not enough to make that month the deficit one, because Home doubles
+        // as the hero shot on the README and the store listing. The two proper holidays sit two
+        // and five months back, which is exactly two deficit months inside the six the dashboard
+        // renders (DemoFixtureTest.completedWindowContainsExactlyTwoDeficitMonths).
+        if (offset == 0) {
+            transaction(
+                month,
+                14,
+                40_000,
+                TransactionType.EXPENSE,
+                "travel",
+                "Seaside weekend",
+                "Weekend al mare"
+            )
+        }
+        if (offset == 2 || offset == 5) {
             transaction(
                 month,
                 14,
@@ -490,6 +585,8 @@ internal fun demoFixture(
         transfer(month, 28, 25_000, label = text("Monthly savings", "Risparmio mensile"))
     }
 
+    // Every category a showcase month spends on gets a day-gated current-month counterpart, so no
+    // budget reads 0% once the month demo opens on is stepped forward to today.
     val currentMonth = YearMonth.from(referenceDate)
     if (referenceDate.dayOfMonth >= 1) {
         transaction(
@@ -502,6 +599,9 @@ internal fun demoFixture(
             "Spesa"
         )
     }
+    if (referenceDate.dayOfMonth >= 2) {
+        transaction(currentMonth, 2, 92_000, TransactionType.EXPENSE, "rent", "Rent", "Affitto")
+    }
     if (referenceDate.dayOfMonth >= 5) {
         transaction(
             currentMonth,
@@ -513,8 +613,44 @@ internal fun demoFixture(
             "Biglietti del treno"
         )
     }
+    if (referenceDate.dayOfMonth >= 8) {
+        transaction(
+            currentMonth,
+            8,
+            14_500,
+            TransactionType.EXPENSE,
+            "utilities",
+            "Energy and internet",
+            "Energia e internet"
+        )
+    }
     if (referenceDate.dayOfMonth >= 15) {
         transaction(currentMonth, 15, 6_800, TransactionType.EXPENSE, "dining", "Lunch", "Pranzo")
+    }
+    if (referenceDate.dayOfMonth >= 19) {
+        transaction(
+            currentMonth,
+            19,
+            1_800,
+            TransactionType.EXPENSE,
+            "leisure",
+            "Movie night",
+            "Serata al cinema"
+        )
+    }
+    if (referenceDate.dayOfMonth >= 20) {
+        transaction(
+            currentMonth,
+            20,
+            1_499,
+            TransactionType.EXPENSE,
+            "subscriptions",
+            "Music subscription",
+            "Abbonamento musica"
+        )
+    }
+    if (referenceDate.dayOfMonth >= 23) {
+        transaction(currentMonth, 23, 4_200, TransactionType.EXPENSE, "health", "Pharmacy", "Farmacia")
     }
     if (referenceDate.dayOfMonth >= 27) {
         transaction(
@@ -666,6 +802,7 @@ internal fun demoFixture(
     return DemoFixture(
         accounts,
         categories,
+        budgets,
         rules,
         transactions,
         transfers,
