@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import it.rfmariano.denaro.data.local.AccountEntity
 import it.rfmariano.denaro.data.local.BalanceAdjustmentEntity
+import it.rfmariano.denaro.data.local.BudgetEntity
 import it.rfmariano.denaro.data.local.DenaroDatabase
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -67,6 +68,48 @@ class DemoDataSeederTest {
         } finally {
             demo.close()
             real.close()
+        }
+    }
+
+    @Test
+    fun resetClearsBudgetsLeftBehindByAPreviousDemoSession() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val referenceDate = LocalDate.of(2026, 8, 1)
+            val zone = ZoneId.of("Europe/Rome")
+            val fixture = demoFixture(referenceDate, zone, italian = false)
+            val seeder = DemoDataSeeder(database)
+            seeder.reset(referenceDate, zone, italian = false)
+
+            // Budgets reference categories with ON DELETE RESTRICT: a budget the reset does not
+            // clear makes the whole reset fail, which leaves demo mode permanently unusable. The
+            // category is one the fixture leaves unbudgeted, so the insert stays unique.
+            val unbudgetedCategory = fixture.categories.first { category ->
+                fixture.budgets.none { it.categoryId == category.id }
+            }
+            database.budgetDao().insert(
+                BudgetEntity(
+                    id = "demo-budget-created-outside-the-fixture",
+                    categoryId = unbudgetedCategory.id,
+                    currency = "EUR",
+                    amountMinor = 1_000,
+                    createdAt = 1,
+                    updatedAt = 1,
+                ),
+            )
+
+            seeder.reset(referenceDate, zone, italian = false)
+
+            assertNull(
+                database.budgetDao().getById("demo-budget-created-outside-the-fixture"),
+            )
+            assertEquals(
+                fixture.budgets.map { it.id }.toSet(),
+                database.backupDao().budgets().map { it.id }.toSet(),
+            )
+        } finally {
+            database.close()
         }
     }
 }

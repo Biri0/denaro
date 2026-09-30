@@ -86,8 +86,11 @@ expected_text() {
         it:accounts) echo "Conto quotidiano" ;;
         en:account_detail) echo "Current balance" ;;
         it:account_detail) echo "Saldo attuale" ;;
-        en:activity) echo "Groceries" ;;
-        it:activity) echo "Spesa" ;;
+        # Every movement row is prefixed with its account name, so this stays on the first screen
+        # no matter which reference date the run uses. A specific transaction does not: the list is
+        # newest-first, so day-gated entries near the start of the month fall below the fold.
+        en:activity) echo "Everyday" ;;
+        it:activity) echo "Conto quotidiano" ;;
         en:debts|it:debts) echo "Alex" ;;
         en:categories) echo "Home" ;;
         it:categories) echo "Casa" ;;
