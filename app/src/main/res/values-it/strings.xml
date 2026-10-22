@@ -156,6 +156,8 @@
     <string name="activity_deleted">Movimento eliminato.</string>
     <string name="choose_same_currency">Scegli due conti diversi con la stessa valuta.</string>
     <string name="filter_account">Filtra per conto</string>
+    <string name="filter_counterparty">Filtra per persona o organizzazione</string>
+    <string name="all_people_and_organizations">Tutte le persone e le organizzazioni</string>
     <string name="clear_filter">Rimuovi filtro</string>
     <string name="settings">Impostazioni</string>
     <string name="appearance">Aspetto</string>

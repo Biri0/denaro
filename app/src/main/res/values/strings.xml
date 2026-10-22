@@ -156,6 +156,8 @@
     <string name="activity_deleted">Activity deleted.</string>
     <string name="choose_same_currency">Choose two different accounts with the same currency.</string>
     <string name="filter_account">Filter by account</string>
+    <string name="filter_counterparty">Filter by person or organization</string>
+    <string name="all_people_and_organizations">All people and organizations</string>
     <string name="clear_filter">Clear filter</string>
     <string name="settings">Settings</string>
     <string name="appearance">Appearance</string>

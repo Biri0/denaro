@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -72,8 +73,6 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import com.composables.icons.lucide.R as LucideR
 
-private enum class DebtStatusFilter { OPEN, SETTLED }
-
 @Composable
 fun DebtsPanel(
     debts: List<DebtSummary>,
@@ -83,21 +82,21 @@ fun DebtsPanel(
 ) {
     var direction by rememberSaveable { mutableStateOf<DebtDirection?>(null) }
     var status by rememberSaveable { mutableStateOf(DebtStatusFilter.OPEN) }
+    var selectedCounterpartyId by rememberSaveable { mutableStateOf<String?>(null) }
     val today = LocalDate.now()
-    val visible = debts.filter { debt ->
-        (direction == null || debt.direction == direction) &&
-                (if (status == DebtStatusFilter.OPEN) !debt.isSettled else debt.isSettled)
-    }.sortedWith(
-        compareBy<DebtSummary> {
-            when {
-                it.isSettled -> 2
-                it.dueDate != null && LocalDate.parse(it.dueDate) < today -> 0
-                else -> 1
-            }
-        }.thenBy { it.dueDate ?: "9999-12-31" }.thenByDescending { it.openedAt },
-    )
+    val counterparties = remember(debts) { counterpartyFilterOptions(debts) }
+    LaunchedEffect(counterparties, selectedCounterpartyId) {
+        if (selectedCounterpartyId != null && counterparties.none { it.id == selectedCounterpartyId }) {
+            selectedCounterpartyId = null
+        }
+    }
+    val visible = remember(debts, direction, status, today, selectedCounterpartyId) {
+        filterDebts(debts, direction, status, today, selectedCounterpartyId)
+    }
     Column(Modifier.fillMaxSize()) {
-        val openDebts = debts.filterNot(DebtSummary::isSettled)
+        val openDebts = debts
+            .filterNot(DebtSummary::isSettled)
+            .filter { selectedCounterpartyId == null || it.counterpartyId == selectedCounterpartyId }
         openDebts.groupBy { it.currency }.toSortedMap().forEach { (currency, group) ->
             Row(
                 Modifier
@@ -162,6 +161,11 @@ fun DebtsPanel(
                 ) { Text(stringResource(if (option == DebtStatusFilter.OPEN) R.string.open else R.string.settled)) }
             }
         }
+        CounterpartyFilterRow(
+            options = counterparties,
+            selectedId = selectedCounterpartyId,
+            onSelected = { selectedCounterpartyId = it },
+        )
         if (visible.isEmpty()) {
             EmptyState(
                 icon = LucideR.drawable.lucide_ic_hand_coins,
@@ -176,6 +180,35 @@ fun DebtsPanel(
                     DebtRow(debt, amountsVisible) { onDebtClick(debt.id) }
                     HorizontalDivider(Modifier.padding(start = 20.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CounterpartyFilterRow(
+    options: List<CounterpartyFilterOption>,
+    selectedId: String?,
+    onSelected: (String?) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            LabeledDropdownSelector(
+                label = stringResource(R.string.filter_counterparty),
+                placeholder = stringResource(R.string.all_people_and_organizations),
+                selectedText = options.find { it.id == selectedId }?.name.orEmpty(),
+                options = options.map { it.id to it.name },
+                onSelected = onSelected,
+            )
+        }
+        if (selectedId != null) {
+            TextButton(onClick = { onSelected(null) }) {
+                Text(stringResource(R.string.clear_filter))
             }
         }
     }
@@ -219,11 +252,11 @@ private fun DebtRow(debt: DebtSummary, amountsVisible: Boolean, onClick: () -> U
                     val date = LocalDate.parse(due)
                     Text(
                         when {
-                            !debt.isSettled && date < today -> stringResource(R.string.overdue)
+                            debt.isOverdue(today) -> stringResource(R.string.overdue)
                             !debt.isSettled && date == today -> stringResource(R.string.due_today)
                             else -> stringResource(R.string.due_on, date.formattedDate())
                         },
-                        color = if (!debt.isSettled && date < today) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (debt.isOverdue(today)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
