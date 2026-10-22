@@ -958,22 +958,40 @@ fun AccountSelector(
     onSelected: (String) -> Unit,
     enabled: Boolean = true,
 ) {
+    LabeledDropdownSelector(
+        label = label,
+        placeholder = stringResource(R.string.select_account),
+        selectedText = accounts.find { it.id == selectedId }?.name.orEmpty(),
+        options = accounts.map { it.id to "${it.name} · ${it.currency}" },
+        onSelected = onSelected,
+        enabled = enabled,
+    )
+}
+
+@Composable
+fun LabeledDropdownSelector(
+    label: String,
+    placeholder: String,
+    selectedText: String,
+    options: List<Pair<String, String>>,
+    onSelected: (String) -> Unit,
+    enabled: Boolean = true,
+) {
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(enabled) {
         if (!enabled) expanded = false
     }
-    val selected = accounts.find { it.id == selectedId }
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = !expanded },
     ) {
         OutlinedTextField(
-            value = selected?.name.orEmpty(),
+            value = selectedText,
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
             label = { Text(label) },
-            placeholder = { Text(stringResource(R.string.select_account)) },
+            placeholder = { Text(placeholder) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -986,11 +1004,11 @@ fun AccountSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            accounts.forEach { account ->
+            options.forEach { (id, text) ->
                 DropdownMenuItem(
-                    text = { Text("${account.name} · ${account.currency}") },
+                    text = { Text(text) },
                     onClick = {
-                        onSelected(account.id)
+                        onSelected(id)
                         expanded = false
                     },
                 )
