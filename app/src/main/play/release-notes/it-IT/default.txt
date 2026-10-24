@@ -1,1 +1,1 @@
-Imposta limiti di spesa mensili per le tue categorie di uscita di primo livello e seguili dalla schermata Home. I nuovi conti di risparmio tengono il denaro separato dal saldo disponibile. La sezione "Per categoria" ora può mostrare uscite e entrate insieme.
+Denaro ora richiede meno autorizzazioni, perché è stato rimosso il supporto inutilizzato per le attività in background.

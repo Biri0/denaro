@@ -21,7 +21,6 @@ kotlinxSerialization = "1.11.0"
 composeIcons = "2.2.1"
 gradlePlayPublisher = "4.1.1"
 glance = "1.1.1"
-work = "2.11.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -62,7 +61,6 @@ icons-lucide-android = { group = "com.composables", name = "icons-lucide-android
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-testing = { group = "androidx.glance", name = "glance-testing", version.ref = "glance" }
 androidx-glance-appwidget-testing = { group = "androidx.glance", name = "glance-appwidget-testing", version.ref = "glance" }
-androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
