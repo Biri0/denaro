@@ -2,7 +2,7 @@ package it.rfmariano.denaro.data.finance
 
 import it.rfmariano.denaro.data.local.TransactionType
 
-enum class StarterCategoryLanguage { ITALIAN, ENGLISH }
+enum class StarterCategoryLanguage { ITALIAN, ENGLISH, SPANISH }
 
 internal data class StarterCategory(
     val type: TransactionType,
@@ -161,5 +161,80 @@ internal fun starterCategories(language: StarterCategoryLanguage): List<StarterC
             ),
             StarterCategory(TransactionType.INCOME, "Refunds", "rotate_ccw"),
             StarterCategory(TransactionType.INCOME, "Other", "shapes", listOf("Gifts" to "gift")),
+        )
+
+        StarterCategoryLanguage.SPANISH -> listOf(
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Hogar",
+                "house",
+                listOf(
+                    "Alquiler o hipoteca" to "house",
+                    "Servicios básicos" to "lightbulb",
+                    "Mantenimiento" to "wrench"
+                )
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Alimentación",
+                "utensils",
+                listOf("Supermercado" to "shopping_basket", "Restaurantes y bares" to "utensils")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Transporte",
+                "car",
+                listOf("Combustible" to "fuel", "Transporte público" to "bus")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Salud",
+                "heart_pulse",
+                listOf("Medicamentos" to "pill", "Consultas médicas" to "stethoscope")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Ocio",
+                "gamepad_2",
+                listOf("Entretenimiento" to "clapperboard", "Viajes" to "plane")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Compras",
+                "shopping_bag",
+                listOf("Ropa" to "shirt", "Artículos para el hogar" to "armchair")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Servicios",
+                "receipt_text",
+                listOf("Suscripciones" to "refresh_cw", "Teléfono e internet" to "wifi")
+            ),
+            StarterCategory(
+                TransactionType.EXPENSE,
+                "Otros",
+                "shapes",
+                listOf("Regalos y donaciones" to "gift", "Impuestos y comisiones" to "landmark")
+            ),
+            StarterCategory(
+                TransactionType.INCOME,
+                "Trabajo",
+                "briefcase_business",
+                listOf("Salario" to "banknote", "Bonus" to "badge_dollar_sign")
+            ),
+            StarterCategory(
+                TransactionType.INCOME,
+                "Trabajo autónomo",
+                "laptop",
+                listOf("Honorarios" to "wallet")
+            ),
+            StarterCategory(
+                TransactionType.INCOME,
+                "Inversiones",
+                "chart_no_axes_combined",
+                listOf("Intereses" to "percent", "Dividendos" to "hand_coins")
+            ),
+            StarterCategory(TransactionType.INCOME, "Reembolsos", "rotate_ccw"),
+            StarterCategory(TransactionType.INCOME, "Otros", "shapes", listOf("Regalos" to "gift")),
         )
     }

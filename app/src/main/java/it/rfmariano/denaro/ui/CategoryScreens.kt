@@ -207,10 +207,16 @@ fun CategoryManagementScreen(
                 }) { Text("Italiano") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    starterDialog = false
-                    scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.ENGLISH) }
-                }) { Text("English") }
+                Row {
+                    TextButton(onClick = {
+                        starterDialog = false
+                        scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.SPANISH) }
+                    }) { Text("Español") }
+                    TextButton(onClick = {
+                        starterDialog = false
+                        scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.ENGLISH) }
+                    }) { Text("English") }
+                }
             },
         )
     }
