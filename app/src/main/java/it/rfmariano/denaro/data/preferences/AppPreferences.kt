@@ -21,6 +21,7 @@ enum class LanguageOption(val languageTag: String?) {
     SYSTEM(null),
     ENGLISH("en"),
     ITALIAN("it"),
+    SPANISH("es"),
 }
 
 enum class DefaultScreen {
