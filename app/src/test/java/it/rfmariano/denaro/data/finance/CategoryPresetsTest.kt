@@ -11,6 +11,13 @@ class CategoryPresetsTest {
     fun spanishLanguageOptionUsesCorrectTag() {
         assertEquals("es", LanguageOption.SPANISH.languageTag)
         assertTrue(LanguageOption.entries.contains(LanguageOption.SPANISH))
+        assertEquals(LanguageOption.SPANISH, LanguageOption.valueOf("SPANISH"))
+    }
+
+    @Test
+    fun starterCategoryLanguageOptionContainsSpanish() {
+        assertTrue(StarterCategoryLanguage.entries.contains(StarterCategoryLanguage.SPANISH))
+        assertEquals(StarterCategoryLanguage.SPANISH, StarterCategoryLanguage.valueOf("SPANISH"))
     }
 
     @Test
