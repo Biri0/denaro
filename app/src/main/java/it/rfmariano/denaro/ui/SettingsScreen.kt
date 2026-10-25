@@ -351,13 +351,12 @@ private fun themeLabel(value: ThemeMode): String = stringResource(
 )
 
 @Composable
-private fun languageLabel(value: LanguageOption): String = stringResource(
-    when (value) {
-        LanguageOption.SYSTEM -> R.string.system_default
-        LanguageOption.ENGLISH -> R.string.english
-        LanguageOption.ITALIAN -> R.string.italian
-    },
-)
+private fun languageLabel(value: LanguageOption): String = when (value) {
+    LanguageOption.SYSTEM -> stringResource(R.string.system_default)
+    LanguageOption.ENGLISH -> stringResource(R.string.english)
+    LanguageOption.ITALIAN -> stringResource(R.string.italian)
+    LanguageOption.SPANISH -> "Español"
+}
 
 @Composable
 private fun defaultScreenLabel(value: DefaultScreen): String = stringResource(

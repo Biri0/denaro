@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -48,6 +49,18 @@ class AppPreferencesRepositoryTest {
         repository.restoreGeneralPreferences(AppPreferences(showAllCurrencies = true))
 
         assertTrue(AppPreferencesRepository(context).state.value.showAllCurrencies)
+    }
+
+    @Test
+    fun spanishLanguagePreferenceSurvivesRepositoryRecreation() {
+        val repository = AppPreferencesRepository(context)
+
+        repository.setLanguage(LanguageOption.SPANISH)
+
+        assertEquals(
+            LanguageOption.SPANISH,
+            AppPreferencesRepository(context).state.value.language,
+        )
     }
 
     private fun preferences() =

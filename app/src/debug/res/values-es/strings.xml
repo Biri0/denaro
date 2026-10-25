@@ -1,0 +1,6 @@
+<resources>
+    <string name="developer_options">Desarrollo</string>
+    <string name="demo_mode">Modo demo</string>
+    <string name="demo_mode_description">Usa datos de ejemplo independientes, regenerados cada vez que se inicia el modo demo.</string>
+    <string name="demo_mode_failed">No se pudo cambiar el modo demo. Tu origen de datos actual no ha cambiado.</string>
+</resources>
