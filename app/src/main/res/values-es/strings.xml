@@ -223,8 +223,6 @@
     <string name="no_categories">Aún no hay categorías</string>
     <string name="no_categories_description">Crea tus propias categorías o añade un conjunto inicial opcional.</string>
     <string name="add_starter_categories">Añadir categorías iniciales</string>
-    <string name="starter_categories_language">Elegir idioma de las categorías</string>
-    <string name="starter_categories_description">Los nombres se mantendrán en el idioma elegido aunque cambie el idioma de la app.</string>
     <string name="color">Color</string>
     <string name="choose_icon">Elegir icono</string>
     <string name="search">Buscar</string>

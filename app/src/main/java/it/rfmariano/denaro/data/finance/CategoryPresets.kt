@@ -4,6 +4,13 @@ import it.rfmariano.denaro.data.local.TransactionType
 
 enum class StarterCategoryLanguage { ITALIAN, ENGLISH, SPANISH }
 
+internal fun starterCategoryLanguage(languageTag: String?): StarterCategoryLanguage =
+    when (languageTag) {
+        "it" -> StarterCategoryLanguage.ITALIAN
+        "es" -> StarterCategoryLanguage.SPANISH
+        else -> StarterCategoryLanguage.ENGLISH
+    }
+
 internal data class StarterCategory(
     val type: TransactionType,
     val name: String,

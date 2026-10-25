@@ -1,1 +1,3 @@
-Denaro now requests fewer permissions, since unused background task support has been removed.
+Spanish language support.
+
+Starter categories are now added directly in the app language, without a separate language prompt.

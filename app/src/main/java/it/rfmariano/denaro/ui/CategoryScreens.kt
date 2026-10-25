@@ -52,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,7 +66,7 @@ import it.rfmariano.denaro.data.finance.CategoryInput
 import it.rfmariano.denaro.data.finance.CategorySummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
-import it.rfmariano.denaro.data.finance.StarterCategoryLanguage
+import it.rfmariano.denaro.data.finance.starterCategoryLanguage
 import it.rfmariano.denaro.data.local.TransactionType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,8 +84,10 @@ fun CategoryManagementScreen(
         .collectAsStateWithLifecycle(emptyList())
     var type by rememberSaveable { mutableStateOf(TransactionType.EXPENSE) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
-    var starterDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val starterLanguage = starterCategoryLanguage(
+        LocalConfiguration.current.locales[0].language
+    )
     val visible = categories.filter { it.type == type && (showArchived || it.archivedAt == null) }
 
     Scaffold(
@@ -138,7 +141,11 @@ fun CategoryManagementScreen(
                     title = stringResource(R.string.no_categories),
                     description = stringResource(R.string.no_categories_description),
                     action = {
-                        Button(onClick = { starterDialog = true }) {
+                        Button(onClick = {
+                            scope.launch {
+                                repository.applyStarterCategories(starterLanguage)
+                            }
+                        }) {
                             Text(stringResource(R.string.add_starter_categories))
                         }
                     },
@@ -193,32 +200,6 @@ fun CategoryManagementScreen(
                 }
             }
         }
-    }
-
-    if (starterDialog) {
-        AlertDialog(
-            onDismissRequest = { starterDialog = false },
-            title = { Text(stringResource(R.string.starter_categories_language)) },
-            text = { Text(stringResource(R.string.starter_categories_description)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    starterDialog = false
-                    scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.ITALIAN) }
-                }) { Text("Italiano") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        starterDialog = false
-                        scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.SPANISH) }
-                    }) { Text("Español") }
-                    TextButton(onClick = {
-                        starterDialog = false
-                        scope.launch { repository.applyStarterCategories(StarterCategoryLanguage.ENGLISH) }
-                    }) { Text("English") }
-                }
-            },
-        )
     }
 }
 
