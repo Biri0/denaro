@@ -220,7 +220,7 @@ internal fun starterCategories(language: StarterCategoryLanguage): List<StarterC
                 TransactionType.INCOME,
                 "Trabajo",
                 "briefcase_business",
-                listOf("Salario" to "banknote", "Bonus" to "badge_dollar_sign")
+                listOf("Salario" to "banknote", "Bonificación" to "badge_dollar_sign")
             ),
             StarterCategory(
                 TransactionType.INCOME,
