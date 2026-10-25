@@ -1,1 +1,3 @@
-Denaro ora richiede meno autorizzazioni, perché è stato rimosso il supporto inutilizzato per le attività in background.
+Supporto per la lingua spagnola.
+
+Le categorie iniziali ora vengono aggiunte direttamente nella lingua dell'app, senza una richiesta separata.

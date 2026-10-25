@@ -8,6 +8,15 @@ import org.junit.Test
 class CategoryPresetsTest {
 
     @Test
+    fun starterCategoryLanguageFollowsLocale() {
+        assertEquals(StarterCategoryLanguage.ITALIAN, starterCategoryLanguage("it"))
+        assertEquals(StarterCategoryLanguage.SPANISH, starterCategoryLanguage("es"))
+        assertEquals(StarterCategoryLanguage.ENGLISH, starterCategoryLanguage("en"))
+        assertEquals(StarterCategoryLanguage.ENGLISH, starterCategoryLanguage("fr"))
+        assertEquals(StarterCategoryLanguage.ENGLISH, starterCategoryLanguage(null))
+    }
+
+    @Test
     fun spanishLanguageOptionUsesCorrectTag() {
         assertEquals("es", LanguageOption.SPANISH.languageTag)
         assertTrue(LanguageOption.entries.contains(LanguageOption.SPANISH))
