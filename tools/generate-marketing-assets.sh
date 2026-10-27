@@ -68,7 +68,9 @@ mkdir -p \
     "$PLAY_DIR/en-US/graphics/icon" \
     "$PLAY_DIR/en-US/graphics/phone-screenshots" \
     "$PLAY_DIR/it-IT/graphics/icon" \
-    "$PLAY_DIR/it-IT/graphics/phone-screenshots"
+    "$PLAY_DIR/it-IT/graphics/phone-screenshots" \
+    "$PLAY_DIR/es-ES/graphics/icon" \
+    "$PLAY_DIR/es-ES/graphics/phone-screenshots"
 
 if [[ "$COMPOSE_ONLY" != true ]]; then
     "$PROJECT_DIR/gradlew" :app:assembleDebug
@@ -82,18 +84,23 @@ expected_text() {
     case "$locale:$scenario" in
         en:home) echo "Balances" ;;
         it:home) echo "Saldi" ;;
+        es:home) echo "Saldos" ;;
         en:accounts) echo "Everyday" ;;
         it:accounts) echo "Conto quotidiano" ;;
+        es:accounts) echo "Cuenta diaria" ;;
         en:account_detail) echo "Current balance" ;;
         it:account_detail) echo "Saldo attuale" ;;
+        es:account_detail) echo "Saldo actual" ;;
         # Every movement row is prefixed with its account name, so this stays on the first screen
         # no matter which reference date the run uses. A specific transaction does not: the list is
         # newest-first, so day-gated entries near the start of the month fall below the fold.
         en:activity) echo "Everyday" ;;
         it:activity) echo "Conto quotidiano" ;;
-        en:debts|it:debts) echo "Alex" ;;
+        es:activity) echo "Cuenta diaria" ;;
+        en:debts|it:debts|es:debts) echo "Alex" ;;
         en:categories) echo "Home" ;;
         it:categories) echo "Casa" ;;
+        es:categories) echo "Hogar" ;;
     esac
 }
 
@@ -128,7 +135,7 @@ capture() {
 }
 
 if [[ "$COMPOSE_ONLY" != true ]]; then
-    for locale in en it; do
+    for locale in en it es; do
         for theme in light dark; do
             for scenario in home accounts account_detail activity debts categories; do
                 capture "$locale" "$theme" "$scenario"
@@ -192,8 +199,13 @@ make_store_card it it-IT 2 accounts account_detail account_detail "Tutti i conti
 make_store_card it it-IT 3 activity activity activity "Trova subito ogni movimento"
 make_store_card it it-IT 4 debts debts debts "Debiti e rimborsi sempre chiari"
 make_store_card it it-IT 5 categories categories categories "Organizza il denaro a modo tuo"
+make_store_card es es-ES 1 dashboard home home "Tu mes de un vistazo"
+make_store_card es es-ES 2 accounts account_detail account_detail "Todas las cuentas, una vista clara"
+make_store_card es es-ES 3 activity activity activity "Encuentra rápido cada movimiento"
+make_store_card es es-ES 4 debts debts debts "Deudas y pagos siempre claros"
+make_store_card es es-ES 5 categories categories categories "Organiza tu dinero a tu manera"
 
-for locale in en-US it-IT; do
+for locale in en-US it-IT es-ES; do
     cp "$PROJECT_DIR/app/src/main/ic_launcher-playstore.png" \
         "$PLAY_DIR/$locale/graphics/icon/icon.png"
 done

@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.Locale
 
 internal fun createBuildFinanceSessionProvider(context: Context): FinanceSessionProvider =
     DebugFinanceSessionProvider(context)
@@ -173,7 +174,7 @@ internal class DebugFinanceSessionProvider(
         DemoDataSeeder(database).reset(
             referenceDate = referenceDate,
             zoneId = ZoneId.systemDefault(),
-            italian = localeTag.startsWith("it", ignoreCase = true),
+            language = demoLanguage(localeTag),
         )
         return database
     }
@@ -192,11 +193,28 @@ internal class DebugFinanceSessionProvider(
     }
 }
 
+internal enum class DemoLanguage {
+    ENGLISH,
+    ITALIAN,
+    SPANISH,
+}
+
+internal fun demoLanguage(localeTag: String): DemoLanguage =
+    when (Locale.forLanguageTag(localeTag).language) {
+        "it" -> DemoLanguage.ITALIAN
+        "es" -> DemoLanguage.SPANISH
+        else -> DemoLanguage.ENGLISH
+    }
+
 internal class DemoDataSeeder(
     private val database: DenaroDatabase,
 ) {
-    suspend fun reset(referenceDate: LocalDate, zoneId: ZoneId, italian: Boolean) {
-        val fixture = demoFixture(referenceDate, zoneId, italian)
+    suspend fun reset(
+        referenceDate: LocalDate,
+        zoneId: ZoneId,
+        language: DemoLanguage = DemoLanguage.ENGLISH,
+    ) {
+        val fixture = demoFixture(referenceDate, zoneId, language)
         database.withTransaction {
             database.clearFinanceRecords()
             database.openHelper.writableDatabase.execSQL("DELETE FROM legacy_imports")
@@ -210,6 +228,14 @@ internal class DemoDataSeeder(
             fixture.debts.forEach { database.debtDao().insert(it) }
             fixture.repayments.forEach { database.debtDao().insertRepayment(it) }
         }
+    }
+
+    suspend fun reset(referenceDate: LocalDate, zoneId: ZoneId, italian: Boolean) {
+        reset(
+            referenceDate = referenceDate,
+            zoneId = zoneId,
+            language = if (italian) DemoLanguage.ITALIAN else DemoLanguage.ENGLISH,
+        )
     }
 }
 
@@ -229,10 +255,24 @@ internal fun demoFixture(
     referenceDate: LocalDate,
     zoneId: ZoneId,
     italian: Boolean,
+): DemoFixture = demoFixture(
+    referenceDate = referenceDate,
+    zoneId = zoneId,
+    language = if (italian) DemoLanguage.ITALIAN else DemoLanguage.ENGLISH,
+)
+
+internal fun demoFixture(
+    referenceDate: LocalDate,
+    zoneId: ZoneId,
+    language: DemoLanguage = DemoLanguage.ENGLISH,
 ): DemoFixture {
     val timestamp = referenceDate.atTime(12, 0).atZone(zoneId).toInstant().toEpochMilli()
     fun epoch(date: LocalDate) = date.atTime(12, 0).atZone(zoneId).toInstant().toEpochMilli()
-    fun text(en: String, it: String) = if (italian) it else en
+    fun text(en: String, it: String, es: String) = when (language) {
+        DemoLanguage.ENGLISH -> en
+        DemoLanguage.ITALIAN -> it
+        DemoLanguage.SPANISH -> es
+    }
     fun id(kind: String, suffix: String) = "demo-$kind-$suffix"
 
     val checkingId = id("account", "checking")
@@ -241,8 +281,12 @@ internal fun demoFixture(
     val accounts = listOf(
         AccountEntity(
             checkingId,
-            text("Everyday", "Conto quotidiano"),
-            text("Salary and daily spending", "Stipendio e spese quotidiane"),
+            text("Everyday", "Conto quotidiano", "Cuenta diaria"),
+            text(
+                "Salary and daily spending",
+                "Stipendio e spese quotidiane",
+                "Salario y gastos diarios"
+            ),
             320_000,
             "EUR",
             null,
@@ -251,8 +295,12 @@ internal fun demoFixture(
         ),
         AccountEntity(
             id = savingsId,
-            name = text("Savings", "Risparmi"),
-            description = text("Long-term goals", "Obiettivi a lungo termine"),
+            name = text("Savings", "Risparmi", "Ahorros"),
+            description = text(
+                "Long-term goals",
+                "Obiettivi a lungo termine",
+                "Objetivos a largo plazo"
+            ),
             openingBalanceMinor = 850_000,
             currency = "EUR",
             archivedAt = null,
@@ -263,7 +311,7 @@ internal fun demoFixture(
         ),
         AccountEntity(
             cashId,
-            text("Cash", "Contanti"),
+            text("Cash", "Contanti", "Efectivo"),
             null,
             9_000,
             "EUR",
@@ -279,29 +327,50 @@ internal fun demoFixture(
         val parent: String?,
         val en: String,
         val it: String,
+        val es: String,
         val icon: String,
         val color: Int,
     )
 
     val specs = listOf(
-        CategorySpec("home", TransactionType.EXPENSE, null, "Home", "Casa", "house", 0),
-        CategorySpec("rent", TransactionType.EXPENSE, "home", "Rent", "Affitto", "house", 0),
+        CategorySpec("home", TransactionType.EXPENSE, null, "Home", "Casa", "Hogar", "house", 0),
+        CategorySpec(
+            "rent",
+            TransactionType.EXPENSE,
+            "home",
+            "Rent",
+            "Affitto",
+            "Alquiler",
+            "house",
+            0
+        ),
         CategorySpec(
             "utilities",
             TransactionType.EXPENSE,
             "home",
             "Utilities",
             "Utenze",
+            "Servicios básicos",
             "lightbulb",
             0
         ),
-        CategorySpec("food", TransactionType.EXPENSE, null, "Food", "Alimentazione", "utensils", 2),
+        CategorySpec(
+            "food",
+            TransactionType.EXPENSE,
+            null,
+            "Food",
+            "Alimentazione",
+            "Alimentación",
+            "utensils",
+            2
+        ),
         CategorySpec(
             "groceries",
             TransactionType.EXPENSE,
             "food",
             "Groceries",
             "Spesa",
+            "Supermercado",
             "shopping_basket",
             2
         ),
@@ -311,6 +380,7 @@ internal fun demoFixture(
             "food",
             "Restaurants",
             "Ristoranti",
+            "Restaurantes",
             "utensils",
             2
         ),
@@ -320,16 +390,27 @@ internal fun demoFixture(
             null,
             "Transport",
             "Trasporti",
+            "Transporte",
             "car",
             4
         ),
-        CategorySpec("health", TransactionType.EXPENSE, null, "Health", "Salute", "heart_pulse", 6),
+        CategorySpec(
+            "health",
+            TransactionType.EXPENSE,
+            null,
+            "Health",
+            "Salute",
+            "Salud",
+            "heart_pulse",
+            6
+        ),
         CategorySpec(
             "services",
             TransactionType.EXPENSE,
             null,
             "Services",
             "Servizi",
+            "Servicios",
             "receipt_text",
             8
         ),
@@ -339,6 +420,7 @@ internal fun demoFixture(
             "services",
             "Subscriptions",
             "Abbonamenti",
+            "Suscripciones",
             "refresh_cw",
             8
         ),
@@ -348,16 +430,27 @@ internal fun demoFixture(
             null,
             "Leisure",
             "Tempo libero",
+            "Ocio",
             "gamepad_2",
             10
         ),
-        CategorySpec("travel", TransactionType.EXPENSE, "leisure", "Travel", "Viaggi", "plane", 10),
+        CategorySpec(
+            "travel",
+            TransactionType.EXPENSE,
+            "leisure",
+            "Travel",
+            "Viaggi",
+            "Viajes",
+            "plane",
+            10
+        ),
         CategorySpec(
             "work",
             TransactionType.INCOME,
             null,
             "Work",
             "Lavoro",
+            "Trabajo",
             "briefcase_business",
             1
         ),
@@ -367,6 +460,7 @@ internal fun demoFixture(
             "work",
             "Salary",
             "Stipendio",
+            "Salario",
             "banknote",
             1
         ),
@@ -376,6 +470,7 @@ internal fun demoFixture(
             null,
             "Freelance",
             "Attività autonoma",
+            "Trabajo autónomo",
             "laptop",
             7
         ),
@@ -385,7 +480,7 @@ internal fun demoFixture(
             id = id("category", spec.key),
             type = spec.type,
             parentId = spec.parent?.let { id("category", it) },
-            name = text(spec.en, spec.it),
+            name = text(spec.en, spec.it, spec.es),
             iconName = spec.icon,
             colorIndex = spec.color,
             archivedAt = null,
@@ -427,6 +522,7 @@ internal fun demoFixture(
         category: String,
         descriptionEn: String,
         descriptionIt: String,
+        descriptionEs: String,
         accountId: String = checkingId
     ) {
         val date = month.atDay(day.coerceAtMost(month.lengthOfMonth()))
@@ -441,7 +537,7 @@ internal fun demoFixture(
             type = type,
             occurredAt = eventTime,
             localDate = date.toString(),
-            description = text(descriptionEn, descriptionIt),
+            description = text(descriptionEn, descriptionIt, descriptionEs),
             createdAt = eventTime,
             updatedAt = eventTime,
         )
@@ -483,7 +579,8 @@ internal fun demoFixture(
             TransactionType.INCOME,
             "salary",
             "Monthly salary",
-            "Stipendio mensile"
+            "Stipendio mensile",
+            "Salario mensual"
         )
         if (offset % 2 == 1) {
             transaction(
@@ -493,10 +590,20 @@ internal fun demoFixture(
                 TransactionType.INCOME,
                 "freelance",
                 "Design project",
-                "Progetto di design"
+                "Progetto di design",
+                "Proyecto de diseño"
             )
         }
-        transaction(month, 2, 92_000, TransactionType.EXPENSE, "rent", "Rent", "Affitto")
+        transaction(
+            month,
+            2,
+            92_000,
+            TransactionType.EXPENSE,
+            "rent",
+            "Rent",
+            "Affitto",
+            "Alquiler"
+        )
         listOf(4, 11, 18, 25).forEachIndexed { index, day ->
             transaction(
                 month,
@@ -505,7 +612,8 @@ internal fun demoFixture(
                 TransactionType.EXPENSE,
                 "groceries",
                 "Groceries",
-                "Spesa"
+                "Spesa",
+                "Supermercado"
             )
         }
         transaction(
@@ -515,7 +623,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "utilities",
             "Energy and internet",
-            "Energia e internet"
+            "Energia e internet",
+            "Energía e internet"
         )
         transaction(
             month,
@@ -524,7 +633,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "transport",
             "Public transport",
-            "Trasporto pubblico"
+            "Trasporto pubblico",
+            "Transporte público"
         )
         transaction(
             month,
@@ -533,7 +643,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "dining",
             "Dinner with friends",
-            "Cena con amici"
+            "Cena con amici",
+            "Cena con amigos"
         )
         transaction(
             month,
@@ -542,7 +653,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "leisure",
             "Movie night",
-            "Serata al cinema"
+            "Serata al cinema",
+            "Noche de cine"
         )
         transaction(
             month,
@@ -551,9 +663,19 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "subscriptions",
             "Music subscription",
-            "Abbonamento musica"
+            "Abbonamento musica",
+            "Suscripción de música"
         )
-        transaction(month, 23, 4_200, TransactionType.EXPENSE, "health", "Pharmacy", "Farmacia")
+        transaction(
+            month,
+            23,
+            4_200,
+            TransactionType.EXPENSE,
+            "health",
+            "Pharmacy",
+            "Farmacia",
+            "Farmacia"
+        )
         // The month demo opens on gets a modest weekend away instead of a full holiday: it is
         // still enough to push Leisure past its budget — the over-budget card is the point of the
         // first screen — but not enough to make that month the deficit one, because Home doubles
@@ -568,7 +690,8 @@ internal fun demoFixture(
                 TransactionType.EXPENSE,
                 "travel",
                 "Seaside weekend",
-                "Weekend al mare"
+                "Weekend al mare",
+                "Escapada a la playa"
             )
         }
         if (offset == 2 || offset == 5) {
@@ -579,10 +702,16 @@ internal fun demoFixture(
                 TransactionType.EXPENSE,
                 "travel",
                 "Weekend trip",
-                "Viaggio nel weekend"
+                "Viaggio nel weekend",
+                "Viaje de fin de semana"
             )
         }
-        transfer(month, 28, 25_000, label = text("Monthly savings", "Risparmio mensile"))
+        transfer(
+            month,
+            28,
+            25_000,
+            label = text("Monthly savings", "Risparmio mensile", "Ahorro mensual")
+        )
     }
 
     // Every category a showcase month spends on gets a day-gated current-month counterpart, so no
@@ -596,11 +725,21 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "groceries",
             "Groceries",
-            "Spesa"
+            "Spesa",
+            "Supermercado"
         )
     }
     if (referenceDate.dayOfMonth >= 2) {
-        transaction(currentMonth, 2, 92_000, TransactionType.EXPENSE, "rent", "Rent", "Affitto")
+        transaction(
+            currentMonth,
+            2,
+            92_000,
+            TransactionType.EXPENSE,
+            "rent",
+            "Rent",
+            "Affitto",
+            "Alquiler"
+        )
     }
     if (referenceDate.dayOfMonth >= 5) {
         transaction(
@@ -610,7 +749,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "transport",
             "Train tickets",
-            "Biglietti del treno"
+            "Biglietti del treno",
+            "Billetes de tren"
         )
     }
     if (referenceDate.dayOfMonth >= 8) {
@@ -621,11 +761,21 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "utilities",
             "Energy and internet",
-            "Energia e internet"
+            "Energia e internet",
+            "Energía e internet"
         )
     }
     if (referenceDate.dayOfMonth >= 15) {
-        transaction(currentMonth, 15, 6_800, TransactionType.EXPENSE, "dining", "Lunch", "Pranzo")
+        transaction(
+            currentMonth,
+            15,
+            6_800,
+            TransactionType.EXPENSE,
+            "dining",
+            "Lunch",
+            "Pranzo",
+            "Almuerzo"
+        )
     }
     if (referenceDate.dayOfMonth >= 19) {
         transaction(
@@ -635,7 +785,8 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "leisure",
             "Movie night",
-            "Serata al cinema"
+            "Serata al cinema",
+            "Noche de cine"
         )
     }
     if (referenceDate.dayOfMonth >= 20) {
@@ -646,11 +797,21 @@ internal fun demoFixture(
             TransactionType.EXPENSE,
             "subscriptions",
             "Music subscription",
-            "Abbonamento musica"
+            "Abbonamento musica",
+            "Suscripción de música"
         )
     }
     if (referenceDate.dayOfMonth >= 23) {
-        transaction(currentMonth, 23, 4_200, TransactionType.EXPENSE, "health", "Pharmacy", "Farmacia")
+        transaction(
+            currentMonth,
+            23,
+            4_200,
+            TransactionType.EXPENSE,
+            "health",
+            "Pharmacy",
+            "Farmacia",
+            "Farmacia"
+        )
     }
     if (referenceDate.dayOfMonth >= 27) {
         transaction(
@@ -660,7 +821,8 @@ internal fun demoFixture(
             TransactionType.INCOME,
             "salary",
             "Monthly salary",
-            "Stipendio mensile"
+            "Stipendio mensile",
+            "Salario mensual"
         )
     }
 
@@ -673,6 +835,7 @@ internal fun demoFixture(
         day: Int,
         descriptionEn: String,
         descriptionIt: String,
+        descriptionEs: String,
         active: Boolean = true
     ): RecurringRuleEntity {
         val nextDate = if (referenceDate.dayOfMonth < day) {
@@ -687,7 +850,7 @@ internal fun demoFixture(
             categoryId = id("category", category),
             amountMinor = amount,
             transactionType = type,
-            description = text(descriptionEn, descriptionIt),
+            description = text(descriptionEn, descriptionIt, descriptionEs),
             frequency = RecurrenceFrequency.MONTHLY,
             intervalCount = 1,
             timezoneId = zoneId.id,
@@ -710,9 +873,19 @@ internal fun demoFixture(
             "salary",
             27,
             "Monthly salary",
-            "Stipendio mensile"
+            "Stipendio mensile",
+            "Salario mensual"
         ),
-        rule("rent", 92_000, TransactionType.EXPENSE, "rent", 2, "Rent", "Affitto"),
+        rule(
+            "rent",
+            92_000,
+            TransactionType.EXPENSE,
+            "rent",
+            2,
+            "Rent",
+            "Affitto",
+            "Alquiler"
+        ),
         rule(
             "music",
             1_499,
@@ -720,7 +893,8 @@ internal fun demoFixture(
             "subscriptions",
             20,
             "Music subscription",
-            "Abbonamento musica"
+            "Abbonamento musica",
+            "Suscripción de música"
         ),
         rule(
             "gym",
@@ -730,6 +904,7 @@ internal fun demoFixture(
             10,
             "Gym membership",
             "Abbonamento palestra",
+            "Cuota del gimnasio",
             active = false
         ),
     )
@@ -738,14 +913,14 @@ internal fun demoFixture(
         CounterpartyEntity(
             id("counterparty", "alex"),
             "Alex",
-            text("Friend", "Amico"),
+            text("Friend", "Amico", "Amigo"),
             null,
             timestamp,
             timestamp
         ),
         CounterpartyEntity(
             id("counterparty", "studio"),
-            text("Design studio", "Studio di design"),
+            text("Design studio", "Studio di design", "Estudio de diseño"),
             null,
             null,
             timestamp + 1,
@@ -765,7 +940,7 @@ internal fun demoFixture(
             epoch(borrowedDate),
             borrowedDate.toString(),
             referenceDate.plusDays(10).toString(),
-            text("Shared trip", "Viaggio insieme"),
+            text("Shared trip", "Viaggio insieme", "Viaje compartido"),
             timestamp,
             timestamp
         ),
@@ -779,7 +954,7 @@ internal fun demoFixture(
             epoch(lentDate),
             lentDate.toString(),
             null,
-            text("Equipment deposit", "Deposito attrezzatura"),
+            text("Equipment deposit", "Deposito attrezzatura", "Depósito de equipo"),
             timestamp + 1,
             timestamp + 1
         ),

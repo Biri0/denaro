@@ -45,7 +45,7 @@ exactly one physical Android device and regenerate the screenshots with:
 tools/generate-marketing-assets.sh --date YYYY-MM-DD
 ```
 
-The generator captures English and Italian in light and dark themes, updates
+The generator captures English, Italian, and Spanish in light and dark themes, updates
 the README composites, and writes the ordered phone screenshots and icon to the
 Triple-T listing. It refuses to capture from an emulator. The release workflow
 publishes the AAB only; it does not run Gradle Play Publisher's separate

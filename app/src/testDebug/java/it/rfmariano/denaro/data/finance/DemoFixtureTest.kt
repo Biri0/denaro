@@ -167,12 +167,40 @@ class DemoFixtureTest {
     fun fixtureUsesRequestedLanguageAndNeverCreatesFutureActivity() {
         val english = demoFixture(referenceDate, zone, italian = false)
         val italian = demoFixture(referenceDate, zone, italian = true)
+        val spanish = demoFixture(referenceDate, zone, DemoLanguage.SPANISH)
+
+        assertEquals(DemoLanguage.ENGLISH, demoLanguage("en"))
+        assertEquals(DemoLanguage.ENGLISH, demoLanguage("en-US"))
+        assertEquals(DemoLanguage.ITALIAN, demoLanguage("it"))
+        assertEquals(DemoLanguage.ITALIAN, demoLanguage("it-IT"))
+        assertEquals(DemoLanguage.SPANISH, demoLanguage("es"))
+        assertEquals(DemoLanguage.SPANISH, demoLanguage("es-ES"))
 
         assertTrue(english.accounts.any { it.name == "Everyday" })
         assertTrue(italian.accounts.any { it.name == "Conto quotidiano" })
+        assertTrue(spanish.accounts.any { it.name == "Cuenta diaria" })
         assertTrue(english.categories.any { it.name == "Groceries" })
         assertTrue(italian.categories.any { it.name == "Spesa" })
+        assertTrue(spanish.categories.any { it.name == "Supermercado" })
         assertFalse(english.transactions.any { LocalDate.parse(it.localDate) > referenceDate })
         assertFalse(italian.transactions.any { LocalDate.parse(it.localDate) > referenceDate })
+        assertFalse(spanish.transactions.any { LocalDate.parse(it.localDate) > referenceDate })
+
+        val accountIds = spanish.accounts.mapTo(mutableSetOf()) { it.id }
+        val categoryIds = spanish.categories.mapTo(mutableSetOf()) { it.id }
+        val counterpartyIds = spanish.counterparties.mapTo(mutableSetOf()) { it.id }
+        val debtIds = spanish.debts.mapTo(mutableSetOf()) { it.id }
+        assertEquals(english.accounts.map { it.id }, spanish.accounts.map { it.id })
+        assertEquals(english.categories.map { it.id }, spanish.categories.map { it.id })
+        assertEquals(
+            english.transactions.map { Triple(it.id, it.amountMinor, it.localDate) },
+            spanish.transactions.map { Triple(it.id, it.amountMinor, it.localDate) },
+        )
+        assertTrue(spanish.transactions.all { it.accountId in accountIds && it.categoryId in categoryIds })
+        assertTrue(spanish.transfers.all { it.fromAccountId in accountIds && it.toAccountId in accountIds })
+        assertTrue(spanish.rules.all { it.accountId in accountIds && it.categoryId in categoryIds })
+        assertTrue(spanish.categories.all { it.parentId == null || it.parentId in categoryIds })
+        assertTrue(spanish.debts.all { it.accountId in accountIds && it.counterpartyId in counterpartyIds })
+        assertTrue(spanish.repayments.all { it.debtId in debtIds && it.accountId in accountIds })
     }
 }
