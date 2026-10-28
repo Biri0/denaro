@@ -165,6 +165,52 @@ split_diagonal "$RAW_DIR/en-accounts-light.png" "$RAW_DIR/en-accounts-dark.png" 
 split_diagonal "$RAW_DIR/en-activity-light.png" "$RAW_DIR/en-activity-dark.png" "$README_DIR/activity.png"
 split_diagonal "$RAW_DIR/en-debts-light.png" "$RAW_DIR/en-debts-dark.png" "$README_DIR/debts.png"
 
+TITLE_FONT_SIZE=64
+# Headlines wider than this get wrapped. The canvas is 1080px, so this keeps a 40px margin
+# instead of letting the text run into (and past) the edge.
+TITLE_MAX_WIDTH=1000
+
+text_width() {
+    local text="$1"
+    local font="$2"
+    magick -font "$font" -pointsize "$TITLE_FONT_SIZE" label:"$text" -format '%w' info:
+}
+
+# Splits a headline into two balanced lines. caption: wraps greedily, which strands words like
+# "view" or "d'occhio" on a line of their own, so pick the most even break instead. Breaking right
+# after a one- or two-letter word ("a", "in") is penalised because it reads badly.
+wrap_title() {
+    local text="$1"
+    local font="$2"
+    local width
+    width="$(text_width "$text" "$font")"
+    if ((width <= TITLE_MAX_WIDTH)); then
+        printf '%s\n' "$text"
+        return
+    fi
+
+    local -a words
+    read -r -a words <<< "$text"
+    local best=""
+    local best_score=0
+    local i left right left_width right_width score
+    for ((i = 1; i < ${#words[@]}; i++)); do
+        left="${words[*]:0:i}"
+        right="${words[*]:i}"
+        left_width="$(text_width "$left" "$font")"
+        right_width="$(text_width "$right" "$font")"
+        score=$((left_width > right_width ? left_width : right_width))
+        if ((${#words[i - 1]} <= 2)); then
+            score=$((score + 150))
+        fi
+        if [[ -z "$best" ]] || ((score < best_score)); then
+            best="$left"$'\n'"$right"
+            best_score=$score
+        fi
+    done
+    printf '%s\n' "$best"
+}
+
 make_store_card() {
     local locale="$1"
     local listing_locale="$2"
@@ -176,15 +222,20 @@ make_store_card() {
     local split="$RAW_DIR/${locale}-${key}-split.png"
     local output="$PLAY_DIR/$listing_locale/graphics/phone-screenshots/${order}-${key}.png"
     local font
+    local wrapped
     font="$(fc-match -f '%{file}' 'DejaVu Sans:style=Bold' | head -n 1)"
+    wrapped="$(wrap_title "$title" "$font")"
     split_diagonal \
         "$RAW_DIR/${locale}-${light_scenario}-light.png" \
         "$RAW_DIR/${locale}-${dark_scenario}-dark.png" \
         "$split"
+    # Caption wraps the headline inside a fixed-width box instead of drawing one long line:
+    # -annotate can only clip, and fixed 64pt titles overflow the 1080px canvas in en/it/es.
     magick -size 1080x1920 xc:'#EDF7F1' \
         -fill '#D9EDE3' -draw 'polygon 0,1920 1080,1180 1080,1920' \
-        -fill '#006C4C' -font "$font" -pointsize 64 -gravity north \
-        -annotate +0+92 "$title" \
+        \( -background none -fill '#006C4C' -font "$font" -pointsize "$TITLE_FONT_SIZE" \
+            -size "${TITLE_MAX_WIDTH}x" -gravity north caption:"$wrapped" \) \
+        -gravity north -geometry +0+92 -composite \
         \( "$split" -resize '760x1480>' -bordercolor '#FFFFFF' -border 4 \) \
         -gravity south -geometry +0+62 -composite -alpha off "PNG24:$output"
 }
