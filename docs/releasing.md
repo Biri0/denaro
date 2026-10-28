@@ -37,7 +37,7 @@ tested locally with `-PreleaseVersionCode=...` and
 ## Store listing assets
 
 F-Droid and Gradle Play Publisher read the localized listing from
-`app/src/main/play`. Before tagging a release, update the English and Italian
+`app/src/main/play`. Before tagging a release, update the EN/ES/IT
 `default.txt` release notes there. When the interface has changed, connect
 exactly one physical Android device and regenerate the screenshots with:
 
