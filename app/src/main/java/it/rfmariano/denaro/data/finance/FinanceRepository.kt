@@ -848,6 +848,15 @@ class FinanceRepository(
         recurrenceProcessor.processDueRules()
     }
 
+    /**
+     * Processes recurrences that were due by [asOf] instead of the current wall clock. Demo data is
+     * regenerated against a caller-supplied reference date, so processing it against the real clock
+     * would append occurrences from every month between that date and today.
+     */
+    suspend fun processDueRecurrences(asOf: Instant) {
+        recurrenceProcessor.processDueRules(asOf.toEpochMilli())
+    }
+
     suspend fun statementSnapshot(accountIds: Set<String>): StatementSnapshot {
         require(accountIds.isNotEmpty()) { "Select at least one account" }
         val allAccounts = database.accountDao().getAll()
