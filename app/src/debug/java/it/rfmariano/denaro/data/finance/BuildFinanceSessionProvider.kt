@@ -28,7 +28,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
@@ -97,8 +99,17 @@ internal class DebugFinanceSessionProvider(
         localeTag: String,
         referenceDate: LocalDate,
     ): FinanceSession = mutex.withLock {
-        demoSession(localeTag, referenceDate).also { _session.value = it }
+        demoSession(
+            localeTag,
+            referenceDate,
+            recurrenceCutoff = endOfDay(referenceDate),
+        ).also { _session.value = it }
     }
+
+    private fun endOfDay(date: LocalDate): Instant = date
+        .atTime(LocalTime.MAX)
+        .atZone(ZoneId.systemDefault())
+        .toInstant()
 
     private suspend fun productionSession(): FinanceSession = withContext(Dispatchers.IO) {
         val database = productionDatabase ?: EncryptedDatabaseFactory(context).open().also {
@@ -123,10 +134,20 @@ internal class DebugFinanceSessionProvider(
     private suspend fun demoSession(
         localeTag: String,
         referenceDate: LocalDate = clock(),
+        recurrenceCutoff: Instant? = null,
     ): FinanceSession = withContext(Dispatchers.IO) {
         val database = resetDemoDatabase(localeTag, referenceDate)
         val repository = FinanceRepository(database)
-        val recurrenceStartupFailed = runCatching { repository.processDueRecurrences() }.isFailure
+        // Marketing captures pass the reference date's end of day: a rule due after --date must
+        // stay ungenerated no matter when the capture runs. Processing against the wall clock made
+        // the same --date gain salary/rent rows from every month elapsed since then.
+        val recurrenceStartupFailed = runCatching {
+            if (recurrenceCutoff == null) {
+                repository.processDueRecurrences()
+            } else {
+                repository.processDueRecurrences(recurrenceCutoff)
+            }
+        }.isFailure
         FinanceSession(
             id = ++nextSessionId,
             repository = repository,

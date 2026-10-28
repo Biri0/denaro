@@ -11,8 +11,7 @@ class RecurrenceProcessor(
     private val database: DenaroDatabase,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    suspend fun processDueRules() {
-        val processingTime = now()
+    suspend fun processDueRules(processingTime: Long = now()) {
         database.withTransaction {
             database.recurringRuleDao().getDue(processingTime).forEach { rule ->
                 processRule(rule, processingTime)

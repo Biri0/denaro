@@ -11,9 +11,11 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 
 @RunWith(AndroidJUnit4::class)
@@ -108,6 +110,64 @@ class DemoDataSeederTest {
                 fixture.budgets.map { it.id }.toSet(),
                 database.backupDao().budgets().map { it.id }.toSet(),
             )
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * Reproduces the marketing-asset drift: the fixture is seeded for a fixed reference date, but
+     * recurrences were processed against the wall clock, so every month between the reference date
+     * and "today" appended salary/rent/subscription rows. `--date 2026-09-30` showed €8,528.58 on
+     * September 30 and €10,443.59 once October had passed.
+     */
+    @Test
+    fun processingRecurrencesUsesTheReferenceDateInsteadOfTheWallClock() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val referenceDate = LocalDate.of(2026, 9, 30)
+            val zone = ZoneId.of("Europe/Rome")
+            DemoDataSeeder(database).reset(
+                referenceDate,
+                zone,
+                language = DemoLanguage.ENGLISH,
+            )
+            val repository = FinanceRepository(database)
+
+            suspend fun availableMinor(): Long {
+                val savingsIds = database.accountDao().getAll()
+                    .filter { it.isSavings }
+                    .mapTo(mutableSetOf()) { it.id }
+                return database.accountBalanceDao().getAll()
+                    .filterNot { it.accountId in savingsIds }
+                    .sumOf { it.balanceMinor }
+            }
+
+            repository.processDueRecurrences(
+                referenceDate.atTime(LocalTime.MAX).atZone(zone).toInstant(),
+            )
+
+            assertTrue(
+                database.backupDao().transactions().none {
+                    LocalDate.parse(it.localDate).isAfter(referenceDate)
+                },
+            )
+            assertEquals(852_858L, availableMinor())
+
+            // The same fixture processed against a later cutoff still drifts: this is what the
+            // marketing script must never do, and why demoSession pins the cutoff to --date.
+            repository.processDueRecurrences(
+                LocalDate.of(2026, 10, 28).atTime(LocalTime.MAX).atZone(zone).toInstant(),
+            )
+            assertEquals(
+                listOf("2026-10-02", "2026-10-20", "2026-10-27"),
+                database.backupDao().transactions()
+                    .map { it.localDate }
+                    .filter { LocalDate.parse(it).isAfter(referenceDate) }
+                    .sorted(),
+            )
+            assertEquals(1_044_359L, availableMinor())
         } finally {
             database.close()
         }
