@@ -18,6 +18,9 @@ jobs:
     name: Build and publish
     runs-on: ubuntu-latest
     environment: play-internal
+    # Successful runs take 6-9 minutes. Without this bound a hung step can burn
+    # ~50 minutes and die with the runner, taking the logs with it.
+    timeout-minutes: 40
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v7
@@ -118,16 +121,25 @@ jobs:
           chmod 600 "$keystore_path"
           echo "DENARO_UPLOAD_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
 
-      - name: Run release checks and build signed artifacts
+      - name: Run release checks
+        timeout-minutes: 15
+        run: |
+          ./gradlew --no-daemon --stacktrace \
+            -PreleaseVersionCode=${{ steps.version.outputs.code }} \
+            -PreleaseVersionName=${{ steps.version.outputs.name }} \
+            testDebugUnitTest lintDebug
+
+      - name: Build signed release artifacts
+        timeout-minutes: 20
         env:
           DENARO_UPLOAD_STORE_PASSWORD: ${{ secrets.DENARO_UPLOAD_STORE_PASSWORD }}
           DENARO_UPLOAD_KEY_ALIAS: ${{ secrets.DENARO_UPLOAD_KEY_ALIAS }}
           DENARO_UPLOAD_KEY_PASSWORD: ${{ secrets.DENARO_UPLOAD_KEY_PASSWORD }}
         run: |
-          ./gradlew --no-daemon \
+          ./gradlew --no-daemon --stacktrace \
             -PreleaseVersionCode=${{ steps.version.outputs.code }} \
             -PreleaseVersionName=${{ steps.version.outputs.name }} \
-            testDebugUnitTest lintDebug assembleRelease bundleRelease
+            assembleRelease bundleRelease
 
       - name: Stage release assets
         shell: bash
@@ -183,6 +195,7 @@ jobs:
           create_credentials_file: true
 
       - name: Publish AAB to completed internal testing
+        timeout-minutes: 15
         env:
           DENARO_UPLOAD_STORE_PASSWORD: ${{ secrets.DENARO_UPLOAD_STORE_PASSWORD }}
           DENARO_UPLOAD_KEY_ALIAS: ${{ secrets.DENARO_UPLOAD_KEY_ALIAS }}
