@@ -107,10 +107,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
-    implementation(libs.androidx.glance.appwidget) {
-        // WorkManager is only needed by Glance's session APIs, which this app does not use.
-        exclude(group = "androidx.work")
-    }
+    implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -129,21 +126,13 @@ dependencies {
     implementation(libs.sqlcipher.android)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
-    testImplementation(libs.androidx.glance.testing) {
-        exclude(group = "androidx.work")
-    }
-    testImplementation(libs.androidx.glance.appwidget.testing) {
-        exclude(group = "androidx.work")
-    }
+    testImplementation(libs.androidx.glance.testing)
+    testImplementation(libs.androidx.glance.appwidget.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.glance.testing) {
-        exclude(group = "androidx.work")
-    }
-    androidTestImplementation(libs.androidx.glance.appwidget.testing) {
-        exclude(group = "androidx.work")
-    }
+    androidTestImplementation(libs.androidx.glance.testing)
+    androidTestImplementation(libs.androidx.glance.appwidget.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
