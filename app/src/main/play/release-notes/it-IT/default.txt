@@ -1,3 +1,3 @@
-Supporto per la lingua spagnola.
+I widget della schermata Home non rimangono più bloccati sul caricamento: puoi tornare ad aggiungere rapidamente entrate, spese, trasferimenti e debiti.
 
-Le categorie iniziali ora vengono aggiunte direttamente nella lingua dell'app, senza una richiesta separata.
+Se un widget continua a caricarsi dopo l'aggiornamento, rimuovilo dalla schermata Home e aggiungilo di nuovo.

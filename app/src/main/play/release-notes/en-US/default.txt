@@ -1,3 +1,3 @@
-Spanish language support.
+Home screen widgets no longer get stuck loading, so you can quickly add income, expenses, transfers, and debts again.
 
-Starter categories are now added directly in the app language, without a separate language prompt.
+If a widget is still loading after the update, remove it from your home screen and add it again.

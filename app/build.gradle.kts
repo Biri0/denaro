@@ -54,6 +54,7 @@ android {
 
     buildTypes {
         release {
+            proguardFiles("proguard-rules.pro")
             if (hasCiSigning) {
                 signingConfig = signingConfigs.create("ciRelease") {
                     storeFile = rootProject.file(requireNotNull(ciKeystorePath))

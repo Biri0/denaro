@@ -1,0 +1,3 @@
+Los widgets de la pantalla de inicio ya no se quedan cargando, para que puedas volver a añadir ingresos, gastos, transferencias y deudas rápidamente.
+
+Si un widget sigue cargando después de actualizar, quítalo de la pantalla de inicio y vuelve a añadirlo.
