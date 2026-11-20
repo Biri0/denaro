@@ -973,14 +973,27 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                                     )
                                 }
                             }
-                            TextButton(onClick = {
+                            IconButton(onClick = {
                                 scope.launch {
                                     repository.setCounterpartyArchived(
                                         party.id,
                                         party.archivedAt == null
                                     )
                                 }
-                            }) { Text(stringResource(if (party.archivedAt == null) R.string.archive else R.string.restore)) }
+                            }) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (party.archivedAt == null) {
+                                            LucideR.drawable.lucide_ic_archive
+                                        } else {
+                                            LucideR.drawable.lucide_ic_archive_restore
+                                        },
+                                    ),
+                                    contentDescription = stringResource(
+                                        if (party.archivedAt == null) R.string.archive else R.string.restore,
+                                    ),
+                                )
+                            }
                         }
                     },
                 )
