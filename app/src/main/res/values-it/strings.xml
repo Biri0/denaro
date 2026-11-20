@@ -68,6 +68,10 @@
     <string name="manage_counterparties">Gestisci persone e organizzazioni usate per i debiti</string>
     <string name="add_counterparty">Aggiungi controparte</string>
     <string name="edit_counterparty">Modifica controparte</string>
+    <string name="delete_counterparty">Eliminare la controparte?</string>
+    <string name="delete_counterparty_action">Elimina controparte</string>
+    <string name="delete_counterparty_message">Eliminerà %1$s in modo permanente. Questa azione non può essere annullata.</string>
+    <string name="counterparty_delete_failed">Impossibile eliminare la controparte.</string>
     <string name="counterparty_note">Nota</string>
     <string name="no_counterparties">Nessuna controparte</string>
     <string name="received_into">Ricevuto su</string>
@@ -213,6 +217,10 @@
     <string name="both">Entrambi</string>
     <string name="add_category">Aggiungi categoria</string>
     <string name="edit_category">Modifica categoria</string>
+    <string name="delete_category">Eliminare la categoria?</string>
+    <string name="delete_category_action">Elimina categoria</string>
+    <string name="delete_category_message">Eliminerà %1$s in modo permanente. Questa azione non può essere annullata.</string>
+    <string name="category_delete_failed">Impossibile eliminare la categoria.</string>
     <string name="add_subcategory">Aggiungi sottocategoria</string>
     <string name="create_parent_category">Crea categoria principale</string>
     <string name="edit_new_parent">Modifica nuova categoria principale</string>

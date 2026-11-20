@@ -178,6 +178,49 @@ class FinanceRepositoryTest {
     }
 
     @Test
+    fun counterpartyCanBeDeletedOnlyWhenNoDebtUsesIt() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+            val unusedId = repository.createCounterparty(CounterpartyInput("Unused", null))
+            val usedId = repository.createCounterparty(CounterpartyInput("Used", null))
+            val debtId = repository.createDebt(
+                DebtInput(usedId, accountId, DebtDirection.BORROWED, 1_000, 1, null, null),
+            )
+
+            val usage = repository.observeCounterparties(includeArchived = true).first()
+                .associate { it.id to it.debtCount }
+            assertEquals(0, usage[unusedId] ?: -1)
+            assertEquals(1, usage[usedId] ?: -1)
+
+            val failure = runCatching { repository.deleteCounterparty(usedId) }.exceptionOrNull()
+            assertEquals("Counterparty is used by debts", failure?.message)
+            assertNotNull(
+                repository.observeCounterparties(includeArchived = true).first()
+                    .find { it.id == usedId },
+            )
+
+            repository.setCounterpartyArchived(unusedId, true)
+            repository.deleteCounterparty(unusedId)
+            assertNull(
+                repository.observeCounterparties(includeArchived = true).first()
+                    .find { it.id == unusedId },
+            )
+
+            repository.deleteDebt(debtId)
+            repository.deleteCounterparty(usedId)
+            assertNull(
+                repository.observeCounterparties(includeArchived = true).first()
+                    .find { it.id == usedId },
+            )
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun debtRepaymentMayExceedOutstandingAmount() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
@@ -253,6 +296,97 @@ class FinanceRepositoryTest {
 
             assertEquals(6, repository.getCategory(parentId)?.colorIndex)
             assertEquals(6, repository.getCategory(childId)?.colorIndex)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun categoryCanBeDeletedOnlyWhenUnused() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.inMemoryDatabaseBuilder(context, DenaroDatabase::class.java).build()
+        try {
+            val repository = FinanceRepository(database, clock = { 10 })
+            val accountId = repository.createAccount(accountInput("Cash"))
+
+            val unusedId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Unused", "shapes", 0),
+            )
+            assertEquals(
+                0,
+                repository.observeCategories(includeArchived = true).first()
+                    .single { it.id == unusedId }.usageCount,
+            )
+            repository.deleteCategory(unusedId)
+            assertNull(
+                repository.observeCategories(includeArchived = true).first()
+                    .find { it.id == unusedId },
+            )
+
+            val usedId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Used", "shapes", 1),
+            )
+            repository.createTransaction(
+                TransactionInput(
+                    accountId = accountId,
+                    amountMinor = 100,
+                    type = TransactionType.EXPENSE,
+                    occurredAt = 1,
+                    description = null,
+                    categoryId = usedId,
+                ),
+            )
+            assertEquals(
+                1,
+                repository.observeCategories(includeArchived = true).first()
+                    .single { it.id == usedId }.usageCount,
+            )
+            assertEquals(
+                "Category is used by transactions",
+                runCatching { repository.deleteCategory(usedId) }.exceptionOrNull()?.message,
+            )
+
+            val parentId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Parent", "shapes", 2),
+            )
+            val childId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, parentId, "Child", "shapes", 2),
+            )
+            assertEquals(
+                "Category has subcategories",
+                runCatching { repository.deleteCategory(parentId) }.exceptionOrNull()?.message,
+            )
+            repository.deleteCategory(childId)
+            repository.deleteCategory(parentId)
+
+            val budgetedId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Budgeted", "shapes", 3),
+            )
+            repository.createBudget(BudgetInput(budgetedId, "EUR", 1_000))
+            assertEquals(
+                "Category has a budget",
+                runCatching { repository.deleteCategory(budgetedId) }.exceptionOrNull()?.message,
+            )
+
+            val scheduledId = repository.createCategory(
+                CategoryInput(TransactionType.EXPENSE, null, "Scheduled", "shapes", 4),
+            )
+            repository.createRecurringRule(
+                RecurringRuleInput(
+                    accountId = accountId,
+                    amountMinor = 100,
+                    transactionType = TransactionType.EXPENSE,
+                    description = null,
+                    frequency = RecurrenceFrequency.MONTHLY,
+                    intervalCount = 1,
+                    nextOccurrenceAt = 4_102_444_800_000L,
+                    categoryId = scheduledId,
+                ),
+            )
+            assertEquals(
+                "Category is used by scheduled transactions",
+                runCatching { repository.deleteCategory(scheduledId) }.exceptionOrNull()?.message,
+            )
         } finally {
             database.close()
         }

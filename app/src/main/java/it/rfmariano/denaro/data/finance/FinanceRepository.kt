@@ -44,10 +44,10 @@ class FinanceRepository(
     private val recurrenceProcessor = RecurrenceProcessor(database, clock)
 
     fun observeCategories(includeArchived: Boolean = false): Flow<List<CategorySummary>> =
-        database.categoryDao().observeAll().map { categories ->
+        database.categoryDao().observeAllWithUsage().map { categories ->
             categories
-                .filter { includeArchived || it.archivedAt == null }
-                .map { it.toSummary() }
+                .filter { includeArchived || it.category.archivedAt == null }
+                .map { it.category.toSummary(it.usageCount) }
         }
 
     suspend fun getCategory(categoryId: String): CategoryEntity? =
@@ -154,6 +154,23 @@ class FinanceRepository(
         }
     }
 
+    suspend fun deleteCategory(categoryId: String) = database.withTransaction {
+        requireNotNull(database.categoryDao().getById(categoryId)) { "Category not found" }
+        require(database.categoryDao().childCount(categoryId) == 0) {
+            "Category has subcategories"
+        }
+        require(database.transactionDao().countForCategory(categoryId) == 0) {
+            "Category is used by transactions"
+        }
+        require(database.recurringRuleDao().countForCategory(categoryId) == 0) {
+            "Category is used by scheduled transactions"
+        }
+        require(database.budgetDao().countForCategory(categoryId) == 0) {
+            "Category has a budget"
+        }
+        database.categoryDao().deleteById(categoryId)
+    }
+
     suspend fun applyStarterCategories(language: StarterCategoryLanguage) {
         require(database.categoryDao().count() == 0) {
             "Starter categories can only be added to an empty list"
@@ -206,9 +223,15 @@ class FinanceRepository(
         }
 
     fun observeCounterparties(includeArchived: Boolean = false): Flow<List<CounterpartySummary>> =
-        database.counterpartyDao().observeAll().map { items ->
-            items.filter { includeArchived || it.archivedAt == null }.map {
-                CounterpartySummary(it.id, it.name, it.note, it.archivedAt)
+        database.counterpartyDao().observeAllWithUsage().map { items ->
+            items.filter { includeArchived || it.counterparty.archivedAt == null }.map {
+                CounterpartySummary(
+                    id = it.counterparty.id,
+                    name = it.counterparty.name,
+                    note = it.counterparty.note,
+                    archivedAt = it.counterparty.archivedAt,
+                    debtCount = it.debtCount,
+                )
             }
         }
 
@@ -240,6 +263,14 @@ class FinanceRepository(
         requireNotNull(database.counterpartyDao().getById(id)) { "Counterparty not found" }
         val now = clock()
         database.counterpartyDao().setArchived(id, if (archived) now else null, now)
+    }
+
+    suspend fun deleteCounterparty(id: String) = database.withTransaction {
+        requireNotNull(database.counterpartyDao().getById(id)) { "Counterparty not found" }
+        require(database.counterpartyDao().debtCount(id) == 0) {
+            "Counterparty is used by debts"
+        }
+        database.counterpartyDao().deleteById(id)
     }
 
     fun observeDebts(): Flow<List<DebtSummary>> = database.debtDao().observeAll().map { records ->
@@ -1226,7 +1257,7 @@ class FinanceRepository(
         fractionDigits = fractionDigits,
     )
 
-    private fun CategoryEntity.toSummary() = CategorySummary(
+    private fun CategoryEntity.toSummary(usageCount: Int = 0) = CategorySummary(
         id = id,
         type = type,
         parentId = parentId,
@@ -1234,6 +1265,7 @@ class FinanceRepository(
         iconName = iconName,
         colorIndex = colorIndex,
         archivedAt = archivedAt,
+        usageCount = usageCount,
     )
 }
 

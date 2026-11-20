@@ -37,6 +37,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -915,22 +917,28 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
     )
     var editing by remember { mutableStateOf<CounterpartySummary?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<CounterpartySummary?>(null) }
+    var deletingInProgress by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(stringResource(R.string.counterparties)) },
-            navigationIcon = { BackButton(onBack) },
-            actions = {
-                IconButton(onClick = {
-                    adding = true
-                }) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_plus),
-                        contentDescription = stringResource(R.string.add_counterparty)
-                    )
-                }
-            })
-    }) { padding ->
+    val deleteFailedMessage = stringResource(R.string.counterparty_delete_failed)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.counterparties)) },
+                navigationIcon = { BackButton(onBack) },
+                actions = {
+                    IconButton(onClick = {
+                        adding = true
+                    }) {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = stringResource(R.string.add_counterparty)
+                        )
+                    }
+                })
+        }) { padding ->
         if (parties.isEmpty()) EmptyState(
             icon = LucideR.drawable.lucide_ic_users,
             title = stringResource(R.string.no_counterparties),
@@ -955,14 +963,25 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                     headlineContent = { Text(party.name) },
                     supportingContent = { Text(party.note.orEmpty()) },
                     trailingContent = {
-                        TextButton(onClick = {
-                            scope.launch {
-                                repository.setCounterpartyArchived(
-                                    party.id,
-                                    party.archivedAt == null
-                                )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (party.debtCount == 0) {
+                                IconButton(onClick = { deleting = party }) {
+                                    Icon(
+                                        painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
+                                        contentDescription = stringResource(R.string.delete_counterparty_action),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
-                        }) { Text(stringResource(if (party.archivedAt == null) R.string.archive else R.string.restore)) }
+                            TextButton(onClick = {
+                                scope.launch {
+                                    repository.setCounterpartyArchived(
+                                        party.id,
+                                        party.archivedAt == null
+                                    )
+                                }
+                            }) { Text(stringResource(if (party.archivedAt == null) R.string.archive else R.string.restore)) }
+                        }
                     },
                 )
             }
@@ -982,6 +1001,43 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                 ); editing = null
             }
         }
+    }
+    deleting?.let { party ->
+        AlertDialog(
+            onDismissRequest = { if (!deletingInProgress) deleting = null },
+            title = { Text(stringResource(R.string.delete_counterparty)) },
+            text = {
+                Text(stringResource(R.string.delete_counterparty_message, party.name))
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = {
+                        deletingInProgress = true
+                        scope.launch {
+                            runCatching { repository.deleteCounterparty(party.id) }
+                                .onSuccess { deleting = null }
+                                .onFailure {
+                                    deleting = null
+                                    snackbarHostState.showSnackbar(deleteFailedMessage)
+                                }
+                            deletingInProgress = false
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = { deleting = null },
+                ) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 }
 

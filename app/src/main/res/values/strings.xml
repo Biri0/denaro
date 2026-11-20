@@ -68,6 +68,10 @@
     <string name="manage_counterparties">Manage people and organizations used for debts</string>
     <string name="add_counterparty">Add counterparty</string>
     <string name="edit_counterparty">Edit counterparty</string>
+    <string name="delete_counterparty">Delete counterparty?</string>
+    <string name="delete_counterparty_action">Delete counterparty</string>
+    <string name="delete_counterparty_message">This permanently deletes %1$s. This cannot be undone.</string>
+    <string name="counterparty_delete_failed">Could not delete the counterparty.</string>
     <string name="counterparty_note">Note</string>
     <string name="no_counterparties">No counterparties yet</string>
     <string name="received_into">Received into</string>
@@ -213,6 +217,10 @@
     <string name="both">Both</string>
     <string name="add_category">Add category</string>
     <string name="edit_category">Edit category</string>
+    <string name="delete_category">Delete category?</string>
+    <string name="delete_category_action">Delete category</string>
+    <string name="delete_category_message">This permanently deletes %1$s. This cannot be undone.</string>
+    <string name="category_delete_failed">Could not delete the category.</string>
     <string name="add_subcategory">Add subcategory</string>
     <string name="create_parent_category">Create parent category</string>
     <string name="edit_new_parent">Edit new parent</string>

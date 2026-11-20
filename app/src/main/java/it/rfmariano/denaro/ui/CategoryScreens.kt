@@ -41,6 +41,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -87,13 +89,18 @@ fun CategoryManagementScreen(
         .collectAsStateWithLifecycle(emptyList())
     var type by rememberSaveable { mutableStateOf(TransactionType.EXPENSE) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<CategorySummary?>(null) }
+    var deletingInProgress by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val deleteFailedMessage = stringResource(R.string.category_delete_failed)
     val starterLanguage = starterCategoryLanguage(
         LocalConfiguration.current.locales[0].language
     )
     val visible = categories.filter { it.type == type && (showArchived || it.archivedAt == null) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.categories)) },
@@ -169,6 +176,8 @@ fun CategoryManagementScreen(
                                         else repository.restoreCategory(parent.id)
                                     }
                                 },
+                                deletable = parent.usageCount == 0,
+                                onDelete = { deleting = parent },
                             )
                         }
                         items(
@@ -187,6 +196,8 @@ fun CategoryManagementScreen(
                                         else repository.restoreCategory(child.id)
                                     }
                                 },
+                                deletable = child.usageCount == 0,
+                                onDelete = { deleting = child },
                             )
                         }
                         if (parent.archivedAt == null) {
@@ -204,6 +215,43 @@ fun CategoryManagementScreen(
             }
         }
     }
+    deleting?.let { category ->
+        AlertDialog(
+            onDismissRequest = { if (!deletingInProgress) deleting = null },
+            title = { Text(stringResource(R.string.delete_category)) },
+            text = {
+                Text(stringResource(R.string.delete_category_message, category.name))
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = {
+                        deletingInProgress = true
+                        scope.launch {
+                            runCatching { repository.deleteCategory(category.id) }
+                                .onSuccess { deleting = null }
+                                .onFailure {
+                                    deleting = null
+                                    snackbarHostState.showSnackbar(deleteFailedMessage)
+                                }
+                            deletingInProgress = false
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = { deleting = null },
+                ) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
@@ -212,6 +260,8 @@ private fun CategoryRow(
     prefix: String,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
+    deletable: Boolean,
+    onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -229,6 +279,15 @@ private fun CategoryRow(
                 stringResource(R.string.archived),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (deletable) {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
+                    contentDescription = stringResource(R.string.delete_category_action),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
         IconButton(onClick = onArchive) {
             Icon(
