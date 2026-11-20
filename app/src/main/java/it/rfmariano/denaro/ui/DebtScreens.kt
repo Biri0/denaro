@@ -944,9 +944,11 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                 }) { Text(stringResource(R.string.add_counterparty)) }
             },
         )
-        else LazyColumn(Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        else LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             items(parties, key = { it.id }) { party ->
                 ListItem(
                     modifier = Modifier.clickable { editing = party },

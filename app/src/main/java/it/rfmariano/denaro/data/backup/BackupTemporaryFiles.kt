@@ -23,7 +23,7 @@ internal object BackupTemporaryFiles {
             val isExport = file.name.startsWith(EXPORT_PREFIX)
             val belongsToCurrentProcess =
                 file.name.startsWith(currentRestorePrefix) ||
-                    file.name.startsWith(currentExportPrefix)
+                        file.name.startsWith(currentExportPrefix)
             if (file.isFile && file.name.endsWith(SUFFIX) &&
                 (isRestore || isExport) && !belongsToCurrentProcess
             ) {

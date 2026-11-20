@@ -294,6 +294,7 @@ internal fun demoFixture(
         DemoLanguage.ITALIAN -> it
         DemoLanguage.SPANISH -> es
     }
+
     fun id(kind: String, suffix: String) = "demo-$kind-$suffix"
 
     val checkingId = id("account", "checking")
