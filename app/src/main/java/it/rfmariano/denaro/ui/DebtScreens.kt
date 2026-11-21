@@ -21,10 +21,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -208,6 +204,7 @@ private fun CounterpartyFilterRow(
                 selectedText = options.find { it.id == selectedId }?.name.orEmpty(),
                 options = options.map { it.id to it.name },
                 onSelected = onSelected,
+                selectedId = selectedId,
             )
         }
         if (selectedId != null) {
@@ -444,8 +441,8 @@ fun DebtEditorScreen(
     var loaded by rememberSaveable(debtId) { mutableStateOf(debtId == null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    var counterpartyMenu by remember { mutableStateOf(false) }
     var showNewCounterparty by remember { mutableStateOf(false) }
+    var newCounterpartyInitialName by remember { mutableStateOf("") }
     var showOpenedPicker by remember { mutableStateOf(false) }
     var showDuePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -585,7 +582,6 @@ fun DebtEditorScreen(
                         selected = direction == option,
                         enabled = !hasRepayments,
                         onClick = {
-                            counterpartyMenu = false
                             direction = option
                             defaultsAppliedDirection = null
                             accountDefaultsAppliedDirection = null
@@ -597,51 +593,40 @@ fun DebtEditorScreen(
                     ) { Text(stringResource(if (option == DebtDirection.BORROWED) R.string.borrowed else R.string.lent)) }
                 }
             }
-            ExposedDropdownMenuBox(
-                expanded = counterpartyMenu,
-                onExpandedChange = {
-                    if (selectorsReady) counterpartyMenu = !counterpartyMenu
-                }) {
-                OutlinedTextField(
-                    value = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = selectorsReady,
-                    label = { Text(stringResource(R.string.counterparty)) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(counterpartyMenu) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(
-                            ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                            selectorsReady,
-                        ),
-                )
-                ExposedDropdownMenu(
-                    expanded = counterpartyMenu,
-                    onDismissRequest = { counterpartyMenu = false }) {
-                    counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
-                        .forEach { party ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        listOfNotNull(
-                                            party.name,
-                                            party.note
-                                        ).joinToString(" · ")
-                                    )
-                                },
-                                onClick = {
-                                    counterpartyId = party.id
-                                    counterpartyCustomized = true
-                                    counterpartyMenu = false
-                                },
-                            )
-                        }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.add_counterparty)) },
-                        onClick = { counterpartyMenu = false; showNewCounterparty = true })
-                }
+            val selectableCounterparties = remember(counterparties, counterpartyId) {
+                counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
             }
+            AdaptiveSelector(
+                label = stringResource(R.string.counterparty),
+                selectedText = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
+                options = selectableCounterparties.map { party ->
+                    SelectorOption(
+                        id = party.id,
+                        value = party.id,
+                        label = party.name,
+                        supportingText = party.note?.takeIf(String::isNotBlank),
+                        selected = party.id == counterpartyId,
+                    )
+                },
+                onSelected = {
+                    counterpartyId = it
+                    counterpartyCustomized = true
+                },
+                enabled = selectorsReady,
+                footerAction = SelectorAction(
+                    label = stringResource(R.string.add_counterparty),
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = { query ->
+                        newCounterpartyInitialName = query
+                        showNewCounterparty = true
+                    },
+                ),
+            )
             AccountSelector(
                 label = stringResource(if (direction == DebtDirection.BORROWED) R.string.received_into else R.string.paid_from),
                 accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
@@ -692,13 +677,19 @@ fun DebtEditorScreen(
         }
     }
     if (showNewCounterparty) CounterpartyDialog(
-        null,
-        onDismiss = { showNewCounterparty = false }) { input ->
+        existing = null,
+        initialName = newCounterpartyInitialName,
+        onDismiss = {
+            showNewCounterparty = false
+            newCounterpartyInitialName = ""
+        },
+    ) { input ->
         scope.launch {
             runCatching { repository.createCounterparty(input) }.onSuccess {
                 counterpartyId = it
                 counterpartyCustomized = true
                 showNewCounterparty = false
+                newCounterpartyInitialName = ""
             }.onFailure { error = it.message }
         }
     }
@@ -919,6 +910,20 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<CounterpartySummary?>(null) }
     var deletingInProgress by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val showSearch = shouldUseSearchableSelector(parties.size)
+    LaunchedEffect(showSearch) {
+        if (!showSearch) searchQuery = ""
+    }
+    val visibleParties = remember(parties, searchQuery, showSearch) {
+        if (!showSearch || searchQuery.isBlank()) {
+            parties
+        } else {
+            parties.filter { party ->
+                matchesSelectorSearch(searchQuery, listOfNotNull(party.name, party.note))
+            }
+        }
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val deleteFailedMessage = stringResource(R.string.counterparty_delete_failed)
@@ -952,12 +957,28 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                 }) { Text(stringResource(R.string.add_counterparty)) }
             },
         )
-        else LazyColumn(
+        else Column(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            items(parties, key = { it.id }) { party ->
+            if (showSearch) {
+                InlineSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            if (visibleParties.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.no_matching_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(visibleParties, key = { it.id }) { party ->
                 ListItem(
                     modifier = Modifier.clickable { editing = party },
                     headlineContent = { Text(party.name) },
@@ -997,12 +1018,16 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                         }
                     },
                 )
+                    }
+                }
             }
         }
     }
     if (adding) CounterpartyDialog(
-        null,
-        { adding = false }) { scope.launch { repository.createCounterparty(it); adding = false } }
+        existing = null,
+        initialName = searchQuery.trim(),
+        onDismiss = { adding = false },
+    ) { scope.launch { repository.createCounterparty(it); adding = false } }
     editing?.let { party ->
         CounterpartyDialog(
             party,
@@ -1058,9 +1083,12 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
 private fun CounterpartyDialog(
     existing: CounterpartySummary?,
     onDismiss: () -> Unit,
-    onSave: (CounterpartyInput) -> Unit
+    initialName: String = "",
+    onSave: (CounterpartyInput) -> Unit,
 ) {
-    var name by remember(existing) { mutableStateOf(existing?.name.orEmpty()) }
+    var name by remember(existing, initialName) {
+        mutableStateOf(existing?.name ?: initialName)
+    }
     var note by remember(existing) { mutableStateOf(existing?.note.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,

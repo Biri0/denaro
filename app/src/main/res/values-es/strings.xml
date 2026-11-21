@@ -234,6 +234,8 @@
     <string name="color">Color</string>
     <string name="choose_icon">Elegir icono</string>
     <string name="search">Buscar</string>
+    <string name="clear_search">Borrar búsqueda</string>
+    <string name="no_matching_results">No se encontraron resultados</string>
     <string name="parent_category">Categoría principal</string>
     <string name="none">Ninguna</string>
     <string name="previous_month">Mes anterior</string>
