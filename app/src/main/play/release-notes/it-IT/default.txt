@@ -1,3 +1,4 @@
-I widget della schermata Home non rimangono più bloccati sul caricamento: puoi tornare ad aggiungere rapidamente entrate, spese, trasferimenti e debiti.
-
-Se un widget continua a caricarsi dopo l'aggiornamento, rimuovilo dalla schermata Home e aggiungilo di nuovo.
+- Nella sezione Debiti ora vedi il saldo netto per valuta quando filtri per una singola controparte.
+- Aggiunta la ricerca nei selettori e negli elenchi di controparti, categorie e conti quando superano i 10 elementi.
+- Ora puoi eliminare definitivamente controparti e categorie inutilizzate.
+- I moduli restano scorrevoli con la tastiera aperta e usano ovunque "Descrizione" in modo coerente.

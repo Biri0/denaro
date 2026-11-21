@@ -1,3 +1,4 @@
-Los widgets de la pantalla de inicio ya no se quedan cargando, para que puedas volver a añadir ingresos, gastos, transferencias y deudas rápidamente.
-
-Si un widget sigue cargando después de actualizar, quítalo de la pantalla de inicio y vuelve a añadirlo.
+- En Deudas ahora ves el saldo neto por moneda al filtrar por una sola persona u organización.
+- Se añadió búsqueda en los selectores y listas de personas y organizaciones, categorías y cuentas al superar los 10 elementos.
+- Ahora puedes eliminar permanentemente categorías y personas u organizaciones sin usar.
+- Los formularios siguen desplazándose con el teclado abierto y usan "Descripción" de forma coherente.
