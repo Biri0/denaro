@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,12 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,6 +37,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -84,13 +85,30 @@ fun CategoryManagementScreen(
         .collectAsStateWithLifecycle(emptyList())
     var type by rememberSaveable { mutableStateOf(TransactionType.EXPENSE) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var deleting by remember { mutableStateOf<CategorySummary?>(null) }
+    var deletingInProgress by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val deleteFailedMessage = stringResource(R.string.category_delete_failed)
     val starterLanguage = starterCategoryLanguage(
         LocalConfiguration.current.locales[0].language
     )
     val visible = categories.filter { it.type == type && (showArchived || it.archivedAt == null) }
+    val showSearch = shouldUseSearchableSelector(visible.size)
+    LaunchedEffect(showSearch, type) {
+        if (!showSearch) searchQuery = ""
+    }
+    val filteredVisible = remember(visible, searchQuery, showSearch) {
+        if (!showSearch || searchQuery.isBlank()) {
+            visible
+        } else {
+            filterCategoriesForSearch(visible, searchQuery)
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.categories)) },
@@ -135,6 +153,13 @@ fun CategoryManagementScreen(
                 Text(stringResource(R.string.show_archived), modifier = Modifier.weight(1f))
                 Switch(checked = showArchived, onCheckedChange = { showArchived = it })
             }
+            if (showSearch) {
+                InlineSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             if (categories.isEmpty()) {
                 EmptyState(
                     icon = LucideR.drawable.lucide_ic_shapes,
@@ -150,9 +175,16 @@ fun CategoryManagementScreen(
                         }
                     },
                 )
+            } else if (filteredVisible.isEmpty() && showSearch && searchQuery.isNotBlank()) {
+                Text(
+                    text = stringResource(R.string.no_matching_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    visible.filter { it.parentId == null }.forEach { parent ->
+                    filteredVisible.filter { it.parentId == null }.forEach { parent ->
                         item(key = parent.id) {
                             CategoryRow(
                                 category = parent,
@@ -166,10 +198,12 @@ fun CategoryManagementScreen(
                                         else repository.restoreCategory(parent.id)
                                     }
                                 },
+                                deletable = parent.usageCount == 0,
+                                onDelete = { deleting = parent },
                             )
                         }
                         items(
-                            visible.filter { it.parentId == parent.id },
+                            filteredVisible.filter { it.parentId == parent.id },
                             key = CategorySummary::id
                         ) { child ->
                             CategoryRow(
@@ -184,6 +218,8 @@ fun CategoryManagementScreen(
                                         else repository.restoreCategory(child.id)
                                     }
                                 },
+                                deletable = child.usageCount == 0,
+                                onDelete = { deleting = child },
                             )
                         }
                         if (parent.archivedAt == null) {
@@ -201,6 +237,43 @@ fun CategoryManagementScreen(
             }
         }
     }
+    deleting?.let { category ->
+        AlertDialog(
+            onDismissRequest = { if (!deletingInProgress) deleting = null },
+            title = { Text(stringResource(R.string.delete_category)) },
+            text = {
+                Text(stringResource(R.string.delete_category_message, category.name))
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = {
+                        deletingInProgress = true
+                        scope.launch {
+                            runCatching { repository.deleteCategory(category.id) }
+                                .onSuccess { deleting = null }
+                                .onFailure {
+                                    deleting = null
+                                    snackbarHostState.showSnackbar(deleteFailedMessage)
+                                }
+                            deletingInProgress = false
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = { deleting = null },
+                ) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
@@ -209,6 +282,8 @@ private fun CategoryRow(
     prefix: String,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
+    deletable: Boolean,
+    onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -226,6 +301,15 @@ private fun CategoryRow(
                 stringResource(R.string.archived),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (deletable) {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
+                    contentDescription = stringResource(R.string.delete_category_action),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
         IconButton(onClick = onArchive) {
             Icon(
@@ -401,6 +485,9 @@ fun CategoryEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -706,51 +793,66 @@ private fun ParentCategorySelector(
     onSelected: (String?) -> Unit,
     onCreateOrEditParent: (() -> Unit)?,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val selected = categories.find { it.id == selectedId }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-        OutlinedTextField(
-            value = newParentName ?: selected?.name.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(R.string.parent_category)) },
-            placeholder = { Text(stringResource(R.string.none)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.none)) },
-                onClick = { onSelected(null); expanded = false })
-            categories.forEach { category ->
-                DropdownMenuItem(
-                    text = { Text(category.name) },
-                    onClick = { onSelected(category.id); expanded = false })
+    AdaptiveSelector(
+        label = stringResource(R.string.parent_category),
+        placeholder = stringResource(R.string.none),
+        selectedText = newParentName ?: selected?.name.orEmpty(),
+        options = categories.map { category ->
+            SelectorOption<String?>(
+                id = category.id,
+                value = category.id,
+                label = category.name,
+                selected = newParentName == null && category.id == selectedId,
+                leadingContent = { CategoryIcon(category.iconName, category.colorIndex) },
+            )
+        },
+        onSelected = onSelected,
+        clearOption = SelectorOption(
+            id = "__none__",
+            value = null,
+            label = stringResource(R.string.none),
+            selected = newParentName == null && selectedId == null,
+        ),
+        footerAction = onCreateOrEditParent?.let { createOrEdit ->
+            SelectorAction(
+                label = stringResource(
+                    if (newParentName == null) R.string.create_parent_category
+                    else R.string.edit_new_parent,
+                ),
+                leadingIcon = {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_plus),
+                        contentDescription = null,
+                    )
+                },
+                onClick = { createOrEdit() },
+            )
+        },
+    )
+}
+
+internal fun filterCategoriesForSearch(
+    categories: List<CategorySummary>,
+    query: String,
+): List<CategorySummary> {
+    if (query.isBlank()) return categories
+    val parents = categories.filter { it.parentId == null }
+    val childrenByParent = categories.filter { it.parentId != null }.groupBy { it.parentId }
+    return buildList {
+        parents.forEach { parent ->
+            val children = childrenByParent[parent.id].orEmpty()
+            val parentMatches = matchesSelectorSearch(query, listOf(parent.name))
+            val matchingChildren = if (parentMatches) {
+                children
+            } else {
+                children.filter { child ->
+                    matchesSelectorSearch(query, listOf(child.name, parent.name))
+                }
             }
-            if (onCreateOrEditParent != null) {
-                HorizontalDivider()
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_plus),
-                            contentDescription = null,
-                        )
-                    },
-                    text = {
-                        Text(
-                            stringResource(
-                                if (newParentName == null) R.string.create_parent_category
-                                else R.string.edit_new_parent,
-                            ),
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onCreateOrEditParent()
-                    },
-                )
+            if (parentMatches || matchingChildren.isNotEmpty()) {
+                add(parent)
+                addAll(matchingChildren)
             }
         }
     }

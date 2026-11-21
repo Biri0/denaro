@@ -74,6 +74,7 @@ data class CounterpartySummary(
     val name: String,
     val note: String?,
     val archivedAt: Long?,
+    val debtCount: Int = 0,
 )
 
 data class CounterpartyInput(val name: String, val note: String?)
@@ -151,6 +152,7 @@ data class CategorySummary(
     val iconName: String,
     val colorIndex: Int,
     val archivedAt: Long?,
+    val usageCount: Int = 0,
 )
 
 data class CategoryInput(

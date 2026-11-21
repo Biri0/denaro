@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -200,8 +201,9 @@ fun AccountEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .consumeWindowInsets(padding)
                 .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -560,8 +562,9 @@ fun ActivityEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .consumeWindowInsets(padding)
                 .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -958,11 +961,19 @@ fun AccountSelector(
     onSelected: (String) -> Unit,
     enabled: Boolean = true,
 ) {
-    LabeledDropdownSelector(
+    AdaptiveSelector(
         label = label,
         placeholder = stringResource(R.string.select_account),
         selectedText = accounts.find { it.id == selectedId }?.name.orEmpty(),
-        options = accounts.map { it.id to "${it.name} · ${it.currency}" },
+        options = accounts.map { account ->
+            SelectorOption(
+                id = account.id,
+                value = account.id,
+                label = account.name,
+                supportingText = account.currency,
+                selected = account.id == selectedId,
+            )
+        },
         onSelected = onSelected,
         enabled = enabled,
     )
@@ -976,45 +987,23 @@ fun LabeledDropdownSelector(
     options: List<Pair<String, String>>,
     onSelected: (String) -> Unit,
     enabled: Boolean = true,
+    selectedId: String? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    LaunchedEffect(enabled) {
-        if (!enabled) expanded = false
-    }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = !expanded },
-    ) {
-        OutlinedTextField(
-            value = selectedText,
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text(label) },
-            placeholder = { Text(placeholder) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(
-                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = enabled,
-                ),
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { (id, text) ->
-                DropdownMenuItem(
-                    text = { Text(text) },
-                    onClick = {
-                        onSelected(id)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    AdaptiveSelector(
+        label = label,
+        placeholder = placeholder,
+        selectedText = selectedText,
+        options = options.map { (id, text) ->
+            SelectorOption(
+                id = id,
+                value = id,
+                label = text,
+                selected = id == selectedId,
+            )
+        },
+        onSelected = onSelected,
+        enabled = enabled,
+    )
 }
 
 @Composable
@@ -1024,83 +1013,68 @@ fun CategorySelector(
     onSelected: (String?) -> Unit,
     onAddCategory: (() -> Unit)? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val selected = categories.find { it.id == selectedId }
     val categoriesById = categories.associateBy(CategorySummary::id)
     val activeCategories = categories.filter { it.archivedAt == null }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-    ) {
-        OutlinedTextField(
-            value = selected?.let { category ->
-                val label = category.parentId?.let { parentId ->
-                    "${categoriesById[parentId]?.name.orEmpty()} · ${category.name}"
-                } ?: category.name
-                if (category.archivedAt == null) label
-                else "$label (${stringResource(R.string.archived)})"
-            }.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(R.string.category)) },
-            placeholder = { Text(stringResource(R.string.no_category)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(
-                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = true,
+    val selectedLabel = selected?.let { category ->
+        val label = category.parentId?.let { parentId ->
+            "${categoriesById[parentId]?.name.orEmpty()} · ${category.name}"
+        } ?: category.name
+        if (category.archivedAt == null) label
+        else "$label (${stringResource(R.string.archived)})"
+    }.orEmpty()
+    val options = buildList {
+        activeCategories.filter { it.parentId == null }.forEach { parent ->
+            add(
+                SelectorOption<String?>(
+                    id = parent.id,
+                    value = parent.id,
+                    label = parent.name,
+                    selected = parent.id == selectedId,
+                    leadingContent = { CategoryIcon(parent.iconName, parent.colorIndex) },
                 ),
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.no_category)) },
-                onClick = {
-                    onSelected(null)
-                    expanded = false
-                },
             )
-            activeCategories.filter { it.parentId == null }.forEach { parent ->
-                DropdownMenuItem(
-                    leadingIcon = { CategoryIcon(parent.iconName, parent.colorIndex) },
-                    text = { Text(parent.name) },
-                    onClick = {
-                        onSelected(parent.id)
-                        expanded = false
-                    },
-                )
-                activeCategories.filter { it.parentId == parent.id }.forEach { child ->
-                    DropdownMenuItem(
-                        leadingIcon = { CategoryIcon(child.iconName, child.colorIndex) },
-                        text = { Text("  ${child.name}") },
-                        onClick = {
-                            onSelected(child.id)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-            if (onAddCategory != null) {
-                HorizontalDivider()
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_plus),
-                            contentDescription = null,
-                        )
-                    },
-                    text = { Text(stringResource(R.string.add_category)) },
-                    onClick = {
-                        expanded = false
-                        onAddCategory()
-                    },
+            activeCategories.filter { it.parentId == parent.id }.forEach { child ->
+                add(
+                    SelectorOption<String?>(
+                        id = child.id,
+                        value = child.id,
+                        label = child.name,
+                        supportingTextWhenFiltered = parent.name,
+                        searchTerms = listOf(child.name, parent.name),
+                        selected = child.id == selectedId,
+                        indented = true,
+                        leadingContent = { CategoryIcon(child.iconName, child.colorIndex) },
+                    ),
                 )
             }
         }
     }
+    AdaptiveSelector(
+        label = stringResource(R.string.category),
+        placeholder = stringResource(R.string.no_category),
+        selectedText = selectedLabel,
+        options = options,
+        onSelected = onSelected,
+        clearOption = SelectorOption(
+            id = "__no_category__",
+            value = null,
+            label = stringResource(R.string.no_category),
+            selected = selectedId == null,
+        ),
+        footerAction = onAddCategory?.let { addCategory ->
+            SelectorAction(
+                label = stringResource(R.string.add_category),
+                leadingIcon = {
+                    Icon(
+                        painterResource(LucideR.drawable.lucide_ic_plus),
+                        contentDescription = null,
+                    )
+                },
+                onClick = { addCategory() },
+            )
+        },
+    )
 }
 
 private fun Long.toUtcDateMillis(): Long {

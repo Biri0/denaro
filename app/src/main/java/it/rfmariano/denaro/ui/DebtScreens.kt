@@ -3,12 +3,15 @@
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,10 +22,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +34,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,12 +66,15 @@ import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.DebtDirection
+import it.rfmariano.denaro.ui.theme.Positive
+import it.rfmariano.denaro.ui.theme.PositiveDark
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlin.math.abs
 import com.composables.icons.lucide.R as LucideR
 
 @Composable
@@ -94,34 +98,42 @@ fun DebtsPanel(
         filterDebts(debts, direction, status, today, selectedCounterpartyId)
     }
     Column(Modifier.fillMaxSize()) {
-        val openDebts = debts
-            .filterNot(DebtSummary::isSettled)
-            .filter { selectedCounterpartyId == null || it.counterpartyId == selectedCounterpartyId }
-        openDebts.groupBy { it.currency }.toSortedMap().forEach { (currency, group) ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                DebtTotal(
-                    R.string.you_owe,
-                    group.filter { it.direction == DebtDirection.BORROWED }
-                        .sumOf { it.outstandingMinor },
-                    currency,
-                    group.first().fractionDigits,
-                    amountsVisible,
-                    Modifier.weight(1f),
+        val currencyTotals = remember(debts, selectedCounterpartyId) {
+            debtCurrencyTotals(debts, selectedCounterpartyId)
+        }
+        currencyTotals.forEach { totals ->
+            if (selectedCounterpartyId != null) {
+                CounterpartyNetTotal(
+                    totals = totals,
+                    amountsVisible = amountsVisible,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 )
-                DebtTotal(
-                    R.string.owed_to_you,
-                    group.filter { it.direction == DebtDirection.LENT }
-                        .sumOf { it.outstandingMinor },
-                    currency,
-                    group.first().fractionDigits,
-                    amountsVisible,
-                    Modifier.weight(1f),
-                )
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DebtTotal(
+                        R.string.you_owe,
+                        totals.youOweMinor,
+                        totals.currency,
+                        totals.fractionDigits,
+                        amountsVisible,
+                        Modifier.weight(1f),
+                    )
+                    DebtTotal(
+                        R.string.owed_to_you,
+                        totals.owedToYouMinor,
+                        totals.currency,
+                        totals.fractionDigits,
+                        amountsVisible,
+                        Modifier.weight(1f),
+                    )
+                }
             }
         }
         Row(
@@ -204,6 +216,7 @@ private fun CounterpartyFilterRow(
                 selectedText = options.find { it.id == selectedId }?.name.orEmpty(),
                 options = options.map { it.id to it.name },
                 onSelected = onSelected,
+                selectedId = selectedId,
             )
         }
         if (selectedId != null) {
@@ -233,6 +246,51 @@ private fun DebtTotal(
             ) else stringResource(R.string.amount_hidden),
             style = MaterialTheme.typography.titleLarge,
         )
+    }
+}
+
+@Composable
+private fun CounterpartyNetTotal(
+    totals: DebtCurrencyTotals,
+    amountsVisible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val labelRes = when {
+        totals.netMinor > 0L && totals.hasBothDirections -> R.string.owed_to_you_net
+        totals.netMinor > 0L -> R.string.owed_to_you
+        totals.netMinor < 0L && totals.hasBothDirections -> R.string.you_owe_net
+        totals.netMinor < 0L -> R.string.you_owe
+        else -> R.string.net_even
+    }
+    val amountColor = when {
+        totals.netMinor > 0L -> if (isSystemInDarkTheme()) PositiveDark else Positive
+        totals.netMinor < 0L -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val hidden = stringResource(R.string.amount_hidden)
+    fun formatted(minor: Long): String = if (amountsVisible) {
+        Money.format(minor, totals.currency, totals.fractionDigits)
+    } else {
+        hidden
+    }
+    Column(modifier.padding(12.dp)) {
+        Text(stringResource(labelRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = formatted(abs(totals.netMinor)),
+            style = MaterialTheme.typography.titleLarge,
+            color = amountColor,
+        )
+        if (totals.hasBothDirections) {
+            Text(
+                text = "${stringResource(R.string.owed_to_you)} ${formatted(totals.owedToYouMinor)} · ${
+                    stringResource(
+                        R.string.you_owe
+                    )
+                } ${formatted(totals.youOweMinor)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -440,8 +498,8 @@ fun DebtEditorScreen(
     var loaded by rememberSaveable(debtId) { mutableStateOf(debtId == null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    var counterpartyMenu by remember { mutableStateOf(false) }
     var showNewCounterparty by remember { mutableStateOf(false) }
+    var newCounterpartyInitialName by remember { mutableStateOf("") }
     var showOpenedPicker by remember { mutableStateOf(false) }
     var showDuePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -569,6 +627,8 @@ fun DebtEditorScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -579,7 +639,6 @@ fun DebtEditorScreen(
                         selected = direction == option,
                         enabled = !hasRepayments,
                         onClick = {
-                            counterpartyMenu = false
                             direction = option
                             defaultsAppliedDirection = null
                             accountDefaultsAppliedDirection = null
@@ -591,51 +650,40 @@ fun DebtEditorScreen(
                     ) { Text(stringResource(if (option == DebtDirection.BORROWED) R.string.borrowed else R.string.lent)) }
                 }
             }
-            ExposedDropdownMenuBox(
-                expanded = counterpartyMenu,
-                onExpandedChange = {
-                    if (selectorsReady) counterpartyMenu = !counterpartyMenu
-                }) {
-                OutlinedTextField(
-                    value = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = selectorsReady,
-                    label = { Text(stringResource(R.string.counterparty)) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(counterpartyMenu) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(
-                            ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                            selectorsReady,
-                        ),
-                )
-                ExposedDropdownMenu(
-                    expanded = counterpartyMenu,
-                    onDismissRequest = { counterpartyMenu = false }) {
-                    counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
-                        .forEach { party ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        listOfNotNull(
-                                            party.name,
-                                            party.note
-                                        ).joinToString(" · ")
-                                    )
-                                },
-                                onClick = {
-                                    counterpartyId = party.id
-                                    counterpartyCustomized = true
-                                    counterpartyMenu = false
-                                },
-                            )
-                        }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.add_counterparty)) },
-                        onClick = { counterpartyMenu = false; showNewCounterparty = true })
-                }
+            val selectableCounterparties = remember(counterparties, counterpartyId) {
+                counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
             }
+            AdaptiveSelector(
+                label = stringResource(R.string.counterparty),
+                selectedText = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
+                options = selectableCounterparties.map { party ->
+                    SelectorOption(
+                        id = party.id,
+                        value = party.id,
+                        label = party.name,
+                        supportingText = party.note?.takeIf(String::isNotBlank),
+                        selected = party.id == counterpartyId,
+                    )
+                },
+                onSelected = {
+                    counterpartyId = it
+                    counterpartyCustomized = true
+                },
+                enabled = selectorsReady,
+                footerAction = SelectorAction(
+                    label = stringResource(R.string.add_counterparty),
+                    leadingIcon = {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = { query ->
+                        newCounterpartyInitialName = query
+                        showNewCounterparty = true
+                    },
+                ),
+            )
             AccountSelector(
                 label = stringResource(if (direction == DebtDirection.BORROWED) R.string.received_into else R.string.paid_from),
                 accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
@@ -675,7 +723,8 @@ fun DebtEditorScreen(
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text(stringResource(R.string.counterparty_note)) },
+                label = { Text(stringResource(R.string.description)) },
+                supportingText = { Text(stringResource(R.string.optional)) },
                 modifier = Modifier.fillMaxWidth()
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -686,13 +735,19 @@ fun DebtEditorScreen(
         }
     }
     if (showNewCounterparty) CounterpartyDialog(
-        null,
-        onDismiss = { showNewCounterparty = false }) { input ->
+        existing = null,
+        initialName = newCounterpartyInitialName,
+        onDismiss = {
+            showNewCounterparty = false
+            newCounterpartyInitialName = ""
+        },
+    ) { input ->
         scope.launch {
             runCatching { repository.createCounterparty(input) }.onSuccess {
                 counterpartyId = it
                 counterpartyCustomized = true
                 showNewCounterparty = false
+                newCounterpartyInitialName = ""
             }.onFailure { error = it.message }
         }
     }
@@ -832,6 +887,9 @@ fun DebtRepaymentEditorScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -868,7 +926,8 @@ fun DebtRepaymentEditorScreen(
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text(stringResource(R.string.counterparty_note)) },
+                label = { Text(stringResource(R.string.description)) },
+                supportingText = { Text(stringResource(R.string.optional)) },
                 modifier = Modifier.fillMaxWidth()
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -908,22 +967,42 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
     )
     var editing by remember { mutableStateOf<CounterpartySummary?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<CounterpartySummary?>(null) }
+    var deletingInProgress by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val showSearch = shouldUseSearchableSelector(parties.size)
+    LaunchedEffect(showSearch) {
+        if (!showSearch) searchQuery = ""
+    }
+    val visibleParties = remember(parties, searchQuery, showSearch) {
+        if (!showSearch || searchQuery.isBlank()) {
+            parties
+        } else {
+            parties.filter { party ->
+                matchesSelectorSearch(searchQuery, listOfNotNull(party.name, party.note))
+            }
+        }
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(stringResource(R.string.counterparties)) },
-            navigationIcon = { BackButton(onBack) },
-            actions = {
-                IconButton(onClick = {
-                    adding = true
-                }) {
-                    Icon(
-                        painterResource(LucideR.drawable.lucide_ic_plus),
-                        contentDescription = stringResource(R.string.add_counterparty)
-                    )
-                }
-            })
-    }) { padding ->
+    val deleteFailedMessage = stringResource(R.string.counterparty_delete_failed)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.counterparties)) },
+                navigationIcon = { BackButton(onBack) },
+                actions = {
+                    IconButton(onClick = {
+                        adding = true
+                    }) {
+                        Icon(
+                            painterResource(LucideR.drawable.lucide_ic_plus),
+                            contentDescription = stringResource(R.string.add_counterparty)
+                        )
+                    }
+                })
+        }) { padding ->
         if (parties.isEmpty()) EmptyState(
             icon = LucideR.drawable.lucide_ic_users,
             title = stringResource(R.string.no_counterparties),
@@ -937,31 +1016,77 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
                 }) { Text(stringResource(R.string.add_counterparty)) }
             },
         )
-        else LazyColumn(Modifier
-            .fillMaxSize()
-            .padding(padding)) {
-            items(parties, key = { it.id }) { party ->
+        else Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            if (showSearch) {
+                InlineSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            if (visibleParties.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.no_matching_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(visibleParties, key = { it.id }) { party ->
                 ListItem(
                     modifier = Modifier.clickable { editing = party },
                     headlineContent = { Text(party.name) },
                     supportingContent = { Text(party.note.orEmpty()) },
                     trailingContent = {
-                        TextButton(onClick = {
-                            scope.launch {
-                                repository.setCounterpartyArchived(
-                                    party.id,
-                                    party.archivedAt == null
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (party.debtCount == 0) {
+                                IconButton(onClick = { deleting = party }) {
+                                    Icon(
+                                        painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
+                                        contentDescription = stringResource(R.string.delete_counterparty_action),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                            IconButton(onClick = {
+                                scope.launch {
+                                    repository.setCounterpartyArchived(
+                                        party.id,
+                                        party.archivedAt == null
+                                    )
+                                }
+                            }) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (party.archivedAt == null) {
+                                            LucideR.drawable.lucide_ic_archive
+                                        } else {
+                                            LucideR.drawable.lucide_ic_archive_restore
+                                        },
+                                    ),
+                                    contentDescription = stringResource(
+                                        if (party.archivedAt == null) R.string.archive else R.string.restore,
+                                    ),
                                 )
                             }
-                        }) { Text(stringResource(if (party.archivedAt == null) R.string.archive else R.string.restore)) }
+                        }
                     },
                 )
+                    }
+                }
             }
         }
     }
     if (adding) CounterpartyDialog(
-        null,
-        { adding = false }) { scope.launch { repository.createCounterparty(it); adding = false } }
+        existing = null,
+        initialName = searchQuery.trim(),
+        onDismiss = { adding = false },
+    ) { scope.launch { repository.createCounterparty(it); adding = false } }
     editing?.let { party ->
         CounterpartyDialog(
             party,
@@ -974,15 +1099,55 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
             }
         }
     }
+    deleting?.let { party ->
+        AlertDialog(
+            onDismissRequest = { if (!deletingInProgress) deleting = null },
+            title = { Text(stringResource(R.string.delete_counterparty)) },
+            text = {
+                Text(stringResource(R.string.delete_counterparty_message, party.name))
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = {
+                        deletingInProgress = true
+                        scope.launch {
+                            runCatching { repository.deleteCounterparty(party.id) }
+                                .onSuccess { deleting = null }
+                                .onFailure {
+                                    deleting = null
+                                    snackbarHostState.showSnackbar(deleteFailedMessage)
+                                }
+                            deletingInProgress = false
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletingInProgress,
+                    onClick = { deleting = null },
+                ) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
 private fun CounterpartyDialog(
     existing: CounterpartySummary?,
     onDismiss: () -> Unit,
-    onSave: (CounterpartyInput) -> Unit
+    initialName: String = "",
+    onSave: (CounterpartyInput) -> Unit,
 ) {
-    var name by remember(existing) { mutableStateOf(existing?.name.orEmpty()) }
+    var name by remember(existing, initialName) {
+        mutableStateOf(existing?.name ?: initialName)
+    }
     var note by remember(existing) { mutableStateOf(existing?.note.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -994,9 +1159,11 @@ private fun CounterpartyDialog(
                     { name = it },
                     label = { Text(stringResource(R.string.name)) })
                 OutlinedTextField(
-                    note,
-                    { note = it },
-                    label = { Text(stringResource(R.string.counterparty_note)) })
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text(stringResource(R.string.description)) },
+                    supportingText = { Text(stringResource(R.string.optional)) },
+                )
             }
         },
         confirmButton = {

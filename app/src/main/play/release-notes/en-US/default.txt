@@ -1,3 +1,4 @@
-Home screen widgets no longer get stuck loading, so you can quickly add income, expenses, transfers, and debts again.
-
-If a widget is still loading after the update, remove it from your home screen and add it again.
+- Debts now show your net balance per currency when filtered by a single person or organization.
+- Added search to counterparty, category, and account pickers (and management lists) once you have more than 10 items.
+- Unused counterparties and categories can now be permanently deleted.
+- Editor forms stay scrollable when the keyboard is open, and debts, repayments, and counterparties now use "Description" consistently.

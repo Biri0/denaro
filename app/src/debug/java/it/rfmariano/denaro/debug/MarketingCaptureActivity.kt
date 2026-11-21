@@ -166,7 +166,7 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
 
         CaptureScenario.ACTIVITY,
         CaptureScenario.DEBTS,
-        -> CaptureScaffold(CaptureDestination.ACTIVITY) {
+            -> CaptureScaffold(CaptureDestination.ACTIVITY) {
             val activity: ActivityViewModel = viewModel(
                 key = "capture-activity-${session.id}",
                 factory = viewModelFactory { ActivityViewModel(repository) },

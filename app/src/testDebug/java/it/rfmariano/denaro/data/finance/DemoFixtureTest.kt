@@ -28,8 +28,8 @@ class DemoFixtureTest {
         return transactions
             .filter { transaction ->
                 transaction.type == TransactionType.EXPENSE &&
-                    transaction.categoryId != null &&
-                    YearMonth.from(LocalDate.parse(transaction.localDate)) == month
+                        transaction.categoryId != null &&
+                        YearMonth.from(LocalDate.parse(transaction.localDate)) == month
             }
             .groupBy { transaction -> rollup(requireNotNull(transaction.categoryId)) }
             .mapValues { (_, entries) -> entries.sumOf { it.amountMinor } }

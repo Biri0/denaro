@@ -3,6 +3,7 @@ package it.rfmariano.denaro.data.local
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Delete
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -87,6 +88,20 @@ interface CategoryDao {
     )
     fun observeAll(): Flow<List<CategoryEntity>>
 
+    @Query(
+        """
+        SELECT c.*,
+            (SELECT COUNT(*) FROM transactions t WHERE t.category_id = c.id) +
+            (SELECT COUNT(*) FROM recurring_rules r WHERE r.category_id = c.id) +
+            (SELECT COUNT(*) FROM budgets b WHERE b.category_id = c.id) +
+            (SELECT COUNT(*) FROM categories child WHERE child.parent_id = c.id)
+            AS usageCount
+        FROM categories c
+        ORDER BY c.type, c.parent_id IS NOT NULL, c.name COLLATE NOCASE, c.created_at, c.id
+        """,
+    )
+    fun observeAllWithUsage(): Flow<List<CategoryWithUsage>>
+
     @Query("SELECT * FROM categories ORDER BY type, name COLLATE NOCASE")
     suspend fun getAll(): List<CategoryEntity>
 
@@ -141,7 +156,18 @@ interface CategoryDao {
 
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM categories WHERE parent_id = :id")
+    suspend fun childCount(id: String): Int
+
+    @Query("DELETE FROM categories WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
+
+data class CategoryWithUsage(
+    @Embedded val category: CategoryEntity,
+    val usageCount: Int,
+)
 
 @Dao
 interface TransactionDao {
@@ -189,6 +215,9 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE category_id = :categoryId")
+    suspend fun countForCategory(categoryId: String): Int
 
 }
 
@@ -269,6 +298,9 @@ interface RecurringRuleDao {
     @Query("SELECT COUNT(*) FROM recurring_rules")
     suspend fun count(): Int
 
+    @Query("SELECT COUNT(*) FROM recurring_rules WHERE category_id = :categoryId")
+    suspend fun countForCategory(categoryId: String): Int
+
 }
 
 @Dao
@@ -321,8 +353,16 @@ interface CounterpartyDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(counterparty: CounterpartyEntity)
 
-    @Query("SELECT * FROM counterparties ORDER BY archived_at IS NOT NULL, name COLLATE NOCASE, created_at")
-    fun observeAll(): Flow<List<CounterpartyEntity>>
+    @Query(
+        """
+        SELECT c.*, COUNT(d.id) AS debtCount
+        FROM counterparties c
+        LEFT JOIN debts d ON d.counterparty_id = c.id
+        GROUP BY c.id
+        ORDER BY c.archived_at IS NOT NULL, c.name COLLATE NOCASE, c.created_at
+        """,
+    )
+    fun observeAllWithUsage(): Flow<List<CounterpartyWithUsage>>
 
     @Query("SELECT * FROM counterparties WHERE id = :id")
     suspend fun getById(id: String): CounterpartyEntity?
@@ -335,7 +375,18 @@ interface CounterpartyDao {
 
     @Query("UPDATE counterparties SET archived_at = :archivedAt, updated_at = :updatedAt WHERE id = :id")
     suspend fun setArchived(id: String, archivedAt: Long?, updatedAt: Long)
+
+    @Query("SELECT COUNT(*) FROM debts WHERE counterparty_id = :id")
+    suspend fun debtCount(id: String): Int
+
+    @Query("DELETE FROM counterparties WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
+
+data class CounterpartyWithUsage(
+    @Embedded val counterparty: CounterpartyEntity,
+    val debtCount: Int,
+)
 
 data class DebtRecord(
     val id: String,
@@ -755,6 +806,9 @@ interface BudgetDao {
 
     @Query("SELECT COUNT(*) FROM budgets")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM budgets WHERE category_id = :categoryId")
+    suspend fun countForCategory(categoryId: String): Int
 
     @Query(
         """

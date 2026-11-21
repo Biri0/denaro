@@ -99,7 +99,10 @@ object Money {
         val minor = runCatching {
             parseMinorUnits(text, fromFractionDigits, allowNegative = true)
         }.getOrNull() ?: return text
-        return toInputAmount(convertMinorUnits(minor, fromFractionDigits, toFractionDigits), toFractionDigits)
+        return toInputAmount(
+            convertMinorUnits(minor, fromFractionDigits, toFractionDigits),
+            toFractionDigits
+        )
     }
 
     fun isValidFractionDigits(fractionDigits: Int): Boolean =
