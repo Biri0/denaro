@@ -8,6 +8,38 @@ internal enum class DebtStatusFilter { OPEN, SETTLED }
 
 internal data class CounterpartyFilterOption(val id: String, val name: String)
 
+internal data class DebtCurrencyTotals(
+    val currency: String,
+    val fractionDigits: Int,
+    val youOweMinor: Long,
+    val owedToYouMinor: Long,
+) {
+    val netMinor: Long get() = owedToYouMinor - youOweMinor
+    val hasBothDirections: Boolean get() = youOweMinor > 0L && owedToYouMinor > 0L
+}
+
+internal fun debtCurrencyTotals(
+    debts: List<DebtSummary>,
+    counterpartyId: String? = null,
+): List<DebtCurrencyTotals> =
+    debts.asSequence()
+        .filterNot(DebtSummary::isSettled)
+        .filter { counterpartyId == null || it.counterpartyId == counterpartyId }
+        .groupBy(DebtSummary::currency)
+        .toSortedMap()
+        .map { (currency, group) ->
+            DebtCurrencyTotals(
+                currency = currency,
+                fractionDigits = group.first().fractionDigits,
+                youOweMinor = group
+                    .filter { it.direction == DebtDirection.BORROWED }
+                    .sumOf(DebtSummary::outstandingMinor),
+                owedToYouMinor = group
+                    .filter { it.direction == DebtDirection.LENT }
+                    .sumOf(DebtSummary::outstandingMinor),
+            )
+        }
+
 internal fun DebtSummary.isOverdue(today: LocalDate): Boolean =
     !isSettled && dueDate?.let { LocalDate.parse(it) < today } == true
 

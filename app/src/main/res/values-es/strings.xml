@@ -91,6 +91,9 @@
     <string name="delete_repayment">¿Eliminar pago?</string>
     <string name="you_owe">Debes</string>
     <string name="owed_to_you">Te deben</string>
+    <string name="you_owe_net">Debes (neto)</string>
+    <string name="owed_to_you_net">Te deben (neto)</string>
+    <string name="net_even">En paz (neto)</string>
     <string name="open">Abiertas</string>
     <string name="settled">Saldadas</string>
     <string name="overpaid_by">Pagado de más: %1$s</string>

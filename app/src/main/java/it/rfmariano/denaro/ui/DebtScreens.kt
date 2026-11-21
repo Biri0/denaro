@@ -3,6 +3,7 @@
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,12 +66,15 @@ import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.DebtDirection
+import it.rfmariano.denaro.ui.theme.Positive
+import it.rfmariano.denaro.ui.theme.PositiveDark
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlin.math.abs
 import com.composables.icons.lucide.R as LucideR
 
 @Composable
@@ -94,34 +98,42 @@ fun DebtsPanel(
         filterDebts(debts, direction, status, today, selectedCounterpartyId)
     }
     Column(Modifier.fillMaxSize()) {
-        val openDebts = debts
-            .filterNot(DebtSummary::isSettled)
-            .filter { selectedCounterpartyId == null || it.counterpartyId == selectedCounterpartyId }
-        openDebts.groupBy { it.currency }.toSortedMap().forEach { (currency, group) ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                DebtTotal(
-                    R.string.you_owe,
-                    group.filter { it.direction == DebtDirection.BORROWED }
-                        .sumOf { it.outstandingMinor },
-                    currency,
-                    group.first().fractionDigits,
-                    amountsVisible,
-                    Modifier.weight(1f),
+        val currencyTotals = remember(debts, selectedCounterpartyId) {
+            debtCurrencyTotals(debts, selectedCounterpartyId)
+        }
+        currencyTotals.forEach { totals ->
+            if (selectedCounterpartyId != null) {
+                CounterpartyNetTotal(
+                    totals = totals,
+                    amountsVisible = amountsVisible,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 )
-                DebtTotal(
-                    R.string.owed_to_you,
-                    group.filter { it.direction == DebtDirection.LENT }
-                        .sumOf { it.outstandingMinor },
-                    currency,
-                    group.first().fractionDigits,
-                    amountsVisible,
-                    Modifier.weight(1f),
-                )
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DebtTotal(
+                        R.string.you_owe,
+                        totals.youOweMinor,
+                        totals.currency,
+                        totals.fractionDigits,
+                        amountsVisible,
+                        Modifier.weight(1f),
+                    )
+                    DebtTotal(
+                        R.string.owed_to_you,
+                        totals.owedToYouMinor,
+                        totals.currency,
+                        totals.fractionDigits,
+                        amountsVisible,
+                        Modifier.weight(1f),
+                    )
+                }
             }
         }
         Row(
@@ -234,6 +246,51 @@ private fun DebtTotal(
             ) else stringResource(R.string.amount_hidden),
             style = MaterialTheme.typography.titleLarge,
         )
+    }
+}
+
+@Composable
+private fun CounterpartyNetTotal(
+    totals: DebtCurrencyTotals,
+    amountsVisible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val labelRes = when {
+        totals.netMinor > 0L && totals.hasBothDirections -> R.string.owed_to_you_net
+        totals.netMinor > 0L -> R.string.owed_to_you
+        totals.netMinor < 0L && totals.hasBothDirections -> R.string.you_owe_net
+        totals.netMinor < 0L -> R.string.you_owe
+        else -> R.string.net_even
+    }
+    val amountColor = when {
+        totals.netMinor > 0L -> if (isSystemInDarkTheme()) PositiveDark else Positive
+        totals.netMinor < 0L -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val hidden = stringResource(R.string.amount_hidden)
+    fun formatted(minor: Long): String = if (amountsVisible) {
+        Money.format(minor, totals.currency, totals.fractionDigits)
+    } else {
+        hidden
+    }
+    Column(modifier.padding(12.dp)) {
+        Text(stringResource(labelRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = formatted(abs(totals.netMinor)),
+            style = MaterialTheme.typography.titleLarge,
+            color = amountColor,
+        )
+        if (totals.hasBothDirections) {
+            Text(
+                text = "${stringResource(R.string.owed_to_you)} ${formatted(totals.owedToYouMinor)} · ${
+                    stringResource(
+                        R.string.you_owe
+                    )
+                } ${formatted(totals.youOweMinor)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

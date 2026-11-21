@@ -103,6 +103,45 @@ class DebtFilteringTest {
         )
     }
 
+    @Test
+    fun computesPerCurrencyNetTotalsForCounterpartyExcludingSettledDebts() {
+        val debts = listOf(
+            debt("a1", "alice", "Alice", DebtDirection.LENT, 120_00L, currency = "EUR"),
+            debt("a2", "alice", "Alice", DebtDirection.BORROWED, 40_00L, currency = "EUR"),
+            debt(
+                "a3",
+                "alice",
+                "Alice",
+                DebtDirection.BORROWED,
+                50_00L,
+                repaid = 50_00L,
+                currency = "EUR"
+            ),
+            debt("a4", "alice", "Alice", DebtDirection.BORROWED, 75_00L, currency = "USD"),
+            debt("a5", "alice", "Alice", DebtDirection.LENT, 25_00L, currency = "USD"),
+            debt("b1", "bob", "Bob", DebtDirection.LENT, 30_00L, currency = "EUR"),
+            debt("b2", "bob", "Bob", DebtDirection.BORROWED, 30_00L, currency = "EUR"),
+        )
+
+        val aliceTotals = debtCurrencyTotals(debts, counterpartyId = "alice")
+        assertEquals(
+            listOf(
+                DebtCurrencyTotals("EUR", 2, youOweMinor = 40_00L, owedToYouMinor = 120_00L),
+                DebtCurrencyTotals("USD", 2, youOweMinor = 75_00L, owedToYouMinor = 25_00L),
+            ),
+            aliceTotals,
+        )
+        assertEquals(80_00L, aliceTotals[0].netMinor)
+        assertTrue(aliceTotals[0].hasBothDirections)
+        assertEquals(-50_00L, aliceTotals[1].netMinor)
+        assertTrue(aliceTotals[1].hasBothDirections)
+
+        val bobTotals = debtCurrencyTotals(debts, counterpartyId = "bob")
+        assertEquals(1, bobTotals.size)
+        assertEquals(0L, bobTotals.single().netMinor)
+        assertTrue(bobTotals.single().hasBothDirections)
+    }
+
     private fun debt(
         id: String,
         counterpartyId: String,

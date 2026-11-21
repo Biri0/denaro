@@ -91,6 +91,9 @@
     <string name="delete_repayment">Delete repayment?</string>
     <string name="you_owe">You owe</string>
     <string name="owed_to_you">Owed to you</string>
+    <string name="you_owe_net">You owe (net)</string>
+    <string name="owed_to_you_net">Owed to you (net)</string>
+    <string name="net_even">Even (net)</string>
     <string name="open">Open</string>
     <string name="settled">Settled</string>
     <string name="overpaid_by">Overpaid %1$s</string>

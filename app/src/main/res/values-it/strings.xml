@@ -91,6 +91,9 @@
     <string name="delete_repayment">Eliminare il rimborso?</string>
     <string name="you_owe">Devi</string>
     <string name="owed_to_you">Ti devono</string>
+    <string name="you_owe_net">Devi (netto)</string>
+    <string name="owed_to_you_net">Ti devono (netto)</string>
+    <string name="net_even">In pari (netto)</string>
     <string name="open">Aperti</string>
     <string name="settled">Saldati</string>
     <string name="overpaid_by">Restituito in più %1$s</string>
