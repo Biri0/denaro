@@ -72,7 +72,6 @@
     <string name="delete_counterparty_action">Eliminar persona u organización</string>
     <string name="delete_counterparty_message">Se eliminará %1$s de forma permanente. Esta acción no se puede deshacer.</string>
     <string name="counterparty_delete_failed">No se pudo eliminar la persona u organización.</string>
-    <string name="counterparty_note">Nota</string>
     <string name="no_counterparties">Aún no hay personas ni organizaciones</string>
     <string name="received_into">Recibido en</string>
     <string name="paid_from">Pagado desde</string>

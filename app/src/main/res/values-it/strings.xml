@@ -72,7 +72,6 @@
     <string name="delete_counterparty_action">Elimina controparte</string>
     <string name="delete_counterparty_message">Eliminerà %1$s in modo permanente. Questa azione non può essere annullata.</string>
     <string name="counterparty_delete_failed">Impossibile eliminare la controparte.</string>
-    <string name="counterparty_note">Nota</string>
     <string name="no_counterparties">Nessuna controparte</string>
     <string name="received_into">Ricevuto su</string>
     <string name="paid_from">Pagato da</string>

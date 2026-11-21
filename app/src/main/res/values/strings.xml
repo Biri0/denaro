@@ -72,7 +72,6 @@
     <string name="delete_counterparty_action">Delete counterparty</string>
     <string name="delete_counterparty_message">This permanently deletes %1$s. This cannot be undone.</string>
     <string name="counterparty_delete_failed">Could not delete the counterparty.</string>
-    <string name="counterparty_note">Note</string>
     <string name="no_counterparties">No counterparties yet</string>
     <string name="received_into">Received into</string>
     <string name="paid_from">Paid from</string>

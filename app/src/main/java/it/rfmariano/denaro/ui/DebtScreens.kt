@@ -723,7 +723,8 @@ fun DebtEditorScreen(
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text(stringResource(R.string.counterparty_note)) },
+                label = { Text(stringResource(R.string.description)) },
+                supportingText = { Text(stringResource(R.string.optional)) },
                 modifier = Modifier.fillMaxWidth()
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -925,7 +926,8 @@ fun DebtRepaymentEditorScreen(
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text(stringResource(R.string.counterparty_note)) },
+                label = { Text(stringResource(R.string.description)) },
+                supportingText = { Text(stringResource(R.string.optional)) },
                 modifier = Modifier.fillMaxWidth()
             )
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -1157,9 +1159,11 @@ private fun CounterpartyDialog(
                     { name = it },
                     label = { Text(stringResource(R.string.name)) })
                 OutlinedTextField(
-                    note,
-                    { note = it },
-                    label = { Text(stringResource(R.string.counterparty_note)) })
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text(stringResource(R.string.description)) },
+                    supportingText = { Text(stringResource(R.string.optional)) },
+                )
             }
         },
         confirmButton = {
