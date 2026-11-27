@@ -39,6 +39,7 @@ import it.rfmariano.denaro.ui.AppLockGate
 import it.rfmariano.denaro.ui.DenaroApp
 import it.rfmariano.denaro.ui.DenaroAppPreloader
 import it.rfmariano.denaro.ui.DenaroAppState
+import it.rfmariano.denaro.ui.DenaroIconBadge
 import it.rfmariano.denaro.ui.StartupLoading
 import it.rfmariano.denaro.ui.rememberDenaroAppState
 import it.rfmariano.denaro.ui.theme.DenaroTheme
@@ -115,6 +116,7 @@ class MainActivity : AppCompatActivity() {
                     ThemeMode.LIGHT -> false
                     ThemeMode.DARK -> true
                 },
+                dynamicColor = preferences.dynamicColor,
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -236,10 +238,23 @@ private fun MigrationFailure(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = stringResource(R.string.migration_failed))
+        DenaroIconBadge(
+            icon = R.drawable.ms_shield,
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            size = 76.dp,
+            iconSize = 36.dp,
+        )
+        Text(
+            text = stringResource(R.string.migration_failed),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(top = 20.dp),
+        )
         Text(
             text = message,
-            modifier = Modifier.padding(top = 12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 10.dp),
         )
         Button(
             onClick = onRetry,

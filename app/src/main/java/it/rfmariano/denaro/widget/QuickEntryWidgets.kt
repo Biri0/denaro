@@ -46,21 +46,9 @@ import it.rfmariano.denaro.R
 import it.rfmariano.denaro.quickentry.QuickEntryAction
 import it.rfmariano.denaro.quickentry.QuickEntryIntent
 import it.rfmariano.denaro.ui.theme.DarkColorScheme
-import it.rfmariano.denaro.ui.theme.DenaroActionSurfaceDark
-import it.rfmariano.denaro.ui.theme.DenaroActionSurfaceLight
-import it.rfmariano.denaro.ui.theme.DenaroAmber
-import it.rfmariano.denaro.ui.theme.DenaroAmberDark
-import it.rfmariano.denaro.ui.theme.DenaroBackground
-import it.rfmariano.denaro.ui.theme.DenaroBackgroundDark
-import it.rfmariano.denaro.ui.theme.DenaroGreen
-import it.rfmariano.denaro.ui.theme.DenaroGreenDark
-import it.rfmariano.denaro.ui.theme.DenaroNeutral
-import it.rfmariano.denaro.ui.theme.DenaroNeutralDark
-import it.rfmariano.denaro.ui.theme.DenaroOnSurfaceDark
-import it.rfmariano.denaro.ui.theme.DenaroOnSurfaceLight
-import it.rfmariano.denaro.ui.theme.DenaroSurfaceDark
+import it.rfmariano.denaro.ui.theme.DarkExtendedColors
 import it.rfmariano.denaro.ui.theme.LightColorScheme
-import com.composables.icons.lucide.R as LucideR
+import it.rfmariano.denaro.ui.theme.LightExtendedColors
 
 internal enum class QuickWidgetKind(
     val actions: List<QuickEntryAction>,
@@ -144,7 +132,7 @@ internal fun QuickEntryWidgetContent(kind: QuickWidgetKind) {
         modifier = GlanceModifier
             .fillMaxSize()
             .background(GlanceTheme.colors.widgetBackground)
-            .cornerRadius(24.dp)
+            .cornerRadius(28.dp)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -161,7 +149,9 @@ internal fun QuickEntryWidgetContent(kind: QuickWidgetKind) {
 @Composable
 private fun ColumnScope.ActionRow(actions: List<QuickEntryAction>, showLabels: Boolean) {
     Row(
-        modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .defaultWeight(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -182,10 +172,10 @@ private fun RowScope.QuickAction(action: QuickEntryAction, showLabel: Boolean) {
         modifier = GlanceModifier
             .defaultWeight()
             .fillMaxHeight()
-            .background(GlanceTheme.colors.surface)
-            .cornerRadius(18.dp)
+            .background(ColorProvider(visual.lightTile, visual.darkTile))
+            .cornerRadius(20.dp)
             .clickable(actionStartActivity(QuickEntryIntent.create(context, action)))
-            .padding(vertical = 7.dp, horizontal = 4.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -196,11 +186,11 @@ private fun RowScope.QuickAction(action: QuickEntryAction, showLabel: Boolean) {
             colorFilter = ColorFilter.tint(ColorProvider(visual.lightColor, visual.darkColor)),
         )
         if (showLabel) {
-            Spacer(modifier = GlanceModifier.height(3.dp))
+            Spacer(modifier = GlanceModifier.height(4.dp))
             Text(
                 text = context.getString(visual.label),
                 style = TextStyle(
-                    color = GlanceTheme.colors.onSurface,
+                    color = ColorProvider(visual.lightColor, visual.darkColor),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -216,77 +206,128 @@ private data class ActionVisual(
     @param:StringRes val label: Int,
     val lightColor: Color,
     val darkColor: Color,
+    val lightTile: Color,
+    val darkTile: Color,
 )
 
 private fun QuickEntryAction.visual(): ActionVisual = when (this) {
     QuickEntryAction.INCOME -> ActionVisual(
-        LucideR.drawable.lucide_ic_arrow_down,
-        R.string.income,
-        Color(0xFF237A45),
-        Color(0xFF68D391),
+        icon = R.drawable.ms_arrow_downward,
+        label = R.string.income,
+        lightColor = LightExtendedColors.onPositiveContainer,
+        darkColor = DarkExtendedColors.onPositiveContainer,
+        lightTile = LightExtendedColors.positiveContainer,
+        darkTile = DarkExtendedColors.positiveContainer,
     )
 
     QuickEntryAction.EXPENSE -> ActionVisual(
-        LucideR.drawable.lucide_ic_arrow_up,
-        R.string.expense,
-        Color(0xFFBA1A1A),
-        Color(0xFFFFB4AB),
+        icon = R.drawable.ms_arrow_upward,
+        label = R.string.expense,
+        lightColor = LightColorScheme.onErrorContainer,
+        darkColor = DarkColorScheme.error,
+        lightTile = LightColorScheme.errorContainer,
+        darkTile = Color(0xFF5A1D22),
     )
 
     QuickEntryAction.TRANSFER -> ActionVisual(
-        LucideR.drawable.lucide_ic_arrow_down_up,
-        R.string.transfer,
-        Color(0xFF7A5F00),
-        Color(0xFFE7C353),
+        icon = R.drawable.ms_swap_vert,
+        label = R.string.transfer,
+        lightColor = LightColorScheme.onTertiaryContainer,
+        darkColor = DarkColorScheme.onTertiaryContainer,
+        lightTile = LightColorScheme.tertiaryContainer,
+        darkTile = DarkColorScheme.tertiaryContainer,
     )
 
     QuickEntryAction.BORROW -> ActionVisual(
-        LucideR.drawable.lucide_ic_arrow_down_to_line,
-        R.string.borrow,
-        Color(0xFF006C4C),
-        Color(0xFF63DBAC),
+        icon = R.drawable.ms_download,
+        label = R.string.borrow,
+        lightColor = LightExtendedColors.onWarningContainer,
+        darkColor = DarkExtendedColors.onWarningContainer,
+        lightTile = LightExtendedColors.warningContainer,
+        darkTile = DarkExtendedColors.warningContainer,
     )
 
     QuickEntryAction.LEND -> ActionVisual(
-        LucideR.drawable.lucide_ic_arrow_up_from_line,
-        R.string.lend,
-        Color(0xFF53645B),
-        Color(0xFFB8CCC0),
+        icon = R.drawable.ms_upload,
+        label = R.string.lend,
+        lightColor = LightColorScheme.onSecondaryContainer,
+        darkColor = DarkColorScheme.onSecondaryContainer,
+        lightTile = LightColorScheme.secondaryContainer,
+        darkTile = DarkColorScheme.secondaryContainer,
     )
 }
 
 private val DenaroWidgetColorsProvider = colorProviders(
-    primary = ColorProvider(DenaroGreen, DenaroGreenDark),
+    primary = ColorProvider(LightColorScheme.primary, DarkColorScheme.primary),
     onPrimary = ColorProvider(LightColorScheme.onPrimary, DarkColorScheme.onPrimary),
-    primaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
-    onPrimaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
-    secondary = ColorProvider(DenaroNeutral, DenaroNeutralDark),
+    primaryContainer = ColorProvider(
+        LightColorScheme.primaryContainer,
+        DarkColorScheme.primaryContainer,
+    ),
+    onPrimaryContainer = ColorProvider(
+        LightColorScheme.onPrimaryContainer,
+        DarkColorScheme.onPrimaryContainer,
+    ),
+    secondary = ColorProvider(LightColorScheme.secondary, DarkColorScheme.secondary),
     onSecondary = ColorProvider(LightColorScheme.onSecondary, DarkColorScheme.onSecondary),
-    secondaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
-    onSecondaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
-    tertiary = ColorProvider(DenaroAmber, DenaroAmberDark),
+    secondaryContainer = ColorProvider(
+        LightColorScheme.secondaryContainer,
+        DarkColorScheme.secondaryContainer,
+    ),
+    onSecondaryContainer = ColorProvider(
+        LightColorScheme.onSecondaryContainer,
+        DarkColorScheme.onSecondaryContainer,
+    ),
+    tertiary = ColorProvider(LightColorScheme.tertiary, DarkColorScheme.tertiary),
     onTertiary = ColorProvider(LightColorScheme.onTertiary, DarkColorScheme.onTertiary),
-    tertiaryContainer = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
-    onTertiaryContainer = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    tertiaryContainer = ColorProvider(
+        LightColorScheme.tertiaryContainer,
+        DarkColorScheme.tertiaryContainer,
+    ),
+    onTertiaryContainer = ColorProvider(
+        LightColorScheme.onTertiaryContainer,
+        DarkColorScheme.onTertiaryContainer,
+    ),
     error = ColorProvider(LightColorScheme.error, DarkColorScheme.error),
-    errorContainer = ColorProvider(LightColorScheme.errorContainer, DarkColorScheme.errorContainer),
+    errorContainer = ColorProvider(
+        LightColorScheme.errorContainer,
+        DarkColorScheme.errorContainer,
+    ),
     onError = ColorProvider(LightColorScheme.onError, DarkColorScheme.onError),
     onErrorContainer = ColorProvider(
         LightColorScheme.onErrorContainer,
-        DarkColorScheme.onErrorContainer
+        DarkColorScheme.onErrorContainer,
     ),
-    background = ColorProvider(DenaroBackground, DenaroBackgroundDark),
-    onBackground = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
-    surface = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
-    onSurface = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
-    surfaceVariant = ColorProvider(DenaroActionSurfaceLight, DenaroActionSurfaceDark),
-    onSurfaceVariant = ColorProvider(DenaroOnSurfaceLight, DenaroOnSurfaceDark),
+    background = ColorProvider(
+        LightColorScheme.surfaceContainerLow,
+        DarkColorScheme.surfaceContainerLow
+    ),
+    onBackground = ColorProvider(LightColorScheme.onSurface, DarkColorScheme.onSurface),
+    surface = ColorProvider(LightColorScheme.surfaceContainer, DarkColorScheme.surfaceContainer),
+    onSurface = ColorProvider(LightColorScheme.onSurface, DarkColorScheme.onSurface),
+    surfaceVariant = ColorProvider(
+        LightColorScheme.surfaceContainerHigh,
+        DarkColorScheme.surfaceContainerHigh,
+    ),
+    onSurfaceVariant = ColorProvider(
+        LightColorScheme.onSurfaceVariant,
+        DarkColorScheme.onSurfaceVariant,
+    ),
     outline = ColorProvider(LightColorScheme.outline, DarkColorScheme.outline),
     inverseOnSurface = ColorProvider(
         LightColorScheme.inverseOnSurface,
-        DarkColorScheme.inverseOnSurface
+        DarkColorScheme.inverseOnSurface,
     ),
-    inverseSurface = ColorProvider(LightColorScheme.inverseSurface, DarkColorScheme.inverseSurface),
-    inversePrimary = ColorProvider(LightColorScheme.inversePrimary, DarkColorScheme.inversePrimary),
-    widgetBackground = ColorProvider(DenaroBackground, DenaroSurfaceDark),
+    inverseSurface = ColorProvider(
+        LightColorScheme.inverseSurface,
+        DarkColorScheme.inverseSurface,
+    ),
+    inversePrimary = ColorProvider(
+        LightColorScheme.inversePrimary,
+        DarkColorScheme.inversePrimary,
+    ),
+    widgetBackground = ColorProvider(
+        LightColorScheme.surfaceContainerLow,
+        DarkColorScheme.surfaceContainer,
+    ),
 )

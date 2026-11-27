@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package it.rfmariano.denaro.ui
 
 import android.content.ContentResolver
@@ -22,11 +24,13 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -182,8 +186,11 @@ internal fun BackupSettings(
         backupViewModel.consumeResult(result)
     }
 
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.create_backup)) },
+    SegmentedListItem(
+        onClick = { backupViewModel.showDialog(BackupDialog.PROTECTION) },
+        enabled = service != null && !busy,
+        shapes = ListItemDefaults.segmentedShapes(1, 4),
+        colors = denaroSegmentedItemColors(),
         supportingContent = { Text(stringResource(R.string.create_backup_description)) },
         trailingContent = {
             BackupOperationIndicator(
@@ -191,12 +198,17 @@ internal fun BackupSettings(
                 tag = "create_backup_progress",
             )
         },
-        modifier = Modifier.clickable(enabled = service != null && !busy) {
-            backupViewModel.showDialog(BackupDialog.PROTECTION)
-        },
-    )
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.restore_backup)) },
+    ) {
+        Text(
+            text = stringResource(R.string.create_backup),
+            style = MaterialTheme.typography.titleMediumEmphasized,
+        )
+    }
+    SegmentedListItem(
+        onClick = { openDocument.launch(arrayOf(BACKUP_MIME_TYPE)) },
+        enabled = restoreEnabled && !busy,
+        shapes = ListItemDefaults.segmentedShapes(2, 4),
+        colors = denaroSegmentedItemColors(),
         supportingContent = {
             Text(
                 stringResource(
@@ -215,10 +227,12 @@ internal fun BackupSettings(
                 tag = "restore_backup_progress",
             )
         },
-        modifier = Modifier.clickable(enabled = restoreEnabled && !busy) {
-            openDocument.launch(arrayOf(BACKUP_MIME_TYPE))
-        },
-    )
+    ) {
+        Text(
+            text = stringResource(R.string.restore_backup),
+            style = MaterialTheme.typography.titleMediumEmphasized,
+        )
+    }
     EraseDataRow(
         enabled = eraseEnabled && !busy,
         isDemo = session?.isDemo == true,
@@ -397,14 +411,13 @@ internal fun BackupProgressDialog(operation: BackupOperation) {
                 modifier = Modifier.padding(24.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(
+                DenaroLoadingIndicator(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(44.dp)
                         .testTag("backup_dialog_progress"),
-                    strokeWidth = 3.dp,
                 )
-                Column(modifier = Modifier.padding(start = 20.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
+                Column(modifier = Modifier.padding(start = 18.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMediumEmphasized)
                     Text(
                         text = stringResource(R.string.backup_progress_description),
                         modifier = Modifier.padding(top = 4.dp),
@@ -417,6 +430,7 @@ internal fun BackupProgressDialog(operation: BackupOperation) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun EraseDataRow(
     enabled: Boolean,
@@ -425,8 +439,11 @@ internal fun EraseDataRow(
     onClick: () -> Unit,
 ) {
     val actionColor = MaterialTheme.colorScheme.error.copy(alpha = if (enabled) 1f else 0.38f)
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.erase_data), color = actionColor) },
+    SegmentedListItem(
+        onClick = onClick,
+        enabled = enabled,
+        shapes = ListItemDefaults.segmentedShapes(3, 4),
+        colors = denaroSegmentedItemColors(),
         supportingContent = {
             Text(
                 stringResource(
@@ -437,10 +454,14 @@ internal fun EraseDataRow(
         trailingContent = {
             BackupOperationIndicator(visible = erasing, tag = "erase_data_progress")
         },
-        modifier = Modifier
-            .testTag("erase_data_action")
-            .clickable(enabled = enabled, onClick = onClick),
-    )
+        modifier = Modifier.testTag("erase_data_action"),
+    ) {
+        Text(
+            text = stringResource(R.string.erase_data),
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            color = actionColor,
+        )
+    }
 }
 
 @Composable
@@ -557,6 +578,7 @@ internal fun PasswordDialog(
                         )
                     }
                     OutlinedSecureTextField(
+                        shape = MaterialTheme.shapes.large,
                         state = editor,
                         label = {
                             Text(
@@ -627,6 +649,7 @@ private fun InactivePasswordField(
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
+        shape = MaterialTheme.shapes.large,
         value = "\u2022".repeat(value.length),
         onValueChange = {},
         enabled = false,

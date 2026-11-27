@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package it.rfmariano.denaro.ui
 
 import androidx.annotation.DrawableRes
@@ -7,7 +9,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,32 +21,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import it.rfmariano.denaro.R
 import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.ActivityItem
 import it.rfmariano.denaro.data.finance.ActivityKind
+import it.rfmariano.denaro.data.finance.DebtMovementKind
 import it.rfmariano.denaro.data.finance.Money
-import it.rfmariano.denaro.ui.theme.Positive
-import it.rfmariano.denaro.ui.theme.PositiveDark
+import it.rfmariano.denaro.data.local.DebtDirection
+import it.rfmariano.denaro.ui.theme.denaroColors
+import it.rfmariano.denaro.ui.theme.tabularNumbers
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun AmountText(
@@ -55,6 +60,7 @@ fun AmountText(
     amountsVisible: Boolean,
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
+    style: TextStyle = MaterialTheme.typography.titleMediumEmphasized,
 ) {
     Text(
         text = if (amountsVisible) {
@@ -64,8 +70,9 @@ fun AmountText(
         },
         modifier = modifier,
         color = color,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
+        style = style.tabularNumbers(),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -74,49 +81,66 @@ fun AccountRow(
     account: AccountSummary,
     amountsVisible: Boolean,
     onClick: () -> Unit,
+    shapes: ListItemShapes = ListItemDefaults.segmentedShapes(0, 1),
     trailingAction: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painter = painterResource(
-                if (account.isSavings) {
-                    LucideR.drawable.lucide_ic_piggy_bank
+    val badgeBg = if (account.isSavings) {
+        MaterialTheme.colorScheme.tertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val badgeFg = if (account.isSavings) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(),
+        leadingContent = {
+            DenaroIconBadge(
+                icon = if (account.isSavings) {
+                    R.drawable.ms_savings
                 } else {
-                    LucideR.drawable.lucide_ic_wallet
+                    R.drawable.ms_account_balance_wallet
                 },
-            ),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(account.name, style = MaterialTheme.typography.titleMedium)
-            account.description?.let {
+                containerColor = badgeBg,
+                contentColor = badgeFg,
+                size = 42.dp,
+                iconSize = 21.dp,
+            )
+        },
+        supportingContent = account.description?.takeIf(String::isNotBlank)?.let { desc ->
+            {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = desc,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-        AmountText(
-            amountMinor = account.balanceMinor,
-            currency = account.currency,
-            fractionDigits = account.fractionDigits,
-            amountsVisible = amountsVisible,
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AmountText(
+                    amountMinor = account.balanceMinor,
+                    currency = account.currency,
+                    fractionDigits = account.fractionDigits,
+                    amountsVisible = amountsVisible,
+                )
+                if (trailingAction != null) {
+                    Spacer(Modifier.width(8.dp))
+                    trailingAction()
+                }
+            }
+        },
+    ) {
+        Text(
+            text = account.name,
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        if (trailingAction != null) {
-            Spacer(Modifier.width(8.dp))
-            trailingAction()
-        }
     }
 }
 
@@ -127,92 +151,96 @@ fun ActivityRow(
     onClick: () -> Unit,
     perspectiveAccountId: String? = null,
     showTransferSign: Boolean = true,
+    shapes: ListItemShapes = ListItemDefaults.segmentedShapes(0, 1),
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (item.kind != ActivityKind.TRANSFER && item.categoryId != null) {
-            CategoryIcon(item.categoryIconName, item.categoryColorIndex)
-        } else {
-            ActivityIcon(item.kind)
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.description ?: when (item.kind) {
-                    ActivityKind.INCOME -> stringResource(R.string.income)
-                    ActivityKind.EXPENSE -> stringResource(R.string.expense)
-                    ActivityKind.TRANSFER -> stringResource(R.string.transfer)
-                    ActivityKind.ADJUSTMENT -> stringResource(R.string.balance_adjustment)
-                    ActivityKind.DEBT -> when (item.debtMovement) {
-                        it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> stringResource(
-                            if (item.debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED) R.string.borrowed_from else R.string.lent_to,
-                            item.externalCounterpartyName.orEmpty(),
-                        )
+    val positiveColor = MaterialTheme.denaroColors.positive
+    val signedAmount = item.signedAmount(perspectiveAccountId, showTransferSign)
+    val amountColor = when (item.kind) {
+        ActivityKind.INCOME -> positiveColor
+        ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
+        ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onSurface
+        ActivityKind.ADJUSTMENT, ActivityKind.DEBT ->
+            if (signedAmount >= 0) positiveColor else MaterialTheme.colorScheme.error
+    }
 
-                        it.rfmariano.denaro.data.finance.DebtMovementKind.REPAYMENT -> stringResource(
-                            if (item.debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED) R.string.repaid_to else R.string.repaid_by,
-                            item.externalCounterpartyName.orEmpty(),
-                        )
-
-                        null -> stringResource(R.string.debt)
-                    }
-                },
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-            )
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(),
+        leadingContent = {
+            if (item.kind != ActivityKind.TRANSFER && item.categoryId != null) {
+                CategoryIcon(item.categoryIconName, item.categoryColorIndex)
+            } else {
+                ActivityIcon(item.kind)
+            }
+        },
+        supportingContent = {
             Text(
                 text = when (item.kind) {
-                    ActivityKind.TRANSFER -> "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
+                    ActivityKind.TRANSFER ->
+                        "${item.accountName} → ${item.counterpartyAccountName.orEmpty()}"
+
                     ActivityKind.DEBT -> listOfNotNull(
                         item.accountName,
-                        item.externalCounterpartyName
+                        item.externalCounterpartyName,
                     ).joinToString(" · ")
 
                     ActivityKind.ADJUSTMENT -> item.accountName
-
                     else -> listOfNotNull(item.accountName, item.categoryName).joinToString(" · ")
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            val signedAmount = item.signedAmount(perspectiveAccountId, showTransferSign)
-            AmountText(
-                amountMinor = signedAmount,
-                currency = item.currency,
-                fractionDigits = item.fractionDigits,
-                amountsVisible = amountsVisible,
-                color = when (item.kind) {
-                    ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {
-                        PositiveDark
-                    } else {
-                        Positive
-                    }
+        },
+        trailingContent = {
+            Column(horizontalAlignment = Alignment.End) {
+                AmountText(
+                    amountMinor = signedAmount,
+                    currency = item.currency,
+                    fractionDigits = item.fractionDigits,
+                    amountsVisible = amountsVisible,
+                    color = amountColor,
+                )
+                Text(
+                    text = item.occurredAt.formattedDate(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    ) {
+        Text(
+            text = item.description ?: when (item.kind) {
+                ActivityKind.INCOME -> stringResource(R.string.income)
+                ActivityKind.EXPENSE -> stringResource(R.string.expense)
+                ActivityKind.TRANSFER -> stringResource(R.string.transfer)
+                ActivityKind.ADJUSTMENT -> stringResource(R.string.balance_adjustment)
+                ActivityKind.DEBT -> when (item.debtMovement) {
+                    DebtMovementKind.OPENING -> stringResource(
+                        if (item.debtDirection == DebtDirection.BORROWED) {
+                            R.string.borrowed_from
+                        } else {
+                            R.string.lent_to
+                        },
+                        item.externalCounterpartyName.orEmpty(),
+                    )
 
-                    ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
-                    ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onSurface
-                    ActivityKind.ADJUSTMENT -> if (signedAmount >= 0) {
-                        if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
-                    } else MaterialTheme.colorScheme.error
+                    DebtMovementKind.REPAYMENT -> stringResource(
+                        if (item.debtDirection == DebtDirection.BORROWED) {
+                            R.string.repaid_to
+                        } else {
+                            R.string.repaid_by
+                        },
+                        item.externalCounterpartyName.orEmpty(),
+                    )
 
-                    ActivityKind.DEBT -> if (signedAmount >= 0) {
-                        if (androidx.compose.foundation.isSystemInDarkTheme()) PositiveDark else Positive
-                    } else MaterialTheme.colorScheme.error
-                },
-            )
-            Text(
-                text = item.occurredAt.formattedDate(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+                    null -> stringResource(R.string.debt)
+                }
+            },
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -233,11 +261,11 @@ internal fun ActivityItem.signedAmount(
         }
 
         ActivityKind.DEBT -> when {
-            debtDirection == it.rfmariano.denaro.data.local.DebtDirection.BORROWED &&
-                    debtMovement == it.rfmariano.denaro.data.finance.DebtMovementKind.OPENING -> amountMinor
+            debtDirection == DebtDirection.BORROWED &&
+                    debtMovement == DebtMovementKind.OPENING -> amountMinor
 
-            debtDirection == it.rfmariano.denaro.data.local.DebtDirection.LENT &&
-                    debtMovement == it.rfmariano.denaro.data.finance.DebtMovementKind.REPAYMENT -> amountMinor
+            debtDirection == DebtDirection.LENT &&
+                    debtMovement == DebtMovementKind.REPAYMENT -> amountMinor
 
             else -> -amountMinor
         }
@@ -246,50 +274,53 @@ internal fun ActivityItem.signedAmount(
 @Composable
 private fun ActivityIcon(kind: ActivityKind) {
     @DrawableRes val icon = when (kind) {
-        ActivityKind.INCOME -> LucideR.drawable.lucide_ic_arrow_down
-        ActivityKind.EXPENSE -> LucideR.drawable.lucide_ic_arrow_up
-        ActivityKind.TRANSFER -> LucideR.drawable.lucide_ic_arrow_down_up
-        ActivityKind.ADJUSTMENT -> LucideR.drawable.lucide_ic_scale
-        ActivityKind.DEBT -> LucideR.drawable.lucide_ic_hand_coins
+        ActivityKind.INCOME -> R.drawable.ms_arrow_downward
+        ActivityKind.EXPENSE -> R.drawable.ms_arrow_upward
+        ActivityKind.TRANSFER -> R.drawable.ms_swap_vert
+        ActivityKind.ADJUSTMENT -> R.drawable.ms_balance
+        ActivityKind.DEBT -> R.drawable.ms_handshake
     }
-    val tint = when (kind) {
-        ActivityKind.INCOME -> if (androidx.compose.foundation.isSystemInDarkTheme()) {
-            PositiveDark
-        } else {
-            Positive
-        }
-
-        ActivityKind.EXPENSE -> MaterialTheme.colorScheme.error
-        ActivityKind.TRANSFER -> MaterialTheme.colorScheme.tertiary
-        ActivityKind.ADJUSTMENT -> MaterialTheme.colorScheme.secondary
-        ActivityKind.DEBT -> MaterialTheme.colorScheme.secondary
+    val containerColor = when (kind) {
+        ActivityKind.INCOME -> MaterialTheme.denaroColors.positiveContainer
+        ActivityKind.EXPENSE -> MaterialTheme.colorScheme.errorContainer
+        ActivityKind.TRANSFER -> MaterialTheme.colorScheme.tertiaryContainer
+        ActivityKind.ADJUSTMENT -> MaterialTheme.colorScheme.secondaryContainer
+        ActivityKind.DEBT -> MaterialTheme.colorScheme.secondaryContainer
     }
-    Box(
-        modifier = Modifier.size(36.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(20.dp),
-        )
+    val contentColor = when (kind) {
+        ActivityKind.INCOME -> MaterialTheme.denaroColors.onPositiveContainer
+        ActivityKind.EXPENSE -> MaterialTheme.colorScheme.onErrorContainer
+        ActivityKind.TRANSFER -> MaterialTheme.colorScheme.onTertiaryContainer
+        ActivityKind.ADJUSTMENT -> MaterialTheme.colorScheme.onSecondaryContainer
+        ActivityKind.DEBT -> MaterialTheme.colorScheme.onSecondaryContainer
     }
+    DenaroIconBadge(
+        icon = icon,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        size = 42.dp,
+        iconSize = 21.dp,
+    )
 }
 
 @Composable
 fun SectionHeader(
     title: String,
+    modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         action?.invoke()
     }
 }
@@ -307,25 +338,32 @@ fun EmptyState(
             .fillMaxWidth()
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            modifier = Modifier
-                .size(40.dp)
-                .alpha(0.7f),
-            tint = MaterialTheme.colorScheme.primary,
+        DenaroIconBadge(
+            icon = icon,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            size = 72.dp,
+            iconSize = 34.dp,
         )
-        Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(20.dp))
         Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = title,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
+            textAlign = TextAlign.Center,
         )
+        if (description.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         if (action != null) {
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(24.dp))
             action()
         }
     }
@@ -335,23 +373,26 @@ fun EmptyState(
 fun HomeLoadingSkeleton(modifier: Modifier = Modifier) {
     val alpha = rememberSkeletonAlpha()
     LoadingSkeletonContainer(modifier) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(84.dp)
-                    .height(14.dp),
-                alpha = alpha,
-            )
-            Spacer(Modifier.height(12.dp))
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(190.dp)
-                    .height(30.dp),
-                alpha = alpha,
-            )
-        }
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .height(136.dp),
+            alpha = alpha,
+            radius = 28.dp,
+        )
+        Spacer(Modifier.height(8.dp))
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(52.dp),
+            alpha = alpha,
+            radius = 24.dp,
+        )
+        Spacer(Modifier.height(12.dp))
         SkeletonSectionHeader(alpha)
-        repeat(6) { AccountSkeletonRow(alpha) }
+        repeat(4) { AccountSkeletonRow(alpha) }
     }
 }
 
@@ -362,34 +403,29 @@ fun DashboardLoadingSkeleton(modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             repeat(3) {
                 SkeletonBlock(
                     modifier = Modifier
                         .weight(1f)
-                        .height(76.dp),
+                        .height(82.dp),
                     alpha = alpha,
+                    radius = 20.dp,
                 )
             }
         }
         SkeletonBlock(
             modifier = Modifier
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .width(142.dp)
-                .height(18.dp),
-            alpha = alpha,
-        )
-        SkeletonBlock(
-            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .height(170.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .height(220.dp),
             alpha = alpha,
+            radius = 28.dp,
         )
         SkeletonSectionHeader(alpha)
-        repeat(4) { ActivitySkeletonRow(alpha) }
+        repeat(3) { ActivitySkeletonRow(alpha) }
     }
 }
 
@@ -408,28 +444,14 @@ fun AccountListLoadingSkeleton(
 fun AccountDetailLoadingSkeleton(modifier: Modifier = Modifier) {
     val alpha = rememberSkeletonAlpha()
     LoadingSkeletonContainer(modifier) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(110.dp)
-                    .height(14.dp),
-                alpha = alpha,
-            )
-            Spacer(Modifier.height(10.dp))
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(180.dp)
-                    .height(30.dp),
-                alpha = alpha,
-            )
-            Spacer(Modifier.height(20.dp))
-            SkeletonBlock(
-                modifier = Modifier
-                    .width(220.dp)
-                    .height(14.dp),
-                alpha = alpha,
-            )
-        }
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .height(168.dp),
+            alpha = alpha,
+            radius = 28.dp,
+        )
         SkeletonSectionHeader(alpha)
         repeat(3) { ActivitySkeletonRow(alpha) }
     }
@@ -465,10 +487,15 @@ private fun AccountSkeletonRow(alpha: Float) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = MaterialTheme.shapes.large,
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SkeletonBlock(Modifier.size(22.dp), alpha)
+        SkeletonBlock(Modifier.size(42.dp), alpha, radius = 14.dp)
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             SkeletonBlock(
@@ -480,14 +507,14 @@ private fun AccountSkeletonRow(alpha: Float) {
             Spacer(Modifier.height(8.dp))
             SkeletonBlock(
                 modifier = Modifier
-                    .width(176.dp)
+                    .width(164.dp)
                     .height(13.dp),
                 alpha = alpha,
             )
         }
         SkeletonBlock(
             modifier = Modifier
-                .width(92.dp)
+                .width(88.dp)
                 .height(18.dp),
             alpha = alpha,
         )
@@ -499,10 +526,15 @@ private fun ActivitySkeletonRow(alpha: Float) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = MaterialTheme.shapes.large,
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SkeletonBlock(Modifier.size(36.dp), alpha)
+        SkeletonBlock(Modifier.size(42.dp), alpha, radius = 14.dp)
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             SkeletonBlock(
@@ -552,13 +584,14 @@ private fun SkeletonSectionHeader(alpha: Float) {
 private fun SkeletonBlock(
     modifier: Modifier,
     alpha: Float,
+    radius: androidx.compose.ui.unit.Dp = 8.dp,
 ) {
     Box(
         modifier = modifier
             .alpha(alpha)
             .background(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                shape = RoundedCornerShape(radius),
             ),
     )
 }
@@ -568,7 +601,7 @@ private fun rememberSkeletonAlpha(): Float {
     val transition = rememberInfiniteTransition(label = "skeleton pulse")
     return transition.animateFloat(
         initialValue = 0.42f,
-        targetValue = 0.78f,
+        targetValue = 0.82f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 850),
             repeatMode = RepeatMode.Reverse,

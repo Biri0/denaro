@@ -1,5 +1,6 @@
 @file:OptIn(
     androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
     androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
 )
 
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -30,17 +33,15 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -74,7 +76,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Date
 import java.util.Locale
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 internal fun ExportStatementScreen(
@@ -83,6 +84,7 @@ internal fun ExportStatementScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val viewModel: ExportStatementViewModel = viewModel(
         factory = viewModelFactory {
             ExportStatementViewModel(
@@ -117,11 +119,14 @@ internal fun ExportStatementScreen(
     var editingTo by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.export_statement)) },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -130,89 +135,100 @@ internal fun ExportStatementScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SectionHeader(
-                label = stringResource(R.string.account),
-                allSelected = uiState.accounts.isNotEmpty() &&
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                SectionHeader(
+                    label = stringResource(R.string.account),
+                    allSelected = uiState.accounts.isNotEmpty() &&
                         uiState.accounts.all { it.id in uiState.selectedAccountIds },
-                selectAllDescription = stringResource(R.string.statement_all_accounts),
-                onToggleAll = {
-                    viewModel.selectAllAccounts(
-                        uiState.accounts.isEmpty() ||
-                                uiState.accounts.any { it.id !in uiState.selectedAccountIds })
-                },
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-            )
-            AccountSelector(
-                accounts = uiState.accounts,
-                selectedAccountIds = uiState.selectedAccountIds,
-                onToggle = viewModel::toggleAccount,
-            )
-            DateRangeDropdown(
-                range = uiState.dateRange,
-                onSelect = viewModel::selectDateRange,
-            )
-            if (uiState.dateRange == StatementDateRange.CUSTOM) {
-                DateField(
-                    label = stringResource(R.string.statement_from),
-                    value = uiState.customFromDate,
-                    onClick = { editingFrom = true },
-                    modifier = Modifier.padding(top = 8.dp),
+                    selectAllDescription = stringResource(R.string.statement_all_accounts),
+                    onToggleAll = {
+                        viewModel.selectAllAccounts(
+                            uiState.accounts.isEmpty() ||
+                                    uiState.accounts.any { it.id !in uiState.selectedAccountIds },
+                        )
+                    },
                 )
-                DateField(
-                    label = stringResource(R.string.statement_to),
-                    value = uiState.customToDate,
-                    onClick = { editingTo = true },
-                    modifier = Modifier.padding(top = 8.dp),
+                AccountSelector(
+                    accounts = uiState.accounts,
+                    selectedAccountIds = uiState.selectedAccountIds,
+                    onToggle = viewModel::toggleAccount,
                 )
-                if (invalidCustomRange(uiState)) {
+                DateRangeDropdown(
+                    range = uiState.dateRange,
+                    onSelect = viewModel::selectDateRange,
+                )
+                if (uiState.dateRange == StatementDateRange.CUSTOM) {
+                    DateField(
+                        label = stringResource(R.string.statement_from),
+                        value = uiState.customFromDate,
+                        onClick = { editingFrom = true },
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    DateField(
+                        label = stringResource(R.string.statement_to),
+                        value = uiState.customToDate,
+                        onClick = { editingTo = true },
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (invalidCustomRange(uiState)) {
+                        Text(
+                            text = stringResource(R.string.statement_invalid_date_range),
+                            modifier = Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Text(
+                    text = stringResource(R.string.statement_layout),
+                    modifier = Modifier.padding(bottom = 10.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                LayoutSelector(
+                    layout = uiState.layout,
+                    onSelect = viewModel::selectLayout,
+                )
+                SectionHeader(
+                    label = stringResource(R.string.statement_columns),
+                    allSelected = DEFAULT_STATEMENT_COLUMNS.all { it in uiState.columns } &&
+                        (uiState.selectedAccountIds.size <= 1 || uiState.accountColumnEnabled),
+                    selectAllDescription = stringResource(R.string.statement_all_columns),
+                    onToggleAll = {
+                        viewModel.setAllColumns(
+                            !(DEFAULT_STATEMENT_COLUMNS.all { it in uiState.columns } &&
+                                    (uiState.selectedAccountIds.size <= 1 || uiState.accountColumnEnabled)),
+                        )
+                    },
+                    modifier = Modifier.padding(top = 18.dp, bottom = 4.dp),
+                )
+                ColumnSelector(
+                    accountColumnVisible = uiState.selectedAccountIds.size > 1,
+                    accountColumnEnabled = uiState.accountColumnEnabled,
+                    columns = uiState.columns,
+                    onAccountColumnChange = viewModel::setAccountColumn,
+                    onToggleColumn = viewModel::toggleColumn,
+                )
+                val hasMoneyColumn = StatementColumn.CREDIT in uiState.columns ||
+                    StatementColumn.DEBIT in uiState.columns
+                if (!hasMoneyColumn) {
                     Text(
-                        text = stringResource(R.string.statement_invalid_date_range),
+                        text = stringResource(R.string.statement_need_money_column),
                         modifier = Modifier.padding(top = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
-            Text(
-                text = stringResource(R.string.statement_layout),
-                modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            LayoutSelector(
-                layout = uiState.layout,
-                onSelect = viewModel::selectLayout,
-            )
-            SectionHeader(
-                label = stringResource(R.string.statement_columns),
-                allSelected = DEFAULT_STATEMENT_COLUMNS.all { it in uiState.columns } &&
-                        (uiState.selectedAccountIds.size <= 1 || uiState.accountColumnEnabled),
-                selectAllDescription = stringResource(R.string.statement_all_columns),
-                onToggleAll = {
-                    viewModel.setAllColumns(!(DEFAULT_STATEMENT_COLUMNS.all { it in uiState.columns } &&
-                            (uiState.selectedAccountIds.size <= 1 || uiState.accountColumnEnabled)))
-                },
-                modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
-            )
-            ColumnSelector(
-                accountColumnVisible = uiState.selectedAccountIds.size > 1,
-                accountColumnEnabled = uiState.accountColumnEnabled,
-                columns = uiState.columns,
-                onAccountColumnChange = viewModel::setAccountColumn,
-                onToggleColumn = viewModel::toggleColumn,
-            )
+
             val hasMoneyColumn = StatementColumn.CREDIT in uiState.columns ||
                     StatementColumn.DEBIT in uiState.columns
-            if (!hasMoneyColumn) {
-                Text(
-                    text = stringResource(R.string.statement_need_money_column),
-                    modifier = Modifier.padding(top = 8.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
             Button(
                 onClick = { createDocument.launch(defaultStatementName()) },
                 enabled = uiState.selectedAccountIds.isNotEmpty() &&
@@ -221,8 +237,13 @@ internal fun ExportStatementScreen(
                         !invalidCustomRange(uiState),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 24.dp),
+                    .padding(bottom = 16.dp),
             ) {
+                Icon(
+                    painter = painterResource(R.drawable.ms_download),
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.statement_export))
             }
         }
@@ -314,7 +335,7 @@ private fun SectionHeader(
         Spacer(Modifier.weight(1f))
         IconToggleButton(checked = allSelected, onCheckedChange = { onToggleAll() }) {
             Icon(
-                painter = painterResource(LucideR.drawable.lucide_ic_list_checks),
+                painter = painterResource(R.drawable.ms_checklist),
                 contentDescription = selectAllDescription,
             )
         }
@@ -335,19 +356,12 @@ private fun LayoutSelector(
     layout: StatementLayout,
     onSelect: (StatementLayout) -> Unit,
 ) {
-    SingleChoiceSegmentedButtonRow(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        StatementLayout.entries.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = layout == option,
-                onClick = { onSelect(option) },
-                shape = SegmentedButtonDefaults.itemShape(index, StatementLayout.entries.size),
-            ) {
-                Text(stringResource(option.labelRes()))
-            }
-        }
-    }
+    DenaroSegmentedChoiceRow(
+        options = StatementLayout.entries,
+        selectedOption = layout,
+        onSelect = onSelect,
+        label = { option -> stringResource(option.labelRes()) },
+    )
 }
 
 @Composable
@@ -359,9 +373,10 @@ private fun DateRangeDropdown(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(top = 12.dp),
     ) {
         OutlinedTextField(
+            shape = MaterialTheme.shapes.large,
             value = stringResource(range.labelRes()),
             onValueChange = {},
             readOnly = true,
@@ -398,14 +413,14 @@ private fun DateField(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 24.dp, end = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
             text = "$label: ${value?.format(MEDIUM_DATE) ?: stringResource(R.string.none)}",
             modifier = Modifier.weight(1f),
         )
         Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_calendar_days),
+            painter = painterResource(R.drawable.ms_calendar_month),
             contentDescription = label,
         )
     }

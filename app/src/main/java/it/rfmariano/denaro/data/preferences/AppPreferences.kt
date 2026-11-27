@@ -28,10 +28,12 @@ enum class DefaultScreen {
     HOME,
     ACCOUNTS,
     ACTIVITY,
+    DEBTS,
 }
 
 data class AppPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = false,
     val language: LanguageOption = LanguageOption.SYSTEM,
     val defaultScreen: DefaultScreen = DefaultScreen.HOME,
     val amountsVisible: Boolean = true,
@@ -55,6 +57,13 @@ class AppPreferencesRepository(context: Context) {
         preferences.edit().putString(KEY_THEME, value.name).apply()
         copy(themeMode = value)
     }.also { applyTheme(value) }
+
+    fun setDynamicColor(value: Boolean) {
+        update {
+            preferences.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
+            copy(dynamicColor = value)
+        }
+    }
 
     fun setLanguage(value: LanguageOption) {
         update {
@@ -144,6 +153,7 @@ class AppPreferencesRepository(context: Context) {
         check(
             preferences.edit()
                 .putString(KEY_THEME, value.themeMode.name)
+                .putBoolean(KEY_DYNAMIC_COLOR, value.dynamicColor)
                 .putString(KEY_LANGUAGE, value.language.name)
                 .putString(KEY_DEFAULT_SCREEN, value.defaultScreen.name)
                 .putBoolean(KEY_AMOUNTS_VISIBLE, value.amountsVisible)
@@ -173,6 +183,7 @@ class AppPreferencesRepository(context: Context) {
         val theme = preferences.getString(KEY_THEME, null)
             ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
             ?: ThemeMode.SYSTEM
+        val dynamicColor = preferences.getBoolean(KEY_DYNAMIC_COLOR, false)
         val language = preferences.getString(KEY_LANGUAGE, null)
             ?.let { runCatching { LanguageOption.valueOf(it) }.getOrNull() }
             ?: LanguageOption.SYSTEM
@@ -201,18 +212,19 @@ class AppPreferencesRepository(context: Context) {
             ?: StatementLayout.GROUPED
         val statementAccountColumn = preferences.getBoolean(KEY_STATEMENT_ACCOUNT_COLUMN, true)
         return AppPreferences(
-            theme,
-            language,
-            defaultScreen,
-            amountsVisible,
-            showAllCurrencies,
-            statementAccountIds,
-            statementDateRange,
-            statementFromDate,
-            statementToDate,
-            statementColumns,
-            statementLayout,
-            statementAccountColumn,
+            themeMode = theme,
+            dynamicColor = dynamicColor,
+            language = language,
+            defaultScreen = defaultScreen,
+            amountsVisible = amountsVisible,
+            showAllCurrencies = showAllCurrencies,
+            statementAccountIds = statementAccountIds,
+            statementDateRange = statementDateRange,
+            statementFromDate = statementFromDate,
+            statementToDate = statementToDate,
+            statementColumns = statementColumns,
+            statementLayout = statementLayout,
+            statementAccountColumn = statementAccountColumn,
         )
     }
 
@@ -239,6 +251,7 @@ class AppPreferencesRepository(context: Context) {
     private companion object {
         const val PREFERENCES_NAME = "denaro_preferences"
         const val KEY_THEME = "theme"
+        const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_LANGUAGE = "language"
         const val KEY_DEFAULT_SCREEN = "default_screen"
         const val KEY_AMOUNTS_VISIBLE = "amounts_visible"
