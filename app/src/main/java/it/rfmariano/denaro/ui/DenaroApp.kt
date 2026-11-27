@@ -1,5 +1,7 @@
 package it.rfmariano.denaro.ui
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
 import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
@@ -57,7 +60,6 @@ import it.rfmariano.denaro.quickentry.QuickEntryAction
 import it.rfmariano.denaro.quickentry.QuickEntryRequest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import com.composables.icons.lucide.R as LucideR
 
 @Serializable
 private data class HomeRoute(val sessionId: Long) : NavKey
@@ -67,6 +69,9 @@ private data class AccountsRoute(val sessionId: Long) : NavKey
 
 @Serializable
 private data class ActivityRoute(val sessionId: Long) : NavKey
+
+@Serializable
+private data class DebtsRoute(val sessionId: Long) : NavKey
 
 @Serializable
 private data object SettingsRoute : NavKey
@@ -141,19 +146,32 @@ private fun QuickEntryRequest.toEditorRoute(): NavKey = when (action) {
         DebtEditorRoute(initialDirection = DebtDirection.LENT, entryId = id)
 }
 
+private fun QuickEntryRequest.targetDestination(): TopLevelDestination = when (action) {
+    QuickEntryAction.BORROW, QuickEntryAction.LEND -> TopLevelDestination.DEBTS
+    QuickEntryAction.INCOME, QuickEntryAction.EXPENSE, QuickEntryAction.TRANSFER ->
+        TopLevelDestination.ACTIVITY
+}
+
 private enum class TopLevelDestination(
-    val label: Int,
-    val icon: Int,
+    @param:StringRes val label: Int,
+    @param:DrawableRes val icon: Int,
+    @param:DrawableRes val selectedIcon: Int,
 ) {
-    HOME(R.string.home, LucideR.drawable.lucide_ic_house),
-    ACCOUNTS(R.string.accounts, LucideR.drawable.lucide_ic_wallet),
-    ACTIVITY(R.string.activity, LucideR.drawable.lucide_ic_list),
+    HOME(R.string.home, R.drawable.ms_home, R.drawable.ms_home_filled),
+    ACCOUNTS(
+        R.string.accounts,
+        R.drawable.ms_account_balance_wallet,
+        R.drawable.ms_account_balance_wallet_filled,
+    ),
+    ACTIVITY(R.string.activity, R.drawable.ms_receipt_long, R.drawable.ms_receipt_long_filled),
+    DEBTS(R.string.debts, R.drawable.ms_handshake, R.drawable.ms_handshake_filled),
 }
 
 private fun DefaultScreen.toTopLevelDestination(): TopLevelDestination = when (this) {
     DefaultScreen.HOME -> TopLevelDestination.HOME
     DefaultScreen.ACCOUNTS -> TopLevelDestination.ACCOUNTS
     DefaultScreen.ACTIVITY -> TopLevelDestination.ACTIVITY
+    DefaultScreen.DEBTS -> TopLevelDestination.DEBTS
 }
 
 data class DenaroAppState(
@@ -281,6 +299,9 @@ private fun SessionDenaroApp(
     val initialQuickEntryRoute = remember(initialQuickEntry) {
         initialQuickEntry?.toEditorRoute()
     }
+    val initialQuickEntryDestination = remember(initialQuickEntry) {
+        initialQuickEntry?.targetDestination()
+    }
     val initialHomeRoutes = remember {
         if (initialSettingsOpen) {
             arrayOf(HomeRoute(session.id), SettingsRoute)
@@ -290,18 +311,25 @@ private fun SessionDenaroApp(
     }
     val homeBackStack = rememberNavBackStack(*initialHomeRoutes)
     val accountsBackStack = rememberNavBackStack(AccountsRoute(session.id))
-    val activityBackStack = if (initialQuickEntryRoute == null) {
-        rememberNavBackStack(ActivityRoute(session.id))
-    } else {
+    val activityBackStack = if (
+        initialQuickEntryRoute != null &&
+        initialQuickEntryDestination == TopLevelDestination.ACTIVITY
+    ) {
         rememberNavBackStack(ActivityRoute(session.id), initialQuickEntryRoute)
+    } else {
+        rememberNavBackStack(ActivityRoute(session.id))
+    }
+    val debtsBackStack = if (
+        initialQuickEntryRoute != null &&
+        initialQuickEntryDestination == TopLevelDestination.DEBTS
+    ) {
+        rememberNavBackStack(DebtsRoute(session.id), initialQuickEntryRoute)
+    } else {
+        rememberNavBackStack(DebtsRoute(session.id))
     }
     var currentDestination by rememberSaveable(initialQuickEntry?.id) {
         mutableStateOf(
-            if (initialQuickEntry != null) {
-                TopLevelDestination.ACTIVITY
-            } else {
-                preferences.defaultScreen.toTopLevelDestination()
-            },
+            initialQuickEntryDestination ?: preferences.defaultScreen.toTopLevelDestination(),
         )
     }
     var handledQuickEntryId by remember {
@@ -318,8 +346,12 @@ private fun SessionDenaroApp(
             onQuickEntryConsumed(request.id)
             return@LaunchedEffect
         }
-        currentDestination = TopLevelDestination.ACTIVITY
-        activityBackStack.add(request.toEditorRoute())
+        val destination = request.targetDestination()
+        currentDestination = destination
+        when (destination) {
+            TopLevelDestination.DEBTS -> debtsBackStack.add(request.toEditorRoute())
+            else -> activityBackStack.add(request.toEditorRoute())
+        }
         handledQuickEntryId = request.id
         onQuickEntryConsumed(request.id)
     }
@@ -367,6 +399,7 @@ private fun SessionDenaroApp(
         TopLevelDestination.HOME -> homeBackStack
         TopLevelDestination.ACCOUNTS -> accountsBackStack
         TopLevelDestination.ACTIVITY -> activityBackStack
+        TopLevelDestination.DEBTS -> debtsBackStack
     }
     val onBack: () -> Unit = {
         if (backStack.size > 1) {
@@ -399,6 +432,10 @@ private fun SessionDenaroApp(
                         preferencesRepository.setAmountsVisible(!preferences.amountsVisible)
                     },
                     onAddAccount = { homeBackStack.add(AccountEditorRoute()) },
+                    onAddActivity = { kind ->
+                        homeBackStack.add(ActivityEditorRoute(kind = kind))
+                    },
+                    onAddDebt = { homeBackStack.add(DebtEditorRoute()) },
                     onSettings = {
                         onSettingsOpenChanged(true)
                         homeBackStack.add(SettingsRoute)
@@ -411,7 +448,7 @@ private fun SessionDenaroApp(
                                 currency,
                                 categoryId,
                                 fromDate,
-                                toDate
+                                toDate,
                             ),
                         )
                         currentDestination = TopLevelDestination.ACTIVITY
@@ -487,7 +524,6 @@ private fun SessionDenaroApp(
                 )
             }
             entry<ActivityRoute> {
-                val debtsState by debtsViewModel.uiState.collectAsStateWithLifecycle()
                 ActivityRouteContent(
                     viewModel = activityViewModel,
                     amountsVisible = preferences.amountsVisible,
@@ -503,9 +539,15 @@ private fun SessionDenaroApp(
                             activityBackStack.add(item.editorRoute())
                         }
                     },
-                    debts = debtsState.debts,
-                    onAddDebt = { activityBackStack.add(DebtEditorRoute()) },
-                    onDebtClick = { activityBackStack.add(DebtDetailRoute(it)) },
+                )
+            }
+            entry<DebtsRoute> {
+                DebtsRouteContent(
+                    viewModel = debtsViewModel,
+                    amountsVisible = preferences.amountsVisible,
+                    onAddDebt = { debtsBackStack.add(DebtEditorRoute()) },
+                    onDebtClick = { debtsBackStack.add(DebtDetailRoute(it)) },
+                    onCounterparties = { debtsBackStack.add(CounterpartiesRoute) },
                 )
             }
             entry<DebtDetailRoute> { route ->
@@ -514,25 +556,22 @@ private fun SessionDenaroApp(
                     factory = viewModelFactory {
                         DebtDetailViewModel(
                             repository,
-                            route.debtId
+                            route.debtId,
                         )
                     },
                 )
-                val state by detail.uiState.collectAsStateWithLifecycle()
-                val accounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
-                    emptyList()
-                )
+                val detailState by detail.uiState.collectAsStateWithLifecycle()
+                val accounts by remember(repository) { repository.observeAllAccounts() }
+                    .collectAsStateWithLifecycle(emptyList())
                 DebtDetailScreen(
-                    state = state,
+                    state = detailState,
                     accounts = accounts,
                     amountsVisible = preferences.amountsVisible,
                     onBack = onBackButton,
                     onEdit = { backStack.add(DebtEditorRoute(it)) },
                     onAddRepayment = { backStack.add(DebtRepaymentEditorRoute(it)) },
                     onEditRepayment = { debtId, repaymentId ->
-                        backStack.add(
-                            DebtRepaymentEditorRoute(debtId, repaymentId)
-                        )
+                        backStack.add(DebtRepaymentEditorRoute(debtId, repaymentId))
                     },
                 )
             }
@@ -552,7 +591,9 @@ private fun SessionDenaroApp(
             }
             entry<DebtRepaymentEditorRoute> { route ->
                 DebtRepaymentEditorScreen(
-                    repository, route.debtId, route.repaymentId,
+                    repository,
+                    route.debtId,
+                    route.repaymentId,
                     onBack = onBackButton,
                     onFinished = { backStack.removeLastOrNull() },
                     onMessage = ::showMessage,
@@ -592,10 +633,10 @@ private fun SessionDenaroApp(
                 )
             }
             entry<ArchivedAccountsRoute> {
-                val state by accountsViewModel.uiState.collectAsStateWithLifecycle()
+                val accountsState by accountsViewModel.uiState.collectAsStateWithLifecycle()
                 ArchivedAccountsRouteContent(
-                    accounts = state.archived,
-                    isLoading = state.isLoading,
+                    accounts = accountsState.archived,
+                    isLoading = accountsState.isLoading,
                     amountsVisible = preferences.amountsVisible,
                     onBack = onBackButton,
                     onRestore = { accountId ->
@@ -674,23 +715,23 @@ private fun SessionDenaroApp(
             )
         }
     }
-    val fullScreenSettings = when (backStack.lastOrNull()) {
-        is SettingsRoute, is CategoriesRoute, is CategoryEditorRoute, is CounterpartiesRoute -> true
-        else -> false
+    val hideNavigationChrome = when (backStack.lastOrNull()) {
+        is HomeRoute, is AccountsRoute, is ActivityRoute, is DebtsRoute -> false
+        else -> true
     }
     if (quickEntryRequest != null && handledQuickEntryId != quickEntryRequest.id) {
         Box(Modifier.fillMaxSize())
         return
     }
     val navigationSuiteState = rememberNavigationSuiteScaffoldState(
-        initialValue = if (fullScreenSettings) {
+        initialValue = if (hideNavigationChrome) {
             NavigationSuiteScaffoldValue.Hidden
         } else {
             NavigationSuiteScaffoldValue.Visible
         },
     )
-    LaunchedEffect(fullScreenSettings) {
-        if (fullScreenSettings) {
+    LaunchedEffect(hideNavigationChrome) {
+        if (hideNavigationChrome) {
             navigationSuiteState.hide()
         } else {
             navigationSuiteState.show()
@@ -698,14 +739,17 @@ private fun SessionDenaroApp(
     }
     NavigationSuiteScaffold(
         state = navigationSuiteState,
-        navigationSuiteItems = {
+        navigationItems = {
             TopLevelDestination.entries.forEach { destination ->
-                item(
-                    selected = currentDestination == destination,
+                val isSelected = currentDestination == destination
+                NavigationSuiteItem(
+                    selected = isSelected,
                     onClick = { currentDestination = destination },
                     icon = {
                         Icon(
-                            painter = painterResource(destination.icon),
+                            painter = painterResource(
+                                if (isSelected) destination.selectedIcon else destination.icon,
+                            ),
                             contentDescription = stringResource(destination.label),
                         )
                     },

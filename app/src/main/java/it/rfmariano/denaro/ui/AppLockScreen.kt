@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package it.rfmariano.denaro.ui
 
 import androidx.activity.compose.ReportDrawn
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,7 +24,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,7 +32,6 @@ import it.rfmariano.denaro.data.security.DeviceAuthenticationResult
 import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import kotlinx.coroutines.launch
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun AppLockGate(
@@ -93,20 +92,23 @@ fun AppLockGate(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            painter = painterResource(LucideR.drawable.lucide_ic_shield),
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary,
+        DenaroIconBadge(
+            icon = R.drawable.ms_shield,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            size = 84.dp,
+            iconSize = 40.dp,
         )
         Spacer(Modifier.height(24.dp))
         Text(
             text = stringResource(R.string.denaro_locked),
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.denaro_locked_description),
+            style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -114,11 +116,12 @@ fun AppLockGate(
             Spacer(Modifier.height(16.dp))
             Text(
                 text = stringResource(it),
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
         Button(
             onClick = ::authenticate,
             enabled = !authenticating,
@@ -133,6 +136,7 @@ fun AppLockGate(
             }
         }
         if (needsSecuritySetup) {
+            Spacer(Modifier.height(8.dp))
             TextButton(onClick = authenticator::openSecuritySettings) {
                 Text(stringResource(R.string.set_up_device_security))
             }
@@ -153,8 +157,12 @@ fun StartupLoading() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CircularProgressIndicator()
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.loading))
+        DenaroLoadingIndicator(modifier = Modifier.size(56.dp))
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = stringResource(R.string.loading),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

@@ -324,4 +324,8 @@
     <string name="statement_column_balance">Balance</string>
     <string name="statement_transfer_from">Transfer from %1$s</string>
     <string name="statement_transfer_to">Transfer to %1$s</string>
+    <string name="dynamic_color">Dynamic color</string>
+    <string name="dynamic_color_description">Match colors to your wallpaper</string>
+    <string name="quick_add">Quick add</string>
+    <string name="close_menu">Close menu</string>
 </resources>

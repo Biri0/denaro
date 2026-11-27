@@ -1,17 +1,24 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -19,30 +26,32 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +62,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -69,11 +81,11 @@ import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.finance.starterCategoryLanguage
 import it.rfmariano.denaro.data.local.TransactionType
+import it.rfmariano.denaro.ui.theme.tabularNumbers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 import androidx.compose.foundation.lazy.grid.items as gridItems
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun CategoryManagementScreen(
@@ -83,6 +95,7 @@ fun CategoryManagementScreen(
 ) {
     val categories by repository.observeCategories(includeArchived = true)
         .collectAsStateWithLifecycle(emptyList())
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var type by rememberSaveable { mutableStateOf(TransactionType.EXPENSE) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -92,7 +105,7 @@ fun CategoryManagementScreen(
     val scope = rememberCoroutineScope()
     val deleteFailedMessage = stringResource(R.string.category_delete_failed)
     val starterLanguage = starterCategoryLanguage(
-        LocalConfiguration.current.locales[0].language
+        LocalConfiguration.current.locales[0].language,
     )
     val visible = categories.filter { it.type == type && (showArchived || it.archivedAt == null) }
     val showSearch = shouldUseSearchableSelector(visible.size)
@@ -108,49 +121,56 @@ fun CategoryManagementScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.categories)) },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onEdit(null, type, null) }) {
+            FloatingActionButton(
+                onClick = { onEdit(null, type, null) },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
                 Icon(
-                    painterResource(LucideR.drawable.lucide_ic_plus),
+                    painterResource(R.drawable.ms_add),
                     contentDescription = stringResource(R.string.add_category),
                 )
             }
         },
     ) { padding ->
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
         ) {
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                TransactionType.entries.forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = type == option,
-                        onClick = { type = option },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    ) {
-                        Text(stringResource(if (option == TransactionType.INCOME) R.string.income else R.string.expense))
-                    }
-                }
-            }
+            DenaroSegmentedChoiceRow(
+                options = TransactionType.entries,
+                selectedOption = type,
+                onSelect = { type = it },
+                label = { option ->
+                    stringResource(
+                        if (option == TransactionType.INCOME) R.string.income else R.string.expense,
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.show_archived), modifier = Modifier.weight(1f))
+                Text(
+                    text = stringResource(R.string.show_archived),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
                 Switch(checked = showArchived, onCheckedChange = { showArchived = it })
             }
             if (showSearch) {
@@ -162,15 +182,18 @@ fun CategoryManagementScreen(
             }
             if (categories.isEmpty()) {
                 EmptyState(
-                    icon = LucideR.drawable.lucide_ic_shapes,
+                    icon = R.drawable.ms_category,
                     title = stringResource(R.string.no_categories),
                     description = stringResource(R.string.no_categories_description),
+                    modifier = Modifier.fillMaxSize(),
                     action = {
-                        Button(onClick = {
-                            scope.launch {
-                                repository.applyStarterCategories(starterLanguage)
-                            }
-                        }) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    repository.applyStarterCategories(starterLanguage)
+                                }
+                            },
+                        ) {
                             Text(stringResource(R.string.add_starter_categories))
                         }
                     },
@@ -183,53 +206,83 @@ fun CategoryManagementScreen(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                 )
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    filteredVisible.filter { it.parentId == null }.forEach { parent ->
+                val parents = filteredVisible.filter { it.parentId == null }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 104.dp,
+                    ),
+                ) {
+                    parents.forEach { parent ->
+                        val children = filteredVisible.filter { it.parentId == parent.id }
+                        val groupCount = 1 + children.size
                         item(key = parent.id) {
                             CategoryRow(
                                 category = parent,
-                                prefix = "",
+                                indented = false,
+                                shapes = ListItemDefaults.segmentedShapes(0, groupCount),
                                 onEdit = { onEdit(parent.id, parent.type, null) },
                                 onArchive = {
                                     scope.launch {
-                                        if (parent.archivedAt == null) repository.archiveCategory(
-                                            parent.id
-                                        )
-                                        else repository.restoreCategory(parent.id)
+                                        if (parent.archivedAt == null) {
+                                            repository.archiveCategory(parent.id)
+                                        } else {
+                                            repository.restoreCategory(parent.id)
+                                        }
                                     }
                                 },
                                 deletable = parent.usageCount == 0,
                                 onDelete = { deleting = parent },
                             )
+                            if (children.isNotEmpty()) {
+                                Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
+                            }
                         }
-                        items(
-                            filteredVisible.filter { it.parentId == parent.id },
-                            key = CategorySummary::id
-                        ) { child ->
+                        itemsIndexed(children, key = { _, child -> child.id }) { childIdx, child ->
                             CategoryRow(
                                 category = child,
-                                prefix = "    ",
+                                indented = true,
+                                shapes = ListItemDefaults.segmentedShapes(childIdx + 1, groupCount),
                                 onEdit = { onEdit(child.id, child.type, parent.id) },
                                 onArchive = {
                                     scope.launch {
-                                        if (child.archivedAt == null) repository.archiveCategory(
-                                            child.id
-                                        )
-                                        else repository.restoreCategory(child.id)
+                                        if (child.archivedAt == null) {
+                                            repository.archiveCategory(child.id)
+                                        } else {
+                                            repository.restoreCategory(child.id)
+                                        }
                                     }
                                 },
                                 deletable = child.usageCount == 0,
                                 onDelete = { deleting = child },
                             )
+                            if (childIdx < children.lastIndex) {
+                                Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
+                            }
                         }
                         if (parent.archivedAt == null) {
                             item(key = "add-${parent.id}") {
                                 TextButton(
                                     onClick = { onEdit(null, type, parent.id) },
-                                    modifier = Modifier.padding(start = 56.dp),
+                                    modifier = Modifier.padding(start = 12.dp, bottom = 10.dp),
                                 ) {
-                                    Text(stringResource(R.string.add_subcategory))
+                                    Icon(
+                                        painter = painterResource(R.drawable.ms_add),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.add_subcategory),
+                                        modifier = Modifier.padding(start = 6.dp),
+                                    )
                                 }
+                            }
+                        } else {
+                            item(key = "spacer-${parent.id}") {
+                                Spacer(Modifier.height(12.dp))
                             }
                         }
                     }
@@ -279,46 +332,68 @@ fun CategoryManagementScreen(
 @Composable
 private fun CategoryRow(
     category: CategorySummary,
-    prefix: String,
+    indented: Boolean,
+    shapes: ListItemShapes,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
     deletable: Boolean,
     onDelete: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(prefix)
-        CategoryIcon(category.iconName, category.colorIndex)
-        Column(Modifier.weight(1f)) {
-            Text(category.name, style = MaterialTheme.typography.titleMedium)
-            if (category.archivedAt != null) Text(
-                stringResource(R.string.archived),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (deletable) {
-            IconButton(onClick = onDelete) {
-                Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
-                    contentDescription = stringResource(R.string.delete_category_action),
-                    tint = MaterialTheme.colorScheme.error,
-                )
+    SegmentedListItem(
+        onClick = onEdit,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(
+            containerColor = if (indented) {
+                MaterialTheme.colorScheme.surfaceContainerLowest
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+        leadingContent = {
+            Box(modifier = Modifier.padding(start = if (indented) 20.dp else 0.dp)) {
+                CategoryIcon(category.iconName, category.colorIndex)
             }
-        }
-        IconButton(onClick = onArchive) {
-            Icon(
-                painterResource(if (category.archivedAt == null) LucideR.drawable.lucide_ic_archive else LucideR.drawable.lucide_ic_archive_restore),
-                contentDescription = stringResource(if (category.archivedAt == null) R.string.archive else R.string.restore),
-            )
-        }
+        },
+        supportingContent = if (category.archivedAt != null) {
+            { Text(stringResource(R.string.archived)) }
+        } else {
+            null
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (deletable) {
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            painter = painterResource(R.drawable.ms_delete),
+                            contentDescription = stringResource(R.string.delete_category_action),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                IconButton(onClick = onArchive) {
+                    Icon(
+                        painterResource(
+                            if (category.archivedAt == null) {
+                                R.drawable.ms_archive
+                            } else {
+                                R.drawable.ms_unarchive
+                            },
+                        ),
+                        contentDescription = stringResource(
+                            if (category.archivedAt == null) R.string.archive else R.string.restore,
+                        ),
+                    )
+                }
+            }
+        },
+    ) {
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
-    HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
 }
 
 @Composable
@@ -395,8 +470,6 @@ fun CategoryEditorScreen(
     val budgetVisible =
         type == TransactionType.EXPENSE && parentId == null && !hasDraftParent
     val categoryBudgets = budgets.filter { it.categoryId == categoryId }
-    // Budget spend is measured on the accounts holding that currency, so a budget may only
-    // use a currency the user has an account in (plus currencies already budgeted here).
     val budgetPreferredCodes =
         (accounts.map { it.currency } + categoryBudgets.map { it.currency })
             .distinct()
@@ -413,11 +486,19 @@ fun CategoryEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(if (categoryId == null) R.string.add_category else R.string.edit_category)) },
+                title = {
+                    Text(
+                        stringResource(
+                            if (categoryId == null) R.string.add_category else R.string.edit_category,
+                        ),
+                    )
+                },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
                 actions = {
-                    TextButton(
+                    FilledTonalButton(
                         enabled = loaded && !isSaving,
+                        modifier = Modifier.padding(end = 8.dp),
                         onClick = {
                             isSaving = true
                             scope.launch {
@@ -488,122 +569,149 @@ fun CategoryEditorScreen(
                 .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.name)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            ParentCategorySelector(
-                categories = categories.filter { it.type == type && it.parentId == null && it.id != categoryId },
-                selectedId = parentId,
-                newParentName = draftParentName.takeIf { hasDraftParent },
-                onSelected = {
-                    parentId = it
-                    hasDraftParent = false
-                },
-                onCreateOrEditParent = if (categoryId == null) {
-                    {
-                        if (hasDraftParent) {
-                            parentDialogName = draftParentName
-                            parentDialogIconName = draftParentIconName
-                            parentDialogIconManuallySelected = true
-                            parentDialogColorIndex = draftParentColorIndex
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(stringResource(R.string.name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    ParentCategorySelector(
+                        categories = categories.filter {
+                            it.type == type && it.parentId == null && it.id != categoryId
+                        },
+                        selectedId = parentId,
+                        newParentName = draftParentName.takeIf { hasDraftParent },
+                        onSelected = {
+                            parentId = it
+                            hasDraftParent = false
+                        },
+                        onCreateOrEditParent = if (categoryId == null) {
+                            {
+                                if (hasDraftParent) {
+                                    parentDialogName = draftParentName
+                                    parentDialogIconName = draftParentIconName
+                                    parentDialogIconManuallySelected = true
+                                    parentDialogColorIndex = draftParentColorIndex
+                                } else {
+                                    parentDialogName = ""
+                                    parentDialogIconName = "shapes"
+                                    parentDialogIconManuallySelected = false
+                                    parentDialogColorIndex = Random.nextInt(CategoryPalette.size)
+                                }
+                                parentDialog = true
+                            }
                         } else {
-                            parentDialogName = ""
-                            parentDialogIconName = "shapes"
-                            parentDialogIconManuallySelected = false
-                            parentDialogColorIndex = Random.nextInt(CategoryPalette.size)
-                        }
-                        parentDialog = true
-                    }
-                } else null,
-            )
-            OutlinedButton(onClick = { iconPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                CategoryIcon(iconName, displayedColorIndex)
-                Text(
-                    categoryIconOption(iconName).name.replace('_', ' '),
-                    modifier = Modifier.padding(start = 12.dp)
-                )
+                            null
+                        },
+                    )
+                }
             }
-            Text(stringResource(R.string.color))
-            if (parentId == null && !hasDraftParent) {
-                CategoryColorPicker(colorIndex, onSelected = { colorIndex = it })
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(
-                            CategoryPalette[displayedColorIndex.mod(CategoryPalette.size)],
-                            CircleShape,
-                        ),
-                )
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedButton(
+                        onClick = { iconPicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        CategoryIcon(iconName, displayedColorIndex)
+                        Text(
+                            text = categoryIconOption(iconName).name.replace('_', ' '),
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.color),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (parentId == null && !hasDraftParent) {
+                        CategoryColorPicker(colorIndex, onSelected = { colorIndex = it })
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(
+                                    CategoryPalette[displayedColorIndex.mod(CategoryPalette.size)],
+                                    CircleShape,
+                                ),
+                        )
+                    }
+                }
             }
             if (loaded && budgetVisible && budgetPreferredCodes.isNotEmpty()) {
-                HorizontalDivider()
-                Text(
-                    stringResource(R.string.budgets),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                if (budgetRows.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.no_budgets_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                budgetRows.forEach { (currency, amount) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                budgetDialogCurrency = currency
-                                budgetDialogAmount = amount
+                DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = stringResource(R.string.budgets),
+                            style = MaterialTheme.typography.titleMediumEmphasized,
+                        )
+                        if (budgetRows.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.no_budgets_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        budgetRows.forEach { (currency, amount) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .clickable {
+                                        budgetDialogCurrency = currency
+                                        budgetDialogAmount = amount
+                                        budgetDialogError = null
+                                        budgetDialogOpen = true
+                                    }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = currency,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                                Text(
+                                    text = amount,
+                                    style = MaterialTheme.typography.titleMediumEmphasized.tabularNumbers(),
+                                )
+                            }
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                budgetDialogCurrency = budgetPreferredCodes
+                                    .firstOrNull { it !in usedBudgetCurrencies }
+                                    ?: ""
+                                budgetDialogAmount = ""
                                 budgetDialogError = null
                                 budgetDialogOpen = true
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = currency,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Text(text = amount, style = MaterialTheme.typography.bodyLarge)
+                            },
+                            enabled = canAddBudget,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ms_add),
+                                contentDescription = null,
+                            )
+                            Text(
+                                text = stringResource(R.string.add_budget),
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        if (budgetRows.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.manage_budgets),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                }
-                OutlinedButton(
-                    onClick = {
-                        budgetDialogCurrency = budgetPreferredCodes
-                            .firstOrNull { it !in usedBudgetCurrencies }
-                            ?: ""
-                        budgetDialogAmount = ""
-                        budgetDialogError = null
-                        budgetDialogOpen = true
-                    },
-                    enabled = canAddBudget,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_plus),
-                        contentDescription = null,
-                    )
-                    Text(
-                        text = stringResource(R.string.add_budget),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                if (budgetRows.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.manage_budgets),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
             if (loaded && !budgetVisible && categoryBudgets.isNotEmpty()) {
@@ -611,9 +719,16 @@ fun CategoryEditorScreen(
                     text = stringResource(R.string.budget_removed_on_subcategory),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            error?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         }
     }
 
@@ -641,6 +756,7 @@ fun CategoryEditorScreen(
                         onValidChange = { budgetDialogCurrencyValid = it },
                     )
                     OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
                         value = budgetDialogAmount,
                         onValueChange = { budgetDialogAmount = it },
                         label = { Text(stringResource(R.string.monthly_limit)) },
@@ -724,6 +840,7 @@ fun CategoryEditorScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
                         value = parentDialogName,
                         onValueChange = { parentDialogName = it },
                         label = { Text(stringResource(R.string.parent_category_name)) },
@@ -822,7 +939,7 @@ private fun ParentCategorySelector(
                 ),
                 leadingIcon = {
                     Icon(
-                        painterResource(LucideR.drawable.lucide_ic_plus),
+                        painterResource(R.drawable.ms_add),
                         contentDescription = null,
                     )
                 },
@@ -867,15 +984,39 @@ private fun CategoryColorPicker(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryPalette.forEachIndexed { index, color ->
+            val selected = selectedColorIndex == index
             Box(
                 modifier = Modifier
-                    .size(if (selectedColorIndex == index) 30.dp else 24.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
                     .background(color, CircleShape)
+                    .then(
+                        if (selected) {
+                            Modifier.border(
+                                2.5.dp,
+                                MaterialTheme.colorScheme.onSurface,
+                                CircleShape
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
                     .clickable { onSelected(index) },
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        painter = painterResource(R.drawable.ms_check),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -892,12 +1033,10 @@ private fun CategoryIconPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.choose_icon)) },
         text = {
-            Column {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text(stringResource(R.string.search)) },
-                    singleLine = true,
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                InlineSearchField(
+                    query = query,
+                    onQueryChange = { query = it },
                 )
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 76.dp),
@@ -906,9 +1045,11 @@ private fun CategoryIconPickerDialog(
                     gridItems(options, key = CategoryIconOption::name) { option ->
                         Column(
                             modifier = Modifier
+                                .clip(MaterialTheme.shapes.large)
                                 .clickable { onSelected(option.name) }
                                 .padding(horizontal = 4.dp, vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             CategoryIcon(option.name, colorIndex)
                             Text(
@@ -932,13 +1073,6 @@ private fun fractionDigitsFor(accounts: List<AccountSummary>, currency: String):
     accounts.firstOrNull { it.currency == currency }?.fractionDigits
         ?: Money.fractionDigitsForCurrency(currency)
 
-/**
- * Turns the staged per-currency budget edits into a plan: the amount in minor units for each
- * currency, or null when the slot was cleared (meaning that budget must be deleted).
- *
- * Only currencies the user actually touched appear here, so untouched budgets are left alone.
- * Throws [IllegalArgumentException] on invalid input, so it runs before any database write.
- */
 internal fun parseBudgetPlan(
     edits: Map<String, String>,
     digitsFor: (String) -> Int,
@@ -947,10 +1081,6 @@ internal fun parseBudgetPlan(
     if (text.isBlank()) null else Money.parseMinorUnits(text.trim(), digitsFor(currency))
 }
 
-/**
- * Resolves every budget the category editor shows: one row per currency, ordered by currency,
- * merging what is stored with what is staged but not saved yet. A cleared slot disappears.
- */
 internal fun resolveBudgetRows(
     existing: List<BudgetSummary>,
     edits: Map<String, String>,

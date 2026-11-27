@@ -1,16 +1,22 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -19,18 +25,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,12 +71,12 @@ import it.rfmariano.denaro.data.finance.TransferAccountSuggestions
 import it.rfmariano.denaro.data.finance.TransferInput
 import it.rfmariano.denaro.data.local.RecurrenceFrequency
 import it.rfmariano.denaro.data.local.TransactionType
+import it.rfmariano.denaro.ui.theme.denaroColors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
-import com.composables.icons.lucide.R as LucideR
 
 @Composable
 fun AccountEditorScreen(
@@ -144,11 +148,13 @@ fun AccountEditorScreen(
                     )
                 },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
                 actions = {
-                    TextButton(
+                    FilledTonalButton(
                         enabled = loaded && !isSaving && (accountId != null || currencyValid),
+                        modifier = Modifier.padding(end = 8.dp),
                         onClick = {
-                            if (isSaving) return@TextButton
+                            if (isSaving) return@FilledTonalButton
                             isSaving = true
                             error = null
                             scope.launch {
@@ -204,65 +210,86 @@ fun AccountEditorScreen(
                 .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.name)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text(stringResource(R.string.description)) },
-                supportingText = { Text(stringResource(R.string.optional)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = openingBalance,
-                onValueChange = { openingBalance = it },
-                label = { Text(stringResource(R.string.opening_balance)) },
-                placeholder = { Text("0.00") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned),
-                singleLine = true,
-                suffix = { Text(currency) },
-                supportingText = {
-                    Text(stringResource(R.string.opening_balance_warning))
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            CurrencyComboBox(
-                code = currency,
-                enabled = accountId == null,
-                includeAll = includeAll,
-                preferredCodes = remember(usedCurrencies, appLocale) {
-                    CurrencyCatalog.preferredCodes(usedCurrencies, appLocale)
-                },
-                onCodeChange = {
-                    currency = it
-                    userPickedCurrency = true
-                },
-                onValidChange = { currencyValid = it },
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.savings_account))
-                    Text(
-                        text = stringResource(R.string.savings_account_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(stringResource(R.string.name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(stringResource(R.string.description)) },
+                        supportingText = { Text(stringResource(R.string.optional)) },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Switch(checked = isSavings, onCheckedChange = { isSavings = it })
+            }
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = openingBalance,
+                        onValueChange = { openingBalance = it },
+                        label = { Text(stringResource(R.string.opening_balance)) },
+                        placeholder = { Text("0.00") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.DecimalSigned),
+                        singleLine = true,
+                        suffix = { Text(currency) },
+                        supportingText = {
+                            Text(stringResource(R.string.opening_balance_warning))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    CurrencyComboBox(
+                        code = currency,
+                        enabled = accountId == null,
+                        includeAll = includeAll,
+                        preferredCodes = remember(usedCurrencies, appLocale) {
+                            CurrencyCatalog.preferredCodes(usedCurrencies, appLocale)
+                        },
+                        onCodeChange = {
+                            currency = it
+                            userPickedCurrency = true
+                        },
+                        onValidChange = { currencyValid = it },
+                    )
+                }
+            }
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.savings_account),
+                            style = MaterialTheme.typography.titleMediumEmphasized,
+                        )
+                        Text(
+                            text = stringResource(R.string.savings_account_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(checked = isSavings, onCheckedChange = { isSavings = it })
+                }
             }
             error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
             }
         }
     }
@@ -312,9 +339,7 @@ fun ActivityEditorScreen(
         mutableStateOf(false)
     }
     var transferSourceCustomized by rememberSaveable(route.id) { mutableStateOf(false) }
-    var transferDestinationCustomized by rememberSaveable(route.id) {
-        mutableStateOf(false)
-    }
+    var transferDestinationCustomized by rememberSaveable(route.id) { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showFrequencyMenu by remember { mutableStateOf(false) }
@@ -470,12 +495,14 @@ fun ActivityEditorScreen(
                     )
                 },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
                 actions = {
-                    TextButton(
+                    FilledTonalButton(
                         enabled = loaded && selectedAccount != null && !isSaving,
+                        modifier = Modifier.padding(end = 8.dp),
                         onClick = {
-                            if (isSaving) return@TextButton
-                            val account = selectedAccount ?: return@TextButton
+                            if (isSaving) return@FilledTonalButton
+                            val account = selectedAccount ?: return@FilledTonalButton
                             isSaving = true
                             error = null
                             scope.launch {
@@ -565,231 +592,238 @@ fun ActivityEditorScreen(
                 .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                listOf(
+            DenaroSegmentedChoiceRow(
+                options = listOf(
                     ActivityKind.INCOME,
                     ActivityKind.EXPENSE,
-                    ActivityKind.TRANSFER
-                ).forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = kind == option,
-                        enabled = route.id == null && route.recurringRuleId == null,
-                        onClick = {
-                            showFrequencyMenu = false
-                            if (option == ActivityKind.TRANSFER && kind != option) {
-                                transferDefaultsApplied = false
-                                transferSourceCustomized = false
-                                transferDestinationCustomized = false
-                            }
-                            kind = option
-                            initializedTransactionKind = null
-                            transactionAccountCustomized = false
-                            if (option == ActivityKind.TRANSFER ||
-                                categories.find { it.id == categoryId }?.type?.name != option.name
-                            ) {
-                                categoryId = null
-                            }
-                            destinationId = ""
-                            if (option == ActivityKind.TRANSFER) {
-                                isScheduled = false
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index,
-                            3,
-                        ),
-                    ) {
-                        Text(
-                            stringResource(
-                                when (option) {
-                                    ActivityKind.INCOME -> R.string.income
-                                    ActivityKind.EXPENSE -> R.string.expense
-                                    ActivityKind.TRANSFER -> R.string.transfer
-                                    ActivityKind.ADJUSTMENT -> R.string.balance_adjustment
-                                    ActivityKind.DEBT -> R.string.debt
-                                },
-                            ),
-                        )
-                    }
-                }
-            }
-            if (kind != ActivityKind.TRANSFER && route.id == null) {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    listOf(false, true).forEachIndexed { index, scheduled ->
-                        SegmentedButton(
-                            selected = isScheduled == scheduled,
-                            enabled = route.recurringRuleId == null,
-                            onClick = { isScheduled = scheduled },
-                            shape = SegmentedButtonDefaults.itemShape(index, 2),
-                        ) {
-                            Text(
-                                stringResource(
-                                    if (scheduled) {
-                                        R.string.scheduled
-                                    } else {
-                                        R.string.one_time
-                                    },
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
-            AccountSelector(
-                label = if (kind == ActivityKind.TRANSFER) {
-                    stringResource(R.string.from_account)
-                } else {
-                    stringResource(R.string.account)
-                },
-                accounts = accounts,
-                selectedId = accountId,
-                enabled = loaded,
-                onSelected = {
-                    amount = Money.rescaleInput(
-                        amount,
-                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
-                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
-                    )
-                    accountId = it
-                    if (kind == ActivityKind.TRANSFER) {
-                        transferSourceCustomized = true
+                    ActivityKind.TRANSFER,
+                ),
+                selectedOption = kind,
+                enabled = route.id == null && route.recurringRuleId == null,
+                onSelect = { option ->
+                    showFrequencyMenu = false
+                    if (option == ActivityKind.TRANSFER && kind != option) {
+                        transferDefaultsApplied = false
+                        transferSourceCustomized = false
                         transferDestinationCustomized = false
-                        destinationId = suggestedDestinationId(
-                            sourceId = it,
-                            accounts = accounts,
-                            suggestions = transferSuggestions,
-                        )
-                    } else {
-                        transactionAccountCustomized = true
-                        if (destinationId == it) destinationId = ""
+                    }
+                    kind = option
+                    initializedTransactionKind = null
+                    transactionAccountCustomized = false
+                    if (option == ActivityKind.TRANSFER ||
+                        categories.find { it.id == categoryId }?.type?.name != option.name
+                    ) {
+                        categoryId = null
+                    }
+                    destinationId = ""
+                    if (option == ActivityKind.TRANSFER) {
+                        isScheduled = false
                     }
                 },
-            )
-            if (kind == ActivityKind.TRANSFER) {
-                val sourceCurrency = selectedAccount?.currency
-                val sourceFractionDigits = selectedAccount?.fractionDigits
-                AccountSelector(
-                    label = stringResource(R.string.to_account),
-                    accounts = accounts.filter {
-                        it.id != accountId &&
-                                it.currency == sourceCurrency &&
-                                it.fractionDigits == sourceFractionDigits
-                    },
-                    selectedId = destinationId,
-                    enabled = loaded,
-                    onSelected = {
-                        transferDestinationCustomized = true
-                        destinationId = it
-                    },
-                )
-                Text(
-                    stringResource(R.string.choose_same_currency),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                CategorySelector(
-                    categories = categories.filter { it.type.name == kind.name },
-                    selectedId = categoryId,
-                    onSelected = { categoryId = it },
-                    onAddCategory = { onAddCategory(TransactionType.valueOf(kind.name)) },
-                )
-            }
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                enabled = loaded,
-                label = { Text(stringResource(R.string.amount)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (isScheduled) {
-                OutlinedTextField(
-                    value = intervalCount,
-                    onValueChange = { intervalCount = it.filter(Char::isDigit) },
-                    label = { Text(stringResource(R.string.repeat_every)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                ExposedDropdownMenuBox(
-                    expanded = showFrequencyMenu,
-                    onExpandedChange = { showFrequencyMenu = !showFrequencyMenu },
-                ) {
-                    OutlinedTextField(
-                        value = stringResource(frequency.labelResource()),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.frequency)) },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(showFrequencyMenu)
+                label = { option ->
+                    stringResource(
+                        when (option) {
+                            ActivityKind.INCOME -> R.string.income
+                            ActivityKind.EXPENSE -> R.string.expense
+                            ActivityKind.TRANSFER -> R.string.transfer
+                            ActivityKind.ADJUSTMENT -> R.string.balance_adjustment
+                            ActivityKind.DEBT -> R.string.debt
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(
-                                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                enabled = true,
-                            ),
                     )
-                    ExposedDropdownMenu(
-                        expanded = showFrequencyMenu,
-                        onDismissRequest = { showFrequencyMenu = false },
-                    ) {
-                        RecurrenceFrequency.entries.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(option.labelResource())) },
-                                onClick = {
-                                    frequency = option
-                                    showFrequencyMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
+                },
+            )
+            if (kind != ActivityKind.TRANSFER && route.id == null) {
+                DenaroSegmentedChoiceRow(
+                    options = listOf(false, true),
+                    selectedOption = isScheduled,
+                    enabled = route.recurringRuleId == null,
+                    onSelect = { isScheduled = it },
+                    label = { scheduled ->
+                        stringResource(if (scheduled) R.string.scheduled else R.string.one_time)
+                    },
+                )
             }
-            OutlinedButton(
-                onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "${
-                        stringResource(
-                            when {
-                                route.recurringRuleId != null -> R.string.next_occurrence_label
-                                isScheduled -> R.string.first_occurrence
-                                else -> R.string.date
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = amount,
+                        onValueChange = { amount = it },
+                        enabled = loaded,
+                        label = { Text(stringResource(R.string.amount)) },
+                        suffix = selectedAccount?.let { { Text(it.currency) } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AccountSelector(
+                        label = if (kind == ActivityKind.TRANSFER) {
+                            stringResource(R.string.from_account)
+                        } else {
+                            stringResource(R.string.account)
+                        },
+                        accounts = accounts,
+                        selectedId = accountId,
+                        enabled = loaded,
+                        onSelected = {
+                            amount = Money.rescaleInput(
+                                amount,
+                                accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                                accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                            )
+                            accountId = it
+                            if (kind == ActivityKind.TRANSFER) {
+                                transferSourceCustomized = true
+                                transferDestinationCustomized = false
+                                destinationId = suggestedDestinationId(
+                                    sourceId = it,
+                                    accounts = accounts,
+                                    suggestions = transferSuggestions,
+                                )
+                            } else {
+                                transactionAccountCustomized = true
+                                if (destinationId == it) destinationId = ""
+                            }
+                        },
+                    )
+                    if (kind == ActivityKind.TRANSFER) {
+                        val sourceCurrency = selectedAccount?.currency
+                        val sourceFractionDigits = selectedAccount?.fractionDigits
+                        AccountSelector(
+                            label = stringResource(R.string.to_account),
+                            accounts = accounts.filter {
+                                it.id != accountId &&
+                                        it.currency == sourceCurrency &&
+                                        it.fractionDigits == sourceFractionDigits
+                            },
+                            selectedId = destinationId,
+                            enabled = loaded,
+                            onSelected = {
+                                transferDestinationCustomized = true
+                                destinationId = it
                             },
                         )
-                    }: ${occurredAt.formattedDate()}",
-                )
+                        Text(
+                            text = stringResource(R.string.choose_same_currency),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        CategorySelector(
+                            categories = categories.filter { it.type.name == kind.name },
+                            selectedId = categoryId,
+                            onSelected = { categoryId = it },
+                            onAddCategory = { onAddCategory(TransactionType.valueOf(kind.name)) },
+                        )
+                    }
+                }
             }
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text(stringResource(R.string.description)) },
-                supportingText = { Text(stringResource(R.string.optional)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (isScheduled) {
+                        OutlinedTextField(
+                            shape = MaterialTheme.shapes.large,
+                            value = intervalCount,
+                            onValueChange = { intervalCount = it.filter(Char::isDigit) },
+                            label = { Text(stringResource(R.string.repeat_every)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = showFrequencyMenu,
+                            onExpandedChange = { showFrequencyMenu = !showFrequencyMenu },
+                        ) {
+                            OutlinedTextField(
+                                shape = MaterialTheme.shapes.large,
+                                value = stringResource(frequency.labelResource()),
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.frequency)) },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(showFrequencyMenu)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(
+                                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                        enabled = true,
+                                    ),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = showFrequencyMenu,
+                                onDismissRequest = { showFrequencyMenu = false },
+                            ) {
+                                RecurrenceFrequency.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(option.labelResource())) },
+                                        onClick = {
+                                            frequency = option
+                                            showFrequencyMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ms_calendar_month),
+                            contentDescription = null,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "${
+                                stringResource(
+                                    when {
+                                        route.recurringRuleId != null -> R.string.next_occurrence_label
+                                        isScheduled -> R.string.first_occurrence
+                                        else -> R.string.date
+                                    },
+                                )
+                            }: ${occurredAt.formattedDate()}",
+                        )
+                    }
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(stringResource(R.string.description)) },
+                        supportingText = { Text(stringResource(R.string.optional)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             recurringRuleId?.let {
-                Text(
-                    stringResource(R.string.recurring_occurrence_note),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-                TextButton(onClick = { onEditSchedule(it) }) {
-                    Text(stringResource(R.string.edit_schedule))
+                DenaroSectionCard(
+                    containerColor = MaterialTheme.denaroColors.warningContainer,
+                    contentColor = MaterialTheme.denaroColors.onWarningContainer,
+                    contentPadding = PaddingValues(16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.recurring_occurrence_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    TextButton(onClick = { onEditSchedule(it) }) {
+                        Text(stringResource(R.string.edit_schedule))
+                    }
                 }
             }
             error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
             }
             if (route.recurringRuleId != null) {
-                HorizontalDivider()
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = {
                         scope.launch {
                             runCatching {
@@ -807,9 +841,7 @@ fun ActivityEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        stringResource(
-                            if (ruleActive) R.string.pause else R.string.resume,
-                        ),
+                        stringResource(if (ruleActive) R.string.pause else R.string.resume),
                     )
                 }
                 OutlinedButton(
@@ -823,7 +855,6 @@ fun ActivityEditorScreen(
                     Text(stringResource(R.string.delete))
                 }
             } else if (route.id != null) {
-                HorizontalDivider()
                 OutlinedButton(
                     onClick = { confirmDelete = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -1067,7 +1098,7 @@ fun CategorySelector(
                 label = stringResource(R.string.add_category),
                 leadingIcon = {
                     Icon(
-                        painterResource(LucideR.drawable.lucide_ic_plus),
+                        painterResource(R.drawable.ms_add),
                         contentDescription = null,
                     )
                 },

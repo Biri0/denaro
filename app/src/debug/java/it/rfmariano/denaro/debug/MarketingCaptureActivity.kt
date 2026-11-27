@@ -5,20 +5,21 @@ import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.rfmariano.denaro.DenaroApplication
@@ -32,6 +33,7 @@ import it.rfmariano.denaro.ui.AccountsViewModel
 import it.rfmariano.denaro.ui.ActivityRouteContent
 import it.rfmariano.denaro.ui.ActivityViewModel
 import it.rfmariano.denaro.ui.CategoryManagementScreen
+import it.rfmariano.denaro.ui.DebtsRouteContent
 import it.rfmariano.denaro.ui.DebtsViewModel
 import it.rfmariano.denaro.ui.HomeRouteContent
 import it.rfmariano.denaro.ui.HomeViewModel
@@ -40,7 +42,6 @@ import it.rfmariano.denaro.ui.viewModelFactory
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Locale
-import com.composables.icons.lucide.R as LucideR
 
 class MarketingCaptureActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: Context) {
@@ -106,10 +107,19 @@ private enum class CaptureScenario {
     }
 }
 
-private enum class CaptureDestination(val label: Int, val icon: Int) {
-    HOME(R.string.home, LucideR.drawable.lucide_ic_house),
-    ACCOUNTS(R.string.accounts, LucideR.drawable.lucide_ic_wallet),
-    ACTIVITY(R.string.activity, LucideR.drawable.lucide_ic_list),
+private enum class CaptureDestination(
+    @param:StringRes val label: Int,
+    @param:DrawableRes val icon: Int,
+    @param:DrawableRes val selectedIcon: Int,
+) {
+    HOME(R.string.home, R.drawable.ms_home, R.drawable.ms_home_filled),
+    ACCOUNTS(
+        R.string.accounts,
+        R.drawable.ms_account_balance_wallet,
+        R.drawable.ms_account_balance_wallet_filled,
+    ),
+    ACTIVITY(R.string.activity, R.drawable.ms_receipt_long, R.drawable.ms_receipt_long_filled),
+    DEBTS(R.string.debts, R.drawable.ms_handshake, R.drawable.ms_handshake_filled),
 }
 
 @Composable
@@ -128,6 +138,8 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
                 amountsVisible = true,
                 onToggleAmounts = {},
                 onAddAccount = {},
+                onAddActivity = {},
+                onAddDebt = {},
                 onSettings = {},
                 onCategoryClick = { _, _, _, _, _, _ -> },
             )
@@ -147,7 +159,7 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
             )
         }
 
-        CaptureScenario.ACCOUNT_DETAIL -> CaptureScaffold(CaptureDestination.ACCOUNTS) {
+        CaptureScenario.ACCOUNT_DETAIL -> {
             val detail: AccountDetailViewModel = viewModel(
                 key = "capture-detail-${session.id}",
                 factory = viewModelFactory {
@@ -164,25 +176,30 @@ private fun CaptureContent(session: FinanceSession, scenario: CaptureScenario) {
             )
         }
 
-        CaptureScenario.ACTIVITY,
-        CaptureScenario.DEBTS,
-            -> CaptureScaffold(CaptureDestination.ACTIVITY) {
+        CaptureScenario.ACTIVITY -> CaptureScaffold(CaptureDestination.ACTIVITY) {
             val activity: ActivityViewModel = viewModel(
                 key = "capture-activity-${session.id}",
                 factory = viewModelFactory { ActivityViewModel(repository) },
             )
-            val debts: DebtsViewModel = viewModel(
-                key = "capture-debts-${session.id}",
-                factory = viewModelFactory { DebtsViewModel(repository) },
-            )
-            val debtsState by debts.uiState.collectAsStateWithLifecycle()
             ActivityRouteContent(
                 viewModel = activity,
                 amountsVisible = true,
                 onAddActivity = {},
                 onActivityClick = {},
-                debts = debtsState.debts,
-                initiallyShowDebts = scenario == CaptureScenario.DEBTS,
+            )
+        }
+
+        CaptureScenario.DEBTS -> CaptureScaffold(CaptureDestination.DEBTS) {
+            val debts: DebtsViewModel = viewModel(
+                key = "capture-debts-${session.id}",
+                factory = viewModelFactory { DebtsViewModel(repository) },
+            )
+            DebtsRouteContent(
+                viewModel = debts,
+                amountsVisible = true,
+                onAddDebt = {},
+                onDebtClick = {},
+                onCounterparties = {},
             )
         }
 
@@ -200,14 +217,17 @@ private fun CaptureScaffold(
     content: @Composable () -> Unit,
 ) {
     NavigationSuiteScaffold(
-        navigationSuiteItems = {
+        navigationItems = {
             CaptureDestination.entries.forEach { destination ->
-                item(
-                    selected = destination == selected,
+                val isSelected = destination == selected
+                NavigationSuiteItem(
+                    selected = isSelected,
                     onClick = {},
                     icon = {
                         Icon(
-                            painterResource(destination.icon),
+                            painterResource(
+                                if (isSelected) destination.selectedIcon else destination.icon,
+                            ),
                             contentDescription = stringResource(destination.label),
                         )
                     },

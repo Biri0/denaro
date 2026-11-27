@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_background">#F7FAF8</color>
-    <color name="widget_background">#F7FAF8</color>
-    <color name="widget_action_background">#E7F2EC</color>
-    <color name="widget_text">#1A1C1B</color>
-    <color name="widget_income">#237A45</color>
+    <color name="splash_background">#F5FBF5</color>
+    <color name="widget_background">#EFF5EF</color>
+    <color name="widget_action_background">#A8F2CE</color>
+    <color name="widget_text">#171D1A</color>
+    <color name="widget_income">#006D43</color>
     <color name="widget_expense">#BA1A1A</color>
-    <color name="widget_transfer">#7A5F00</color>
-    <color name="widget_borrow">#006C4C</color>
-    <color name="widget_lend">#53645B</color>
+    <color name="widget_transfer">#3D6373</color>
+    <color name="widget_borrow">#1F6A4E</color>
+    <color name="widget_lend">#4C6358</color>
 </resources>

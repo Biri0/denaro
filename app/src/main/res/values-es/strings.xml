@@ -324,4 +324,8 @@
     <string name="statement_column_balance">Saldo</string>
     <string name="statement_transfer_from">Transferencia desde %1$s</string>
     <string name="statement_transfer_to">Transferencia hacia %1$s</string>
+    <string name="dynamic_color">Color dinámico</string>
+    <string name="dynamic_color_description">Adapta los colores a tu fondo de pantalla</string>
+    <string name="quick_add">Añadir rápido</string>
+    <string name="close_menu">Cerrar menú</string>
 </resources>

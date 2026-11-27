@@ -1,26 +1,35 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package it.rfmariano.denaro.ui
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,7 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,8 +52,8 @@ import it.rfmariano.denaro.data.security.DeviceAuthenticationResult
 import it.rfmariano.denaro.data.security.DeviceAuthenticator
 import it.rfmariano.denaro.data.security.ProcessUnlockSession
 import it.rfmariano.denaro.data.security.SecurityPreferencesRepository
+import it.rfmariano.denaro.ui.theme.supportsDynamicColor
 import kotlinx.coroutines.launch
-import com.composables.icons.lucide.R as LucideR
 
 private enum class SettingsDialog {
     THEME,
@@ -67,6 +76,7 @@ fun SettingsScreen(
 ) {
     val preferences by preferencesRepository.state.collectAsStateWithLifecycle()
     val securityPreferences by securityPreferencesRepository.state.collectAsStateWithLifecycle()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var dialog by remember { mutableStateOf<SettingsDialog?>(null) }
     var authenticationInProgress by remember { mutableStateOf(false) }
     var showSecuritySetupDialog by remember { mutableStateOf(false) }
@@ -76,6 +86,7 @@ fun SettingsScreen(
     val authenticationSubtitle = stringResource(R.string.confirm_security_change_description)
     val authenticationCanceled = stringResource(R.string.authentication_canceled)
     val authenticationUnavailable = stringResource(R.string.authentication_unavailable)
+    val dynamicColorSupported = supportsDynamicColor()
 
     fun setAppLockEnabled(enabled: Boolean) {
         if (authenticationInProgress) return
@@ -104,18 +115,14 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.settings)) },
-                navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_arrow_left),
-                            contentDescription = stringResource(R.string.back),
-                        )
-                    }
-                },
+                navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
@@ -123,68 +130,99 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             SectionLabel(R.string.appearance)
-            SettingsItem(
-                title = stringResource(R.string.theme),
-                value = themeLabel(preferences.themeMode),
-                onClick = { dialog = SettingsDialog.THEME },
-            )
-            SettingsItem(
-                title = stringResource(R.string.language),
-                value = languageLabel(preferences.language),
-                onClick = { dialog = SettingsDialog.LANGUAGE },
-            )
+            val appearanceCount = if (dynamicColorSupported) 3 else 2
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                SettingsItem(
+                    title = stringResource(R.string.theme),
+                    value = themeLabel(preferences.themeMode),
+                    shapes = ListItemDefaults.segmentedShapes(0, appearanceCount),
+                    onClick = { dialog = SettingsDialog.THEME },
+                )
+                if (dynamicColorSupported) {
+                    SwitchSettingsItem(
+                        title = stringResource(R.string.dynamic_color),
+                        value = stringResource(R.string.dynamic_color_description),
+                        checked = preferences.dynamicColor,
+                        shapes = ListItemDefaults.segmentedShapes(1, appearanceCount),
+                        onCheckedChange = preferencesRepository::setDynamicColor,
+                    )
+                }
+                SettingsItem(
+                    title = stringResource(R.string.language),
+                    value = languageLabel(preferences.language),
+                    shapes = ListItemDefaults.segmentedShapes(appearanceCount - 1, appearanceCount),
+                    onClick = { dialog = SettingsDialog.LANGUAGE },
+                )
+            }
 
             SectionLabel(R.string.security)
-            SwitchSettingsItem(
-                title = stringResource(R.string.app_lock),
-                value = stringResource(R.string.app_lock_description),
-                checked = securityPreferences.appLockEnabled,
-                enabled = !authenticationInProgress,
-                onCheckedChange = ::setAppLockEnabled,
-            )
-            SwitchSettingsItem(
-                title = stringResource(R.string.screen_security),
-                value = stringResource(R.string.screen_security_description),
-                checked = securityPreferences.screenSecurityEnabled,
-                onCheckedChange = securityPreferencesRepository::setScreenSecurityEnabled,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                SwitchSettingsItem(
+                    title = stringResource(R.string.app_lock),
+                    value = stringResource(R.string.app_lock_description),
+                    checked = securityPreferences.appLockEnabled,
+                    enabled = !authenticationInProgress,
+                    shapes = ListItemDefaults.segmentedShapes(0, 2),
+                    onCheckedChange = ::setAppLockEnabled,
+                )
+                SwitchSettingsItem(
+                    title = stringResource(R.string.screen_security),
+                    value = stringResource(R.string.screen_security_description),
+                    checked = securityPreferences.screenSecurityEnabled,
+                    shapes = ListItemDefaults.segmentedShapes(1, 2),
+                    onCheckedChange = securityPreferencesRepository::setScreenSecurityEnabled,
+                )
+            }
 
             SectionLabel(R.string.general)
-            SettingsItem(
-                title = stringResource(R.string.default_screen),
-                value = defaultScreenLabel(preferences.defaultScreen),
-                onClick = { dialog = SettingsDialog.DEFAULT_SCREEN },
-            )
-            SwitchSettingsItem(
-                title = stringResource(R.string.show_all_currencies),
-                value = stringResource(R.string.show_all_currencies_description),
-                checked = preferences.showAllCurrencies,
-                onCheckedChange = preferencesRepository::setShowAllCurrencies,
-            )
-            SettingsItem(
-                title = stringResource(R.string.categories),
-                value = stringResource(R.string.manage_categories),
-                onClick = onCategories,
-            )
-            SettingsItem(
-                title = stringResource(R.string.counterparties),
-                value = stringResource(R.string.manage_counterparties),
-                onClick = onCounterparties,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                SettingsItem(
+                    title = stringResource(R.string.default_screen),
+                    value = defaultScreenLabel(preferences.defaultScreen),
+                    shapes = ListItemDefaults.segmentedShapes(0, 4),
+                    onClick = { dialog = SettingsDialog.DEFAULT_SCREEN },
+                )
+                SwitchSettingsItem(
+                    title = stringResource(R.string.show_all_currencies),
+                    value = stringResource(R.string.show_all_currencies_description),
+                    checked = preferences.showAllCurrencies,
+                    shapes = ListItemDefaults.segmentedShapes(1, 4),
+                    onCheckedChange = preferencesRepository::setShowAllCurrencies,
+                )
+                SettingsItem(
+                    title = stringResource(R.string.categories),
+                    value = stringResource(R.string.manage_categories),
+                    shapes = ListItemDefaults.segmentedShapes(2, 4),
+                    onClick = onCategories,
+                )
+                SettingsItem(
+                    title = stringResource(R.string.counterparties),
+                    value = stringResource(R.string.manage_counterparties),
+                    shapes = ListItemDefaults.segmentedShapes(3, 4),
+                    onClick = onCounterparties,
+                )
+            }
+
             SectionLabel(R.string.data)
-            SettingsItem(
-                title = stringResource(R.string.export_statement),
-                value = stringResource(R.string.export_statement_description),
-                onClick = onExportStatement,
-            )
-            BackupSettings(
-                financeSessionProvider = financeSessionProvider,
-                snackbarHostState = snackbarHostState,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                SettingsItem(
+                    title = stringResource(R.string.export_statement),
+                    value = stringResource(R.string.export_statement_description),
+                    shapes = ListItemDefaults.segmentedShapes(0, 4),
+                    onClick = onExportStatement,
+                )
+                BackupSettings(
+                    financeSessionProvider = financeSessionProvider,
+                    snackbarHostState = snackbarHostState,
+                )
+            }
+
             DeveloperSettingsSection(financeSessionProvider)
+            Spacer(Modifier.height(24.dp))
         }
     }
 
@@ -256,9 +294,9 @@ fun SettingsScreen(
 private fun SectionLabel(label: Int) {
     Text(
         text = stringResource(label),
-        modifier = Modifier.padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 4.dp),
-        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-        color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 8.dp, top = 20.dp, end = 8.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
     )
 }
 
@@ -266,13 +304,17 @@ private fun SectionLabel(label: Int) {
 private fun SettingsItem(
     title: String,
     value: String,
+    shapes: ListItemShapes,
     onClick: () -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(title) },
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(),
         supportingContent = { Text(value) },
-        modifier = Modifier.clickable(onClick = onClick),
-    )
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleMediumEmphasized)
+    }
 }
 
 @Composable
@@ -280,11 +322,15 @@ private fun SwitchSettingsItem(
     title: String,
     value: String,
     checked: Boolean,
+    shapes: ListItemShapes,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(title) },
+    SegmentedListItem(
+        onClick = { if (enabled) onCheckedChange(!checked) },
+        enabled = enabled,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(),
         supportingContent = { Text(value) },
         trailingContent = {
             Switch(
@@ -293,10 +339,9 @@ private fun SwitchSettingsItem(
                 enabled = enabled,
             )
         },
-        modifier = Modifier.clickable(enabled = enabled) {
-            onCheckedChange(!checked)
-        },
-    )
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleMediumEmphasized)
+    }
 }
 
 @Composable
@@ -364,5 +409,6 @@ private fun defaultScreenLabel(value: DefaultScreen): String = stringResource(
         DefaultScreen.HOME -> R.string.home
         DefaultScreen.ACCOUNTS -> R.string.accounts
         DefaultScreen.ACTIVITY -> R.string.activity
+        DefaultScreen.DEBTS -> R.string.debts
     },
 )

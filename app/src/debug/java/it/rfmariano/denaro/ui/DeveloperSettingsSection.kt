@@ -1,9 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package it.rfmariano.denaro.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,12 +34,23 @@ internal fun DeveloperSettingsSection(provider: FinanceSessionProvider) {
 
     Text(
         text = stringResource(R.string.developer_options),
-        modifier = Modifier.padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = 8.dp, top = 20.dp, end = 8.dp, bottom = 8.dp),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
     )
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.demo_mode)) },
+    SegmentedListItem(
+        onClick = {
+            busy = true
+            failed = false
+            scope.launch {
+                runCatching { provider.setDemoMode(!enabled, localeTag) }
+                    .onFailure { failed = true }
+                busy = false
+            }
+        },
+        enabled = !busy,
+        shapes = ListItemDefaults.segmentedShapes(0, 1),
+        colors = denaroSegmentedItemColors(),
         supportingContent = {
             Text(
                 stringResource(
@@ -52,14 +65,10 @@ internal fun DeveloperSettingsSection(provider: FinanceSessionProvider) {
                 onCheckedChange = null,
             )
         },
-        modifier = Modifier.clickable(enabled = !busy) {
-            busy = true
-            failed = false
-            scope.launch {
-                runCatching { provider.setDemoMode(!enabled, localeTag) }
-                    .onFailure { failed = true }
-                busy = false
-            }
-        },
-    )
+    ) {
+        Text(
+            text = stringResource(R.string.demo_mode),
+            style = MaterialTheme.typography.titleMediumEmphasized,
+        )
+    }
 }

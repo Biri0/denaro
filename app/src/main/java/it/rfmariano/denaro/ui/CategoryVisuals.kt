@@ -4,7 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import it.rfmariano.denaro.R
 import java.text.Normalizer
-import com.composables.icons.lucide.R as LucideR
 
 data class CategoryIconOption(
     val name: String,
@@ -24,300 +24,300 @@ data class CategoryIconOption(
 const val CATEGORY_ICON_SUGGESTION_DEBOUNCE_MS = 300L
 
 val CategoryIconOptions = listOf(
-    CategoryIconOption("shapes", LucideR.drawable.lucide_ic_shapes, setOf("altro", "other")),
+    CategoryIconOption("shapes", R.drawable.ms_category, setOf("altro", "other")),
     CategoryIconOption(
         "house",
-        LucideR.drawable.lucide_ic_house,
+        R.drawable.ms_home,
         setOf("casa", "home", "affitto", "rent", "mutuo", "mortgage")
     ),
     CategoryIconOption(
         "lightbulb",
-        LucideR.drawable.lucide_ic_lightbulb,
+        R.drawable.ms_lightbulb,
         setOf("utenze", "utilities", "energia")
     ),
     CategoryIconOption(
         "wrench",
-        LucideR.drawable.lucide_ic_wrench,
+        R.drawable.ms_build,
         setOf("manutenzione", "maintenance", "riparazioni")
     ),
     CategoryIconOption(
         "utensils",
-        LucideR.drawable.lucide_ic_utensils,
+        R.drawable.ms_restaurant,
         setOf("alimentazione", "food", "ristoranti", "restaurants", "bar")
     ),
     CategoryIconOption(
         "shopping_basket",
-        LucideR.drawable.lucide_ic_shopping_basket,
+        R.drawable.ms_shopping_basket,
         setOf("spesa", "groceries", "supermercato")
     ),
     CategoryIconOption(
         "car",
-        LucideR.drawable.lucide_ic_car,
+        R.drawable.ms_directions_car,
         setOf("auto", "trasporti", "transport")
     ),
     CategoryIconOption(
         "fuel",
-        LucideR.drawable.lucide_ic_fuel,
+        R.drawable.ms_local_gas_station,
         setOf("carburante", "benzina", "fuel", "gas")
     ),
     CategoryIconOption(
         "bus",
-        LucideR.drawable.lucide_ic_bus,
+        R.drawable.ms_directions_bus,
         setOf("bus", "trasporto pubblico", "public transport")
     ),
     CategoryIconOption(
         "heart_pulse",
-        LucideR.drawable.lucide_ic_heart_pulse,
+        R.drawable.ms_monitor_heart,
         setOf("salute", "health")
     ),
     CategoryIconOption(
         "pill",
-        LucideR.drawable.lucide_ic_pill,
+        R.drawable.ms_pill,
         setOf("farmaci", "medicine", "pharmacy")
     ),
     CategoryIconOption(
         "stethoscope",
-        LucideR.drawable.lucide_ic_stethoscope,
+        R.drawable.ms_stethoscope,
         setOf("visite", "medical", "doctor")
     ),
     CategoryIconOption(
         "gamepad_2",
-        LucideR.drawable.lucide_ic_gamepad_2,
+        R.drawable.ms_sports_esports,
         setOf("tempo libero", "leisure", "giochi", "games")
     ),
     CategoryIconOption(
         "clapperboard",
-        LucideR.drawable.lucide_ic_clapperboard,
+        R.drawable.ms_movie,
         setOf("intrattenimento", "entertainment", "cinema")
     ),
     CategoryIconOption(
         "plane",
-        LucideR.drawable.lucide_ic_plane,
+        R.drawable.ms_flight,
         setOf("viaggi", "travel", "vacanze")
     ),
     CategoryIconOption(
         "shopping_bag",
-        LucideR.drawable.lucide_ic_shopping_bag,
+        R.drawable.ms_shopping_bag,
         setOf("acquisti", "shopping")
     ),
     CategoryIconOption(
         "shirt",
-        LucideR.drawable.lucide_ic_shirt,
+        R.drawable.ms_apparel,
         setOf("abbigliamento", "clothing")
     ),
     CategoryIconOption(
         "armchair",
-        LucideR.drawable.lucide_ic_armchair,
+        R.drawable.ms_chair,
         setOf("arredamento", "household", "furniture")
     ),
     CategoryIconOption(
         "receipt_text",
-        LucideR.drawable.lucide_ic_receipt_text,
+        R.drawable.ms_request_quote,
         setOf("servizi", "services", "bollette")
     ),
     CategoryIconOption(
         "refresh_cw",
-        LucideR.drawable.lucide_ic_refresh_cw,
+        R.drawable.ms_autorenew,
         setOf("abbonamenti", "subscriptions", "ricorrenti")
     ),
     CategoryIconOption(
         "wifi",
-        LucideR.drawable.lucide_ic_wifi,
+        R.drawable.ms_wifi,
         setOf("internet", "telefono", "phone", "wifi")
     ),
     CategoryIconOption(
         "gift",
-        LucideR.drawable.lucide_ic_gift,
+        R.drawable.ms_redeem,
         setOf("regali", "gifts", "donazioni", "donations")
     ),
     CategoryIconOption(
         "landmark",
-        LucideR.drawable.lucide_ic_landmark,
+        R.drawable.ms_account_balance,
         setOf("tasse", "taxes", "commissioni", "fees", "banca")
     ),
     CategoryIconOption(
         "briefcase_business",
-        LucideR.drawable.lucide_ic_briefcase_business,
+        R.drawable.ms_work,
         setOf("lavoro", "work", "job")
     ),
     CategoryIconOption(
         "banknote",
-        LucideR.drawable.lucide_ic_banknote,
+        R.drawable.ms_payments,
         setOf("stipendio", "salary", "paga")
     ),
     CategoryIconOption(
         "badge_dollar_sign",
-        LucideR.drawable.lucide_ic_badge_dollar_sign,
+        R.drawable.ms_paid,
         setOf("bonus", "premio")
     ),
     CategoryIconOption(
         "laptop",
-        LucideR.drawable.lucide_ic_laptop,
+        R.drawable.ms_laptop,
         setOf("freelance", "attivita autonoma", "compensi")
     ),
     CategoryIconOption(
         "wallet",
-        LucideR.drawable.lucide_ic_wallet,
+        R.drawable.ms_account_balance_wallet,
         setOf("compensi", "fees", "portafoglio")
     ),
     CategoryIconOption(
         "chart_no_axes_combined",
-        LucideR.drawable.lucide_ic_chart_no_axes_combined,
+        R.drawable.ms_trending_up,
         setOf("investimenti", "investments")
     ),
     CategoryIconOption(
         "percent",
-        LucideR.drawable.lucide_ic_percent,
+        R.drawable.ms_percent,
         setOf("interessi", "interest")
     ),
     CategoryIconOption(
         "hand_coins",
-        LucideR.drawable.lucide_ic_hand_coins,
+        R.drawable.ms_handshake,
         setOf("dividendi", "dividends")
     ),
     CategoryIconOption(
         "rotate_ccw",
-        LucideR.drawable.lucide_ic_rotate_ccw,
+        R.drawable.ms_currency_exchange,
         setOf("rimborsi", "refunds")
     ),
     CategoryIconOption(
         "circle_help",
-        LucideR.drawable.lucide_ic_circle_question_mark,
+        R.drawable.ms_help,
         setOf("senza categoria", "uncategorized")
     ),
     CategoryIconOption(
         "coffee",
-        LucideR.drawable.lucide_ic_coffee,
+        R.drawable.ms_local_cafe,
         setOf("caffe", "colazione", "coffee", "breakfast")
     ),
     CategoryIconOption(
         "cake_slice",
-        LucideR.drawable.lucide_ic_cake_slice,
+        R.drawable.ms_cake,
         setOf("dolci", "torta", "compleanno", "cake", "birthday")
     ),
     CategoryIconOption(
         "dumbbell",
-        LucideR.drawable.lucide_ic_dumbbell,
+        R.drawable.ms_fitness_center,
         setOf("sport", "palestra", "fitness", "gym")
     ),
     CategoryIconOption(
         "baby",
-        LucideR.drawable.lucide_ic_baby,
+        R.drawable.ms_child_care,
         setOf("bambini", "figli", "neonato", "children", "kids")
     ),
     CategoryIconOption(
         "paw_print",
-        LucideR.drawable.lucide_ic_paw_print,
+        R.drawable.ms_pets,
         setOf("animali", "cane", "gatto", "pets", "dog", "cat")
     ),
     CategoryIconOption(
         "book_open",
-        LucideR.drawable.lucide_ic_book_open,
+        R.drawable.ms_menu_book,
         setOf("libri", "studio", "lettura", "books", "study")
     ),
     CategoryIconOption(
         "graduation_cap",
-        LucideR.drawable.lucide_ic_graduation_cap,
+        R.drawable.ms_school,
         setOf("istruzione", "universita", "scuola", "education", "school")
     ),
     CategoryIconOption(
         "music",
-        LucideR.drawable.lucide_ic_music,
+        R.drawable.ms_music_note,
         setOf("musica", "concerti", "music", "concerts")
     ),
     CategoryIconOption(
         "headphones",
-        LucideR.drawable.lucide_ic_headphones,
+        R.drawable.ms_headphones,
         setOf("audio", "podcast", "cuffie")
     ),
     CategoryIconOption(
         "camera",
-        LucideR.drawable.lucide_ic_camera,
+        R.drawable.ms_photo_camera,
         setOf("fotografia", "foto", "photography")
     ),
     CategoryIconOption(
         "smartphone",
-        LucideR.drawable.lucide_ic_smartphone,
+        R.drawable.ms_smartphone,
         setOf("telefono", "cellulare", "phone", "mobile")
     ),
     CategoryIconOption(
         "tv",
-        LucideR.drawable.lucide_ic_tv,
+        R.drawable.ms_tv,
         setOf("televisione", "streaming", "serie", "television")
     ),
     CategoryIconOption(
         "bed_double",
-        LucideR.drawable.lucide_ic_bed_double,
+        R.drawable.ms_bed,
         setOf("hotel", "alloggio", "camera", "accommodation")
     ),
     CategoryIconOption(
         "hammer",
-        LucideR.drawable.lucide_ic_hammer,
+        R.drawable.ms_hardware,
         setOf("lavori", "fai da te", "attrezzi", "tools", "diy")
     ),
     CategoryIconOption(
         "paintbrush",
-        LucideR.drawable.lucide_ic_paintbrush,
+        R.drawable.ms_brush,
         setOf("pittura", "decorazione", "arte", "paint", "art")
     ),
     CategoryIconOption(
         "trees",
-        LucideR.drawable.lucide_ic_trees,
+        R.drawable.ms_park,
         setOf("natura", "giardino", "parco", "nature", "garden")
     ),
     CategoryIconOption(
         "bike",
-        LucideR.drawable.lucide_ic_bike,
+        R.drawable.ms_pedal_bike,
         setOf("bici", "bicicletta", "cycling", "bicycle")
     ),
     CategoryIconOption(
         "train_front",
-        LucideR.drawable.lucide_ic_train_front,
+        R.drawable.ms_train,
         setOf("treno", "ferrovia", "train", "rail")
     ),
     CategoryIconOption(
         "ship",
-        LucideR.drawable.lucide_ic_ship,
+        R.drawable.ms_directions_boat,
         setOf("nave", "traghetto", "crociera", "ferry", "cruise")
     ),
     CategoryIconOption(
         "ticket",
-        LucideR.drawable.lucide_ic_ticket,
+        R.drawable.ms_confirmation_number,
         setOf("biglietti", "eventi", "tickets", "events")
     ),
     CategoryIconOption(
         "calendar_days",
-        LucideR.drawable.lucide_ic_calendar_days,
+        R.drawable.ms_calendar_month,
         setOf("calendario", "appuntamenti", "calendar", "appointments")
     ),
     CategoryIconOption(
         "shield",
-        LucideR.drawable.lucide_ic_shield,
+        R.drawable.ms_shield,
         setOf("assicurazione", "protezione", "insurance", "protection")
     ),
     CategoryIconOption(
         "piggy_bank",
-        LucideR.drawable.lucide_ic_piggy_bank,
+        R.drawable.ms_savings,
         setOf("risparmio", "salvadanaio", "savings")
     ),
     CategoryIconOption(
         "coins",
-        LucideR.drawable.lucide_ic_coins,
+        R.drawable.ms_toll,
         setOf("monete", "contanti", "cash", "money")
     ),
     CategoryIconOption(
         "credit_card",
-        LucideR.drawable.lucide_ic_credit_card,
+        R.drawable.ms_credit_card,
         setOf("carta", "pagamenti", "credito", "card", "payments")
     ),
     CategoryIconOption(
         "building_2",
-        LucideR.drawable.lucide_ic_building_2,
+        R.drawable.ms_apartment,
         setOf("ufficio", "azienda", "impresa", "office", "company")
     ),
     CategoryIconOption(
         "store",
-        LucideR.drawable.lucide_ic_store,
+        R.drawable.ms_storefront,
         setOf("negozio", "commercio", "shop", "retail")
     ),
 )
@@ -386,8 +386,8 @@ fun CategoryIcon(
     val color = CategoryPalette[(colorIndex ?: 0).mod(CategoryPalette.size)]
     Box(
         modifier = modifier
-            .size(40.dp)
-            .background(color.copy(alpha = 0.14f), CircleShape),
+            .size(42.dp)
+            .background(color.copy(alpha = 0.16f), RoundedCornerShape(14.dp)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

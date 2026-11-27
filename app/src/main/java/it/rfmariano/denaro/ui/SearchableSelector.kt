@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -40,7 +42,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import it.rfmariano.denaro.R
 import java.text.Normalizer
-import com.composables.icons.lucide.R as LucideR
 
 internal const val SELECTOR_SEARCH_THRESHOLD = 10
 
@@ -115,9 +116,10 @@ internal fun InlineSearchField(
         onValueChange = onQueryChange,
         placeholder = { Text(stringResource(R.string.search)) },
         singleLine = true,
+        shape = CircleShape,
         leadingIcon = {
             Icon(
-                painter = painterResource(LucideR.drawable.lucide_ic_search),
+                painter = painterResource(R.drawable.ms_search),
                 contentDescription = null,
             )
         },
@@ -125,7 +127,7 @@ internal fun InlineSearchField(
             {
                 IconButton(onClick = { onQueryChange("") }) {
                     Icon(
-                        painter = painterResource(LucideR.drawable.lucide_ic_x),
+                        painter = painterResource(R.drawable.ms_close),
                         contentDescription = stringResource(R.string.clear_search),
                     )
                 }
@@ -172,6 +174,7 @@ internal fun <T> AdaptiveSelector(
         modifier = modifier,
     ) {
         OutlinedTextField(
+            shape = MaterialTheme.shapes.large,
             value = selectedText,
             onValueChange = {},
             readOnly = true,
@@ -353,7 +356,7 @@ private fun <T> SelectorSheetRow(
         trailingContent = if (option.selected) {
             {
                 Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_check),
+                    painter = painterResource(R.drawable.ms_check),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                 )

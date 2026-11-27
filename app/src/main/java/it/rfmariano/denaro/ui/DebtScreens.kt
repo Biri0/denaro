@@ -1,44 +1,53 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package it.rfmariano.denaro.ui
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,12 +60,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.rfmariano.denaro.R
+import it.rfmariano.denaro.data.finance.AccountSummary
 import it.rfmariano.denaro.data.finance.CounterpartyInput
 import it.rfmariano.denaro.data.finance.CounterpartySummary
 import it.rfmariano.denaro.data.finance.DebtEntryDefaults
@@ -66,8 +79,8 @@ import it.rfmariano.denaro.data.finance.DebtSummary
 import it.rfmariano.denaro.data.finance.FinanceRepository
 import it.rfmariano.denaro.data.finance.Money
 import it.rfmariano.denaro.data.local.DebtDirection
-import it.rfmariano.denaro.ui.theme.Positive
-import it.rfmariano.denaro.ui.theme.PositiveDark
+import it.rfmariano.denaro.ui.theme.denaroColors
+import it.rfmariano.denaro.ui.theme.tabularNumbers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -75,7 +88,63 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.math.abs
-import com.composables.icons.lucide.R as LucideR
+
+@Composable
+fun DebtsRouteContent(
+    viewModel: DebtsViewModel,
+    amountsVisible: Boolean,
+    onAddDebt: () -> Unit,
+    onDebtClick: (String) -> Unit,
+    onCounterparties: () -> Unit,
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.debts),
+                        style = MaterialTheme.typography.headlineSmallEmphasized,
+                    )
+                },
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
+                actions = {
+                    IconButton(onClick = onCounterparties) {
+                        Icon(
+                            painter = painterResource(R.drawable.ms_group),
+                            contentDescription = stringResource(R.string.counterparties),
+                        )
+                    }
+                },
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddDebt,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ms_add),
+                    contentDescription = stringResource(R.string.add_debt),
+                )
+            }
+        },
+    ) { padding ->
+        DebtsPanel(
+            debts = state.debts,
+            amountsVisible = amountsVisible,
+            onAddDebt = onAddDebt,
+            onDebtClick = onDebtClick,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        )
+    }
+}
 
 @Composable
 fun DebtsPanel(
@@ -83,6 +152,7 @@ fun DebtsPanel(
     amountsVisible: Boolean,
     onAddDebt: () -> Unit,
     onDebtClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var direction by rememberSaveable { mutableStateOf<DebtDirection?>(null) }
     var status by rememberSaveable { mutableStateOf(DebtStatusFilter.OPEN) }
@@ -97,7 +167,7 @@ fun DebtsPanel(
     val visible = remember(debts, direction, status, today, selectedCounterpartyId) {
         filterDebts(debts, direction, status, today, selectedCounterpartyId)
     }
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         val currencyTotals = remember(debts, selectedCounterpartyId) {
             debtCurrencyTotals(debts, selectedCounterpartyId)
         }
@@ -108,36 +178,38 @@ fun DebtsPanel(
                     amountsVisible = amountsVisible,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
                 )
             } else {
                 Row(
-                    Modifier
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     DebtTotal(
-                        R.string.you_owe,
-                        totals.youOweMinor,
-                        totals.currency,
-                        totals.fractionDigits,
-                        amountsVisible,
-                        Modifier.weight(1f),
+                        label = R.string.you_owe,
+                        amount = totals.youOweMinor,
+                        currency = totals.currency,
+                        fractionDigits = totals.fractionDigits,
+                        visible = amountsVisible,
+                        amountColor = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
                     )
                     DebtTotal(
-                        R.string.owed_to_you,
-                        totals.owedToYouMinor,
-                        totals.currency,
-                        totals.fractionDigits,
-                        amountsVisible,
-                        Modifier.weight(1f),
+                        label = R.string.owed_to_you,
+                        amount = totals.owedToYouMinor,
+                        currency = totals.currency,
+                        fractionDigits = totals.fractionDigits,
+                        visible = amountsVisible,
+                        amountColor = MaterialTheme.denaroColors.positive,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
         Row(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -153,26 +225,22 @@ fun DebtsPanel(
                                     null -> R.string.all
                                     DebtDirection.BORROWED -> R.string.borrowed
                                     DebtDirection.LENT -> R.string.lent
-                                }
-                            )
+                                },
+                            ),
                         )
                     },
                 )
             }
         }
-        SingleChoiceSegmentedButtonRow(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-        ) {
-            DebtStatusFilter.entries.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = status == option,
-                    onClick = { status = option },
-                    shape = SegmentedButtonDefaults.itemShape(index, DebtStatusFilter.entries.size),
-                ) { Text(stringResource(if (option == DebtStatusFilter.OPEN) R.string.open else R.string.settled)) }
-            }
-        }
+        DenaroSegmentedChoiceRow(
+            options = DebtStatusFilter.entries,
+            selectedOption = status,
+            onSelect = { status = it },
+            label = { option ->
+                stringResource(if (option == DebtStatusFilter.OPEN) R.string.open else R.string.settled)
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
         CounterpartyFilterRow(
             options = counterparties,
             selectedId = selectedCounterpartyId,
@@ -180,17 +248,33 @@ fun DebtsPanel(
         )
         if (visible.isEmpty()) {
             EmptyState(
-                icon = LucideR.drawable.lucide_ic_hand_coins,
+                icon = R.drawable.ms_handshake,
                 title = stringResource(R.string.no_debts),
                 description = stringResource(R.string.no_debts_description),
                 modifier = Modifier.fillMaxSize(),
-                action = { Button(onClick = onAddDebt) { Text(stringResource(R.string.add_debt)) } },
+                action = {
+                    Button(onClick = onAddDebt) {
+                        Text(stringResource(R.string.add_debt))
+                    }
+                },
             )
         } else {
-            LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
-                items(visible, key = { it.id }) { debt ->
-                    DebtRow(debt, amountsVisible) { onDebtClick(debt.id) }
-                    HorizontalDivider(Modifier.padding(start = 20.dp))
+            LazyColumn(
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 8.dp,
+                    bottom = 104.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                itemsIndexed(visible, key = { _, debt -> debt.id }) { index, debt ->
+                    DebtRow(
+                        debt = debt,
+                        amountsVisible = amountsVisible,
+                        shapes = ListItemDefaults.segmentedShapes(index, visible.size),
+                        onClick = { onDebtClick(debt.id) },
+                    )
                 }
             }
         }
@@ -204,7 +288,7 @@ private fun CounterpartyFilterRow(
     onSelected: (String?) -> Unit,
 ) {
     Row(
-        Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -234,18 +318,35 @@ private fun DebtTotal(
     currency: String,
     fractionDigits: Int,
     visible: Boolean,
-    modifier: Modifier
+    amountColor: Color,
+    modifier: Modifier,
 ) {
-    Column(modifier.padding(12.dp)) {
-        Text(stringResource(label), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            if (visible) Money.format(
-                amount,
-                currency,
-                fractionDigits
-            ) else stringResource(R.string.amount_hidden),
-            style = MaterialTheme.typography.titleLarge,
-        )
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = stringResource(label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = if (visible) {
+                    Money.format(amount, currency, fractionDigits)
+                } else {
+                    stringResource(R.string.amount_hidden)
+                },
+                style = MaterialTheme.typography.titleLargeEmphasized.tabularNumbers(),
+                color = if (amount > 0L) amountColor else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -263,7 +364,7 @@ private fun CounterpartyNetTotal(
         else -> R.string.net_even
     }
     val amountColor = when {
-        totals.netMinor > 0L -> if (isSystemInDarkTheme()) PositiveDark else Positive
+        totals.netMinor > 0L -> MaterialTheme.denaroColors.positive
         totals.netMinor < 0L -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -273,74 +374,156 @@ private fun CounterpartyNetTotal(
     } else {
         hidden
     }
-    Column(modifier.padding(12.dp)) {
-        Text(stringResource(labelRes), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            text = formatted(abs(totals.netMinor)),
-            style = MaterialTheme.typography.titleLarge,
-            color = amountColor,
-        )
-        if (totals.hasBothDirections) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.largeIncreased,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text(
-                text = "${stringResource(R.string.owed_to_you)} ${formatted(totals.owedToYouMinor)} · ${
-                    stringResource(
-                        R.string.you_owe
-                    )
-                } ${formatted(totals.youOweMinor)}",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(labelRes),
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = formatted(abs(totals.netMinor)),
+                style = MaterialTheme.typography.headlineSmallEmphasized.tabularNumbers(),
+                color = amountColor,
+            )
+            if (totals.hasBothDirections) {
+                Text(
+                    text = "${stringResource(R.string.owed_to_you)} ${formatted(totals.owedToYouMinor)} · ${
+                        stringResource(R.string.you_owe)
+                    } ${formatted(totals.youOweMinor)}",
+                    style = MaterialTheme.typography.bodySmall.tabularNumbers(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DebtRow(debt: DebtSummary, amountsVisible: Boolean, onClick: () -> Unit) {
+private fun DebtRow(
+    debt: DebtSummary,
+    amountsVisible: Boolean,
+    shapes: ListItemShapes,
+    onClick: () -> Unit,
+) {
     val today = LocalDate.now()
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+    val isOverdue = debt.isOverdue(today)
+    val isBorrowed = debt.direction == DebtDirection.BORROWED
+    val badgeBg = when {
+        debt.isSettled -> MaterialTheme.colorScheme.surfaceContainerHighest
+        isOverdue -> MaterialTheme.colorScheme.errorContainer
+        isBorrowed -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.denaroColors.positiveContainer
+    }
+    val badgeFg = when {
+        debt.isSettled -> MaterialTheme.colorScheme.onSurfaceVariant
+        isOverdue -> MaterialTheme.colorScheme.onErrorContainer
+        isBorrowed -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.denaroColors.onPositiveContainer
+    }
+    val amountColor = when {
+        debt.isSettled -> MaterialTheme.colorScheme.onSurfaceVariant
+        isBorrowed -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.denaroColors.positive
+    }
+    val repaidFraction = if (debt.principalMinor > 0L) {
+        (debt.repaidMinor.toFloat() / debt.principalMinor.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = denaroSegmentedItemColors(),
         leadingContent = {
-            Icon(painterResource(LucideR.drawable.lucide_ic_hand_coins), contentDescription = null)
+            DenaroIconBadge(
+                icon = if (isBorrowed) R.drawable.ms_download else R.drawable.ms_upload,
+                containerColor = badgeBg,
+                contentColor = badgeFg,
+                size = 42.dp,
+                iconSize = 20.dp,
+            )
         },
-        headlineContent = { Text(debt.counterpartyName) },
         supportingContent = {
-            Column {
-                Text(stringResource(if (debt.direction == DebtDirection.BORROWED) R.string.borrowed else R.string.lent))
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    stringResource(if (isBorrowed) R.string.borrowed else R.string.lent),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 debt.dueDate?.let { due ->
                     val date = LocalDate.parse(due)
                     Text(
-                        when {
-                            debt.isOverdue(today) -> stringResource(R.string.overdue)
+                        text = when {
+                            isOverdue -> stringResource(R.string.overdue)
                             !debt.isSettled && date == today -> stringResource(R.string.due_today)
                             else -> stringResource(R.string.due_on, date.formattedDate())
                         },
-                        color = if (debt.isOverdue(today)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isOverdue) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                if (debt.repaidMinor > 0L && !debt.isSettled) {
+                    Spacer(Modifier.height(2.dp))
+                    DenaroLinearMeter(
+                        progress = repaidFraction,
+                        color = if (isBorrowed) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.denaroColors.positive
+                        },
+                        height = 5.dp,
                     )
                 }
             }
         },
         trailingContent = {
-            Column {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    if (amountsVisible) Money.format(
-                        maxOf(0L, debt.outstandingMinor),
-                        debt.currency,
-                        debt.fractionDigits
-                    ) else stringResource(R.string.amount_hidden)
+                    text = if (amountsVisible) {
+                        Money.format(
+                            maxOf(0L, debt.outstandingMinor),
+                            debt.currency,
+                            debt.fractionDigits,
+                        )
+                    } else {
+                        stringResource(R.string.amount_hidden)
+                    },
+                    style = MaterialTheme.typography.titleMediumEmphasized.tabularNumbers(),
+                    color = amountColor,
                 )
                 Text(
-                    stringResource(if (debt.isSettled) R.string.settled else R.string.outstanding),
-                    style = MaterialTheme.typography.bodySmall
+                    text = stringResource(if (debt.isSettled) R.string.settled else R.string.outstanding),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-    )
+    ) {
+        Text(
+            text = debt.counterpartyName,
+            style = MaterialTheme.typography.titleMediumEmphasized,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
 fun DebtDetailScreen(
     state: DebtDetailUiState,
-    accounts: List<it.rfmariano.denaro.data.finance.AccountSummary>,
+    accounts: List<AccountSummary>,
     amountsVisible: Boolean,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
@@ -348,17 +531,21 @@ fun DebtDetailScreen(
     onEditRepayment: (String, String) -> Unit,
 ) {
     val debt = state.debt
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            MediumFlexibleTopAppBar(
                 title = { Text(debt?.counterpartyName.orEmpty()) },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
                 actions = {
                     debt?.let {
                         IconButton(onClick = { onEdit(it.id) }) {
                             Icon(
-                                painterResource(LucideR.drawable.lucide_ic_pencil),
-                                contentDescription = stringResource(R.string.edit_debt)
+                                painterResource(R.drawable.ms_edit),
+                                contentDescription = stringResource(R.string.edit_debt),
                             )
                         }
                     }
@@ -367,103 +554,218 @@ fun DebtDetailScreen(
         },
     ) { padding ->
         if (debt != null) {
+            val repaidFraction = if (debt.principalMinor > 0L) {
+                (debt.repaidMinor.toFloat() / debt.principalMinor.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            val heroContainer = if (debt.direction == DebtDirection.LENT) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            }
+            val heroContent = if (debt.direction == DebtDirection.LENT) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+
             LazyColumn(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 24.dp)
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 8.dp,
+                    bottom = 32.dp,
+                ),
             ) {
                 item {
-                    Column(
-                        Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    DenaroSectionCard(
+                        containerColor = heroContainer,
+                        contentColor = heroContent,
+                        contentPadding = PaddingValues(22.dp),
                     ) {
-                        Text(stringResource(if (debt.direction == DebtDirection.BORROWED) R.string.you_owe else R.string.owed_to_you))
                         Text(
-                            if (amountsVisible) Money.format(
-                                maxOf(0L, debt.outstandingMinor),
-                                debt.currency,
-                                debt.fractionDigits
-                            ) else stringResource(R.string.amount_hidden),
-                            style = MaterialTheme.typography.headlineMedium,
+                            text = stringResource(
+                                if (debt.direction == DebtDirection.BORROWED) {
+                                    R.string.you_owe
+                                } else {
+                                    R.string.owed_to_you
+                                },
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = heroContent.copy(alpha = 0.78f),
                         )
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "${stringResource(R.string.principal)}: ${
-                                if (amountsVisible) Money.format(
-                                    debt.principalMinor,
+                            text = if (amountsVisible) {
+                                Money.format(
+                                    maxOf(0L, debt.outstandingMinor),
                                     debt.currency,
-                                    debt.fractionDigits
-                                ) else stringResource(R.string.amount_hidden)
-                            }"
-                        )
-                        Text(
-                            "${stringResource(R.string.repaid)}: ${
-                                if (amountsVisible) Money.format(
-                                    debt.repaidMinor,
-                                    debt.currency,
-                                    debt.fractionDigits
-                                ) else stringResource(R.string.amount_hidden)
-                            }"
-                        )
-                        if (debt.overpaidMinor > 0) {
-                            Text(
-                                stringResource(
-                                    R.string.overpaid_by,
-                                    if (amountsVisible) Money.format(
-                                        debt.overpaidMinor,
-                                        debt.currency,
-                                        debt.fractionDigits
-                                    ) else stringResource(R.string.amount_hidden),
-                                ),
-                                color = MaterialTheme.colorScheme.tertiary,
-                            )
-                        }
-                        Text(debt.accountName)
-                        debt.dueDate?.let {
-                            Text(
-                                stringResource(
-                                    R.string.due_on,
-                                    LocalDate.parse(it).formattedDate()
+                                    debt.fractionDigits,
                                 )
-                            )
-                        }
-                        debt.note?.let {
+                            } else {
+                                stringResource(R.string.amount_hidden)
+                            },
+                            style = MaterialTheme.typography.displaySmallEmphasized.tabularNumbers(),
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        DenaroLinearMeter(
+                            progress = repaidFraction,
+                            color = if (debt.direction == DebtDirection.LENT) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.denaroColors.positive
+                            },
+                            trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            height = 8.dp,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
                             Text(
-                                it,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "${stringResource(R.string.principal)}: ${
+                                    if (amountsVisible) {
+                                        Money.format(
+                                            debt.principalMinor,
+                                            debt.currency,
+                                            debt.fractionDigits,
+                                        )
+                                    } else {
+                                        stringResource(R.string.amount_hidden)
+                                    }
+                                }",
+                                style = MaterialTheme.typography.bodyMedium.tabularNumbers(),
+                            )
+                            Text(
+                                text = "${stringResource(R.string.repaid)}: ${
+                                    if (amountsVisible) {
+                                        Money.format(
+                                            debt.repaidMinor,
+                                            debt.currency,
+                                            debt.fractionDigits,
+                                        )
+                                    } else {
+                                        stringResource(R.string.amount_hidden)
+                                    }
+                                }",
+                                style = MaterialTheme.typography.bodyMedium.tabularNumbers(),
                             )
                         }
+                        if (debt.overpaidMinor > 0) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.overpaid_by,
+                                    if (amountsVisible) {
+                                        Money.format(
+                                            debt.overpaidMinor,
+                                            debt.currency,
+                                            debt.fractionDigits,
+                                        )
+                                    } else {
+                                        stringResource(R.string.amount_hidden)
+                                    },
+                                ),
+                                style = MaterialTheme.typography.labelLarge.tabularNumbers(),
+                                color = MaterialTheme.denaroColors.warning,
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = debt.accountName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = heroContent.copy(alpha = 0.8f),
+                        )
+                        debt.dueDate?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.due_on,
+                                    LocalDate.parse(it).formattedDate(),
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = heroContent.copy(alpha = 0.8f),
+                            )
+                        }
+                        debt.note?.takeIf(String::isNotBlank)?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = heroContent.copy(alpha = 0.78f),
+                            )
+                        }
+                        Spacer(Modifier.height(18.dp))
                         Button(
                             onClick = { onAddRepayment(debt.id) },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ms_add),
+                                contentDescription = null,
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.add_repayment))
                         }
                     }
                 }
-                if (state.repayments.isNotEmpty()) item { SectionHeader(stringResource(R.string.repayments)) }
-                items(state.repayments, key = { it.id }) { payment ->
-                    val account = accounts.find { it.id == payment.accountId }?.name.orEmpty()
-                    ListItem(
-                        modifier = Modifier.clickable { onEditRepayment(debt.id, payment.id) },
-                        headlineContent = {
+                if (state.repayments.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(R.string.repayments),
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                    itemsIndexed(state.repayments, key = { _, p -> p.id }) { index, payment ->
+                        val account = accounts.find { it.id == payment.accountId }?.name.orEmpty()
+                        SegmentedListItem(
+                            onClick = { onEditRepayment(debt.id, payment.id) },
+                            shapes = ListItemDefaults.segmentedShapes(index, state.repayments.size),
+                            colors = denaroSegmentedItemColors(),
+                            modifier = Modifier.padding(
+                                bottom = if (index < state.repayments.lastIndex) {
+                                    ListItemDefaults.SegmentedGap
+                                } else {
+                                    0.dp
+                                },
+                            ),
+                            leadingContent = {
+                                DenaroIconBadge(
+                                    icon = R.drawable.ms_payments,
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    size = 40.dp,
+                                    iconSize = 20.dp,
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    listOf(
+                                        account,
+                                        payment.occurredAt.formattedDate(),
+                                    ).filter(String::isNotBlank).joinToString(" · "),
+                                )
+                            },
+                        ) {
                             Text(
-                                if (amountsVisible) Money.format(
-                                    payment.amountMinor,
-                                    debt.currency,
-                                    debt.fractionDigits
-                                ) else stringResource(R.string.amount_hidden)
+                                text = if (amountsVisible) {
+                                    Money.format(
+                                        payment.amountMinor,
+                                        debt.currency,
+                                        debt.fractionDigits,
+                                    )
+                                } else {
+                                    stringResource(R.string.amount_hidden)
+                                },
+                                style = MaterialTheme.typography.titleMediumEmphasized.tabularNumbers(),
                             )
-                        },
-                        supportingContent = {
-                            Text(
-                                listOf(
-                                    account,
-                                    payment.occurredAt.formattedDate()
-                                ).filter(String::isNotBlank).joinToString(" · ")
-                            )
-                        },
-                    )
+                        }
+                    }
                 }
             }
         }
@@ -480,12 +782,10 @@ fun DebtEditorScreen(
     onDeleted: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
-    val accounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
-        emptyList()
-    )
-    val counterparties by remember(repository) { repository.observeCounterparties(includeArchived = true) }.collectAsStateWithLifecycle(
-        emptyList()
-    )
+    val accounts by remember(repository) { repository.observeAllAccounts() }
+        .collectAsStateWithLifecycle(emptyList())
+    val counterparties by remember(repository) { repository.observeCounterparties(includeArchived = true) }
+        .collectAsStateWithLifecycle(emptyList())
     var direction by rememberSaveable { mutableStateOf(initialDirection) }
     var counterpartyId by rememberSaveable { mutableStateOf("") }
     var accountId by rememberSaveable { mutableStateOf("") }
@@ -595,190 +895,252 @@ fun DebtEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(if (debtId == null) R.string.add_debt else R.string.edit_debt)) },
+                title = {
+                    Text(stringResource(if (debtId == null) R.string.add_debt else R.string.edit_debt))
+                },
                 navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
                 actions = {
-                    TextButton(enabled = loaded && selectedAccount != null && !saving, onClick = {
-                        val account = selectedAccount ?: return@TextButton
-                        saving = true
-                        scope.launch {
-                            runCatching {
-                                val input = DebtInput(
-                                    counterpartyId,
-                                    accountId,
-                                    direction,
-                                    Money.parseMinorUnits(amount, account.fractionDigits),
-                                    openedAt,
-                                    dueDate,
-                                    note
-                                )
-                                if (debtId == null) repository.createDebt(input) else {
-                                    repository.updateDebt(debtId, input); debtId
-                                }
-                            }.onSuccess { onMessage(saved); onFinished(it) }
-                                .onFailure { error = it.message; saving = false }
-                        }
-                    }) { Text(stringResource(R.string.save)) }
+                    FilledTonalButton(
+                        enabled = loaded && selectedAccount != null && !saving,
+                        modifier = Modifier.padding(end = 8.dp),
+                        onClick = {
+                            val account = selectedAccount ?: return@FilledTonalButton
+                            saving = true
+                            scope.launch {
+                                runCatching {
+                                    val input = DebtInput(
+                                        counterpartyId,
+                                        accountId,
+                                        direction,
+                                        Money.parseMinorUnits(amount, account.fractionDigits),
+                                        openedAt,
+                                        dueDate,
+                                        note,
+                                    )
+                                    if (debtId == null) {
+                                        repository.createDebt(input)
+                                    } else {
+                                        repository.updateDebt(debtId, input)
+                                        debtId
+                                    }
+                                }.onSuccess { onMessage(saved); onFinished(it) }
+                                    .onFailure { error = it.message; saving = false }
+                            }
+                        },
+                    ) { Text(stringResource(R.string.save)) }
                 },
             )
         },
     ) { padding ->
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                DebtDirection.entries.forEachIndexed { index, option ->
-                    SegmentedButton(
-                        selected = direction == option,
-                        enabled = !hasRepayments,
-                        onClick = {
-                            direction = option
-                            defaultsAppliedDirection = null
-                            accountDefaultsAppliedDirection = null
-                            counterpartyDefaultsAppliedDirection = null
-                            accountCustomized = false
-                            counterpartyCustomized = false
+            DenaroSegmentedChoiceRow(
+                options = DebtDirection.entries,
+                selectedOption = direction,
+                enabled = !hasRepayments,
+                onSelect = { option ->
+                    direction = option
+                    defaultsAppliedDirection = null
+                    accountDefaultsAppliedDirection = null
+                    counterpartyDefaultsAppliedDirection = null
+                    accountCustomized = false
+                    counterpartyCustomized = false
+                },
+                label = { option ->
+                    stringResource(
+                        if (option == DebtDirection.BORROWED) R.string.borrowed else R.string.lent,
+                    )
+                },
+            )
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    val selectableCounterparties = remember(counterparties, counterpartyId) {
+                        counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
+                    }
+                    AdaptiveSelector(
+                        label = stringResource(R.string.counterparty),
+                        selectedText = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
+                        options = selectableCounterparties.map { party ->
+                            SelectorOption(
+                                id = party.id,
+                                value = party.id,
+                                label = party.name,
+                                supportingText = party.note?.takeIf(String::isNotBlank),
+                                selected = party.id == counterpartyId,
+                            )
                         },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    ) { Text(stringResource(if (option == DebtDirection.BORROWED) R.string.borrowed else R.string.lent)) }
+                        onSelected = {
+                            counterpartyId = it
+                            counterpartyCustomized = true
+                        },
+                        enabled = selectorsReady,
+                        footerAction = SelectorAction(
+                            label = stringResource(R.string.add_counterparty),
+                            leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.ms_add),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = { query ->
+                                newCounterpartyInitialName = query
+                                showNewCounterparty = true
+                            },
+                        ),
+                    )
+                    AccountSelector(
+                        label = stringResource(
+                            if (direction == DebtDirection.BORROWED) {
+                                R.string.received_into
+                            } else {
+                                R.string.paid_from
+                            },
+                        ),
+                        accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
+                        selectedId = accountId,
+                        onSelected = {
+                            amount = Money.rescaleInput(
+                                amount,
+                                accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                                accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                            )
+                            accountId = it
+                            accountCustomized = true
+                        },
+                        enabled = selectorsReady,
+                    )
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = { Text(stringResource(R.string.amount)) },
+                        suffix = selectedAccount?.let { { Text(it.currency) } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    belowRepaymentsWarning?.takeIf { !saving }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.denaroColors.warning,
+                        )
+                    }
                 }
             }
-            val selectableCounterparties = remember(counterparties, counterpartyId) {
-                counterparties.filter { it.archivedAt == null || it.id == counterpartyId }
-            }
-            AdaptiveSelector(
-                label = stringResource(R.string.counterparty),
-                selectedText = counterparties.find { it.id == counterpartyId }?.name.orEmpty(),
-                options = selectableCounterparties.map { party ->
-                    SelectorOption(
-                        id = party.id,
-                        value = party.id,
-                        label = party.name,
-                        supportingText = party.note?.takeIf(String::isNotBlank),
-                        selected = party.id == counterpartyId,
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DateField(
+                        label = R.string.opened_date,
+                        value = openedAt.formattedDate(),
+                        onClick = { showOpenedPicker = true },
                     )
-                },
-                onSelected = {
-                    counterpartyId = it
-                    counterpartyCustomized = true
-                },
-                enabled = selectorsReady,
-                footerAction = SelectorAction(
-                    label = stringResource(R.string.add_counterparty),
-                    leadingIcon = {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_plus),
-                            contentDescription = null,
-                        )
-                    },
-                    onClick = { query ->
-                        newCounterpartyInitialName = query
-                        showNewCounterparty = true
-                    },
-                ),
-            )
-            AccountSelector(
-                label = stringResource(if (direction == DebtDirection.BORROWED) R.string.received_into else R.string.paid_from),
-                accounts = accounts.filter { it.archivedAt == null || it.id == accountId },
-                selectedId = accountId,
-                onSelected = {
-                    amount = Money.rescaleInput(
-                        amount,
-                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
-                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                    DateField(
+                        label = R.string.due_date,
+                        value = dueDate?.let { LocalDate.parse(it).formattedDate() }.orEmpty(),
+                        onClick = { showDuePicker = true },
+                        onClear = if (dueDate != null) ({ dueDate = null }) else null,
                     )
-                    accountId = it
-                    accountCustomized = true
-                },
-                enabled = selectorsReady,
-            )
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text(stringResource(R.string.amount)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth()
-            )
-            belowRepaymentsWarning?.takeIf { !saving }?.let {
-                Text(it, color = MaterialTheme.colorScheme.tertiary)
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text(stringResource(R.string.description)) },
+                        supportingText = { Text(stringResource(R.string.optional)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            DateField(
-                label = R.string.opened_date,
-                value = openedAt.formattedDate(),
-                onClick = { showOpenedPicker = true },
-            )
-            DateField(
-                label = R.string.due_date,
-                value = dueDate?.let { LocalDate.parse(it).formattedDate() }.orEmpty(),
-                onClick = { showDuePicker = true },
-                onClear = if (dueDate != null) ({ dueDate = null }) else null,
-            )
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text(stringResource(R.string.description)) },
-                supportingText = { Text(stringResource(R.string.optional)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (debtId != null) OutlinedButton(
-                onClick = { confirmDelete = true },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(stringResource(R.string.delete)) }
+            error?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+            if (debtId != null) {
+                OutlinedButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) { Text(stringResource(R.string.delete)) }
+            }
         }
     }
-    if (showNewCounterparty) CounterpartyDialog(
-        existing = null,
-        initialName = newCounterpartyInitialName,
-        onDismiss = {
-            showNewCounterparty = false
-            newCounterpartyInitialName = ""
-        },
-    ) { input ->
-        scope.launch {
-            runCatching { repository.createCounterparty(input) }.onSuccess {
-                counterpartyId = it
-                counterpartyCustomized = true
+    if (showNewCounterparty) {
+        CounterpartyDialog(
+            existing = null,
+            initialName = newCounterpartyInitialName,
+            onDismiss = {
                 showNewCounterparty = false
                 newCounterpartyInitialName = ""
-            }.onFailure { error = it.message }
+            },
+        ) { input ->
+            scope.launch {
+                runCatching { repository.createCounterparty(input) }.onSuccess {
+                    counterpartyId = it
+                    counterpartyCustomized = true
+                    showNewCounterparty = false
+                    newCounterpartyInitialName = ""
+                }.onFailure { error = it.message }
+            }
         }
     }
-    if (showOpenedPicker) LocalDatePicker(openedAt, { showOpenedPicker = false }) {
-        openedAt = it; showOpenedPicker = false
+    if (showOpenedPicker) {
+        LocalDatePicker(openedAt, { showOpenedPicker = false }) {
+            openedAt = it
+            showOpenedPicker = false
+        }
     }
-    if (showDuePicker) LocalDatePicker(dueDate?.let {
-        LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    } ?: openedAt, { showDuePicker = false }) {
-        dueDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
-            .toString(); showDuePicker = false
+    if (showDuePicker) {
+        LocalDatePicker(
+            initial = dueDate?.let {
+                LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            } ?: openedAt,
+            onDismiss = { showDuePicker = false },
+        ) {
+            dueDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
+            showDuePicker = false
+        }
     }
-    if (confirmDelete && debtId != null) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text(stringResource(R.string.delete_debt)) },
-        text = { Text(stringResource(R.string.delete_debt_message)) },
-        confirmButton = {
-            TextButton(onClick = {
-                scope.launch {
-                    repository.deleteDebt(debtId); onMessage(
-                    deleted
-                ); onDeleted()
+    if (confirmDelete && debtId != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.delete_debt)) },
+            text = { Text(stringResource(R.string.delete_debt_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            repository.deleteDebt(debtId)
+                            onMessage(deleted)
+                            onDeleted()
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text(stringResource(R.string.delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text(stringResource(R.string.cancel))
                 }
-            }) { Text(stringResource(R.string.delete)) }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                confirmDelete = false
-            }) { Text(stringResource(R.string.cancel)) }
-        },
-    )
+            },
+        )
+    }
 }
 
 @Composable
@@ -790,16 +1152,12 @@ fun DebtRepaymentEditorScreen(
     onFinished: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
-    val debt by remember(
-        repository,
-        debtId
-    ) { repository.observeDebt(debtId) }.collectAsStateWithLifecycle(null)
-    val accounts by remember(repository) { repository.observeActiveAccounts() }.collectAsStateWithLifecycle(
-        emptyList()
-    )
-    val allAccounts by remember(repository) { repository.observeAllAccounts() }.collectAsStateWithLifecycle(
-        emptyList()
-    )
+    val debt by remember(repository, debtId) { repository.observeDebt(debtId) }
+        .collectAsStateWithLifecycle(null)
+    val accounts by remember(repository) { repository.observeActiveAccounts() }
+        .collectAsStateWithLifecycle(emptyList())
+    val allAccounts by remember(repository) { repository.observeAllAccounts() }
+        .collectAsStateWithLifecycle(emptyList())
     var accountId by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
     var originalAmountMinor by rememberSaveable { mutableLongStateOf(0L) }
@@ -844,8 +1202,7 @@ fun DebtRepaymentEditorScreen(
         val existingRepaymentId = repaymentId ?: return@LaunchedEffect
         if (loaded) return@LaunchedEffect
         val currentDebt = debt ?: return@LaunchedEffect
-        val repayment = repository.getDebtRepayment(existingRepaymentId)
-            ?: return@LaunchedEffect
+        val repayment = repository.getDebtRepayment(existingRepaymentId) ?: return@LaunchedEffect
         val account = allAccounts.firstOrNull { it.id == repayment.accountId }
         if (account == null || account.currency != currentDebt.currency) return@LaunchedEffect
         accountId = repayment.accountId
@@ -855,116 +1212,164 @@ fun DebtRepaymentEditorScreen(
         note = repayment.note.orEmpty()
         loaded = true
     }
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(stringResource(if (repaymentId == null) R.string.add_repayment else R.string.edit_repayment)) },
-            navigationIcon = { BackButton(onBack) },
-            actions = {
-                TextButton(enabled = requiredDataLoaded && !saving, onClick = {
-                    val account = selectedAccount ?: return@TextButton
-                    if (debt == null) return@TextButton
-                    saving = true
-                    scope.launch {
-                        runCatching {
-                            val input = DebtRepaymentInput(
-                                debtId,
-                                accountId,
-                                Money.parseMinorUnits(amount, account.fractionDigits),
-                                occurredAt,
-                                note
-                            )
-                            if (repaymentId == null) repository.createDebtRepayment(input) else repository.updateDebtRepayment(
-                                repaymentId,
-                                input
-                            )
-                        }.onSuccess { onMessage(saved); onFinished() }
-                            .onFailure { error = it.message; saving = false }
-                    }
-                }) { Text(stringResource(R.string.save)) }
-            })
-    }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(
+                            if (repaymentId == null) R.string.add_repayment else R.string.edit_repayment,
+                        ),
+                    )
+                },
+                navigationIcon = { BackButton(onBack) },
+                colors = denaroTopAppBarColors(),
+                actions = {
+                    FilledTonalButton(
+                        enabled = requiredDataLoaded && !saving,
+                        modifier = Modifier.padding(end = 8.dp),
+                        onClick = {
+                            val account = selectedAccount ?: return@FilledTonalButton
+                            if (debt == null) return@FilledTonalButton
+                            saving = true
+                            scope.launch {
+                                runCatching {
+                                    val input = DebtRepaymentInput(
+                                        debtId,
+                                        accountId,
+                                        Money.parseMinorUnits(amount, account.fractionDigits),
+                                        occurredAt,
+                                        note,
+                                    )
+                                    if (repaymentId == null) {
+                                        repository.createDebtRepayment(input)
+                                    } else {
+                                        repository.updateDebtRepayment(repaymentId, input)
+                                    }
+                                }.onSuccess { onMessage(saved); onFinished() }
+                                    .onFailure { error = it.message; saving = false }
+                            }
+                        },
+                    ) { Text(stringResource(R.string.save)) }
+                },
+            )
+        },
+    ) { padding ->
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            AccountSelector(
-                stringResource(R.string.account),
-                accounts.filter { it.currency == debt?.currency },
-                accountId,
-                {
-                    amount = Money.rescaleInput(
-                        amount,
-                        accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
-                        accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+            DenaroSectionCard(contentPadding = PaddingValues(18.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    AccountSelector(
+                        stringResource(R.string.account),
+                        accounts.filter { it.currency == debt?.currency },
+                        accountId,
+                        {
+                            amount = Money.rescaleInput(
+                                amount,
+                                accounts.firstOrNull { account -> account.id == accountId }?.fractionDigits,
+                                accounts.firstOrNull { account -> account.id == it }?.fractionDigits,
+                            )
+                            accountId = it
+                        },
+                        enabled = loaded && debt != null,
                     )
-                    accountId = it
-                },
-                enabled = loaded && debt != null,
-            )
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                enabled = loaded,
-                label = { Text(stringResource(R.string.amount)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth()
-            )
-            overOutstandingWarning?.takeIf { !saving }?.let {
-                Text(it, color = MaterialTheme.colorScheme.tertiary)
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = amount,
+                        onValueChange = { amount = it },
+                        enabled = loaded,
+                        label = { Text(stringResource(R.string.amount)) },
+                        suffix = selectedAccount?.let { { Text(it.currency) } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    overOutstandingWarning?.takeIf { !saving }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.denaroColors.warning,
+                        )
+                    }
+                    DateField(
+                        label = R.string.date,
+                        value = occurredAt.formattedDate(),
+                        onClick = { showDate = true },
+                    )
+                    OutlinedTextField(
+                        shape = MaterialTheme.shapes.large,
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text(stringResource(R.string.description)) },
+                        supportingText = { Text(stringResource(R.string.optional)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            DateField(
-                label = R.string.date,
-                value = occurredAt.formattedDate(),
-                onClick = { showDate = true },
-            )
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text(stringResource(R.string.description)) },
-                supportingText = { Text(stringResource(R.string.optional)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (repaymentId != null) OutlinedButton(
-                onClick = { confirmDelete = true },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(stringResource(R.string.delete)) }
+            error?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+            if (repaymentId != null) {
+                OutlinedButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) { Text(stringResource(R.string.delete)) }
+            }
         }
     }
-    if (showDate) LocalDatePicker(occurredAt, { showDate = false }) {
-        occurredAt = it; showDate = false
+    if (showDate) {
+        LocalDatePicker(occurredAt, { showDate = false }) {
+            occurredAt = it
+            showDate = false
+        }
     }
-    if (confirmDelete && repaymentId != null) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text(stringResource(R.string.delete_repayment)) },
-        confirmButton = {
-            TextButton(onClick = {
-                scope.launch {
-                    repository.deleteDebtRepayment(
-                        repaymentId
-                    ); onFinished()
+    if (confirmDelete && repaymentId != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.delete_repayment)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            repository.deleteDebtRepayment(repaymentId)
+                            onFinished()
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text(stringResource(R.string.delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text(stringResource(R.string.cancel))
                 }
-            }) { Text(stringResource(R.string.delete)) }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                confirmDelete = false
-            }) { Text(stringResource(R.string.cancel)) }
-        },
-    )
+            },
+        )
+    }
 }
 
 @Composable
 fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
-    val parties by remember(repository) { repository.observeCounterparties(includeArchived = true) }.collectAsStateWithLifecycle(
-        emptyList()
-    )
+    val parties by remember(repository) { repository.observeCounterparties(includeArchived = true) }
+        .collectAsStateWithLifecycle(emptyList())
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var editing by remember { mutableStateOf<CounterpartySummary?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<CounterpartySummary?>(null) }
@@ -987,115 +1392,172 @@ fun CounterpartiesScreen(repository: FinanceRepository, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val deleteFailedMessage = stringResource(R.string.counterparty_delete_failed)
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            MediumFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.counterparties)) },
                 navigationIcon = { BackButton(onBack) },
-                actions = {
-                    IconButton(onClick = {
-                        adding = true
-                    }) {
-                        Icon(
-                            painterResource(LucideR.drawable.lucide_ic_plus),
-                            contentDescription = stringResource(R.string.add_counterparty)
-                        )
-                    }
-                })
-        }) { padding ->
-        if (parties.isEmpty()) EmptyState(
-            icon = LucideR.drawable.lucide_ic_users,
-            title = stringResource(R.string.no_counterparties),
-            description = stringResource(R.string.manage_counterparties),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            action = {
-                Button(onClick = {
-                    adding = true
-                }) { Text(stringResource(R.string.add_counterparty)) }
-            },
-        )
-        else Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            if (showSearch) {
-                InlineSearchField(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = denaroTopAppBarColors(),
+                scrollBehavior = scrollBehavior,
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { adding = true },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(
+                    painterResource(R.drawable.ms_add),
+                    contentDescription = stringResource(R.string.add_counterparty),
                 )
             }
-            if (visibleParties.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.no_matching_results),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
-                )
-            } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(visibleParties, key = { it.id }) { party ->
-                ListItem(
-                    modifier = Modifier.clickable { editing = party },
-                    headlineContent = { Text(party.name) },
-                    supportingContent = { Text(party.note.orEmpty()) },
-                    trailingContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (party.debtCount == 0) {
-                                IconButton(onClick = { deleting = party }) {
-                                    Icon(
-                                        painter = painterResource(LucideR.drawable.lucide_ic_trash_2),
-                                        contentDescription = stringResource(R.string.delete_counterparty_action),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                            IconButton(onClick = {
-                                scope.launch {
-                                    repository.setCounterpartyArchived(
-                                        party.id,
-                                        party.archivedAt == null
-                                    )
-                                }
-                            }) {
-                                Icon(
-                                    painter = painterResource(
-                                        if (party.archivedAt == null) {
-                                            LucideR.drawable.lucide_ic_archive
+        },
+    ) { padding ->
+        if (parties.isEmpty()) {
+            EmptyState(
+                icon = R.drawable.ms_group,
+                title = stringResource(R.string.no_counterparties),
+                description = stringResource(R.string.manage_counterparties),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                action = {
+                    Button(onClick = { adding = true }) {
+                        Text(stringResource(R.string.add_counterparty))
+                    }
+                },
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                if (showSearch) {
+                    InlineSearchField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                if (visibleParties.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.no_matching_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 8.dp,
+                            bottom = 104.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                    ) {
+                        itemsIndexed(
+                            visibleParties,
+                            key = { _, party -> party.id }) { index, party ->
+                            SegmentedListItem(
+                                onClick = { editing = party },
+                                shapes = ListItemDefaults.segmentedShapes(
+                                    index,
+                                    visibleParties.size
+                                ),
+                                colors = denaroSegmentedItemColors(),
+                                leadingContent = {
+                                    DenaroIconBadge(
+                                        icon = R.drawable.ms_group,
+                                        containerColor = if (party.archivedAt == null) {
+                                            MaterialTheme.colorScheme.secondaryContainer
                                         } else {
-                                            LucideR.drawable.lucide_ic_archive_restore
+                                            MaterialTheme.colorScheme.surfaceContainerHighest
                                         },
-                                    ),
-                                    contentDescription = stringResource(
-                                        if (party.archivedAt == null) R.string.archive else R.string.restore,
-                                    ),
+                                        contentColor = if (party.archivedAt == null) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        size = 40.dp,
+                                        iconSize = 20.dp,
+                                    )
+                                },
+                                supportingContent = party.note?.takeIf(String::isNotBlank)?.let {
+                                    { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                },
+                                trailingContent = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (party.debtCount == 0) {
+                                            IconButton(onClick = { deleting = party }) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ms_delete),
+                                                    contentDescription = stringResource(R.string.delete_counterparty_action),
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    repository.setCounterpartyArchived(
+                                                        party.id,
+                                                        party.archivedAt == null,
+                                                    )
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(
+                                                    if (party.archivedAt == null) {
+                                                        R.drawable.ms_archive
+                                                    } else {
+                                                        R.drawable.ms_unarchive
+                                                    },
+                                                ),
+                                                contentDescription = stringResource(
+                                                    if (party.archivedAt == null) R.string.archive else R.string.restore,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(
+                                    text = party.name,
+                                    style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }
                         }
-                    },
-                )
                     }
                 }
             }
         }
     }
-    if (adding) CounterpartyDialog(
-        existing = null,
-        initialName = searchQuery.trim(),
-        onDismiss = { adding = false },
-    ) { scope.launch { repository.createCounterparty(it); adding = false } }
+    if (adding) {
+        CounterpartyDialog(
+            existing = null,
+            initialName = searchQuery.trim(),
+            onDismiss = { adding = false },
+        ) {
+            scope.launch {
+                repository.createCounterparty(it)
+                adding = false
+            }
+        }
+    }
     editing?.let { party ->
         CounterpartyDialog(
-            party,
-            { editing = null }) {
+            existing = party,
+            onDismiss = { editing = null },
+        ) {
             scope.launch {
-                repository.updateCounterparty(
-                    party.id,
-                    it
-                ); editing = null
+                repository.updateCounterparty(party.id, it)
+                editing = null
             }
         }
     }
@@ -1151,14 +1613,24 @@ private fun CounterpartyDialog(
     var note by remember(existing) { mutableStateOf(existing?.note.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (existing == null) R.string.add_counterparty else R.string.edit_counterparty)) },
+        title = {
+            Text(
+                stringResource(
+                    if (existing == null) R.string.add_counterparty else R.string.edit_counterparty,
+                ),
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    name,
-                    { name = it },
-                    label = { Text(stringResource(R.string.name)) })
+                    shape = MaterialTheme.shapes.large,
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.name)) },
+                    singleLine = true,
+                )
                 OutlinedTextField(
+                    shape = MaterialTheme.shapes.large,
                     value = note,
                     onValueChange = { note = it },
                     label = { Text(stringResource(R.string.description)) },
@@ -1169,16 +1641,13 @@ private fun CounterpartyDialog(
         confirmButton = {
             TextButton(
                 enabled = name.isNotBlank(),
-                onClick = {
-                    onSave(
-                        CounterpartyInput(
-                            name,
-                            note
-                        )
-                    )
-                }) { Text(stringResource(R.string.save)) }
+                onClick = { onSave(CounterpartyInput(name, note)) },
+            ) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable
@@ -1191,8 +1660,13 @@ private fun DateField(
     OutlinedButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 24.dp, end = 8.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
     ) {
+        Icon(
+            painter = painterResource(R.drawable.ms_calendar_month),
+            contentDescription = null,
+        )
+        Spacer(Modifier.width(10.dp))
         Text(
             text = "${stringResource(label)}: ${value.ifBlank { stringResource(R.string.none) }}",
             modifier = Modifier.weight(1f),
@@ -1200,7 +1674,7 @@ private fun DateField(
         onClear?.let { clear ->
             IconButton(onClick = clear) {
                 Icon(
-                    painter = painterResource(LucideR.drawable.lucide_ic_x),
+                    painter = painterResource(R.drawable.ms_close),
                     contentDescription = stringResource(R.string.clear_due_date),
                 )
             }
@@ -1218,10 +1692,11 @@ private fun LocalDatePicker(initial: Long, onDismiss: () -> Unit, onSelected: (L
                 Text(stringResource(R.string.save))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }) {
-        DatePicker(
-            state
-        )
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    ) {
+        DatePicker(state)
     }
 }
 
